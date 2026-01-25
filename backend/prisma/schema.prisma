@@ -1,0 +1,319 @@
+// This is your Prisma schema file
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  RIDER
+  MERCHANT
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  READY_FOR_PICKUP
+  PICKED_UP
+  DELIVERING
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH_ON_DELIVERY
+  ONLINE_PAYMENT
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum RiderStatus {
+  OFFLINE
+  AVAILABLE
+  BUSY
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  phone         String?   @unique
+  password      String
+  role          UserRole
+  isActive      Boolean   @default(true)
+  isVerified    Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Relations
+  customer      Customer?
+  rider         Rider?
+  merchant      Merchant?
+  admin         Admin?
+  refreshTokens RefreshToken[]
+  notifications Notification[]
+
+  @@index([email])
+  @@index([phone])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Customer {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  firstName String
+  lastName  String
+  avatar    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  addresses Address[]
+  orders    Order[]
+  reviews   Review[]
+
+  @@map("customers")
+}
+
+model Address {
+  id           String   @id @default(uuid())
+  customerId   String
+  label        String   // e.g., "Home", "Work"
+  street       String
+  city         String
+  state        String
+  zipCode      String?
+  country      String   @default("Philippines")
+  latitude     Float
+  longitude    Float
+  isDefault    Boolean  @default(false)
+  instructions String?  // Delivery instructions
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  orders   Order[]
+
+  @@index([customerId])
+  @@map("addresses")
+}
+
+model Rider {
+  id              String       @id @default(uuid())
+  userId          String       @unique
+  firstName       String
+  lastName        String
+  avatar          String?
+  vehicleType     String       // e.g., "Motorcycle", "Bicycle"
+  vehicleNumber   String?
+  licenseNumber   String?
+  status          RiderStatus  @default(OFFLINE)
+  currentLatitude Float?
+  currentLongitude Float?
+  rating          Float        @default(0)
+  totalDeliveries Int          @default(0)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@map("riders")
+}
+
+model Merchant {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  name        String
+  description String?
+  logo        String?
+  coverImage  String?
+  address     String
+  city        String
+  state       String
+  zipCode     String?
+  latitude    Float
+  longitude   Float
+  phone       String
+  email       String?
+  isOpen      Boolean  @default(true)
+  rating      Float    @default(0)
+  totalOrders Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  menuItems  MenuItem[]
+  orders     Order[]
+  categories Category[]
+
+  @@index([city])
+  @@map("merchants")
+}
+
+model Category {
+  id         String     @id @default(uuid())
+  merchantId String
+  name       String
+  sortOrder  Int        @default(0)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  
+  merchant  Merchant   @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  menuItems MenuItem[]
+
+  @@index([merchantId])
+  @@map("categories")
+}
+
+model MenuItem {
+  id          String   @id @default(uuid())
+  merchantId  String
+  categoryId  String?
+  name        String
+  description String?
+  price       Float
+  image       String?
+  isAvailable Boolean  @default(true)
+  preparationTime Int   @default(15) // in minutes
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  merchant   Merchant     @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  category   Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  orderItems OrderItem[]
+
+  @@index([merchantId])
+  @@index([categoryId])
+  @@map("menu_items")
+}
+
+model Order {
+  id                String        @id @default(uuid())
+  orderNumber       String        @unique
+  customerId        String
+  merchantId        String
+  riderId           String?
+  addressId         String
+  status            OrderStatus   @default(PENDING)
+  paymentMethod     PaymentMethod @default(CASH_ON_DELIVERY)
+  paymentStatus     PaymentStatus @default(PENDING)
+  subtotal          Float
+  deliveryFee       Float
+  tax               Float         @default(0)
+  total             Float
+  specialInstructions String?
+  estimatedDeliveryTime DateTime?
+  confirmedAt       DateTime?
+  preparingAt       DateTime?
+  readyAt           DateTime?
+  pickedUpAt        DateTime?
+  deliveredAt       DateTime?
+  cancelledAt       DateTime?
+  cancellationReason String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  
+  customer   Customer    @relation(fields: [customerId], references: [id])
+  merchant   Merchant    @relation(fields: [merchantId], references: [id])
+  rider      Rider?      @relation(fields: [riderId], references: [id])
+  address    Address     @relation(fields: [addressId], references: [id])
+  items      OrderItem[]
+  review     Review?
+
+  @@index([customerId])
+  @@index([merchantId])
+  @@index([riderId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id         String   @id @default(uuid())
+  orderId    String
+  menuItemId String
+  quantity   Int
+  price      Float    // Price at time of order
+  notes      String?  // Special requests
+  createdAt  DateTime @default(now())
+  
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+model Review {
+  id         String   @id @default(uuid())
+  orderId    String   @unique
+  customerId String
+  rating     Int      // 1-5
+  comment    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([customerId])
+  @@map("reviews")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  type      String   // e.g., "ORDER_UPDATE", "PROMOTION", "SYSTEM"
+  data      Json?    // Additional data
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model Admin {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  firstName String
+  lastName  String
+  avatar    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("admins")
+}
