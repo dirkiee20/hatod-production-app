@@ -27,8 +27,8 @@ const getApiUrl = () => {
         return 'http://10.0.2.2:3000';
     }
 
-    // 3. Default fallback (iOS simulator or web)
-    return 'http://localhost:3000';
+    // 3. Default fallback (iOS simulator or web, or production build)
+    return 'https://hatod-production-app-production.up.railway.app/api';
 };
 
 const API_URL = getApiUrl();
