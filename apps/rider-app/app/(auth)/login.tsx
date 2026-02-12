@@ -8,36 +8,34 @@ import api from '@/services/api';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!email || !password) {
+    if (!phone || !password) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
 
     setIsLoading(true);
     try {
-      // Direct call to backend auth endpoint
       const response = await api.post('/auth/login', {
-        email,
+        phone,
         password,
-        role: 'RIDER', // Ensure we are logging in as a rider
       });
 
-      const { accessToken } = response.data;
+      const { access_token } = response.data;
 
-      if (accessToken) {
-        await SecureStore.setItemAsync('authToken', accessToken);
+      if (access_token) {
+        await SecureStore.setItemAsync('authToken', access_token);
         router.replace('/(tabs)');
       } else {
         throw new Error('No token received');
       }
     } catch (error: any) {
-      console.error('Login error:', error); // Log for debugging
-      const message = error.response?.data?.message || 'Login failed. Please check your credentials.';
+      console.error('Login error:', error);
+      const message = error.response?.data?.message || error.message || 'Login failed';
       Alert.alert('Login Failed', message);
     } finally {
       setIsLoading(false);
@@ -52,15 +50,15 @@ export default function LoginScreen() {
 
         <View style={styles.form}>
           <View style={styles.inputContainer}>
-            <ThemedText style={styles.label}>Email</ThemedText>
+            <ThemedText style={styles.label}>Mobile Number</ThemedText>
             <TextInput
               style={styles.input}
-              placeholder="rider@example.com"
+              placeholder="+639123456789"
               placeholderTextColor="#999"
-              value={email}
-              onChangeText={setEmail}
+              value={phone}
+              onChangeText={setPhone}
               autoCapitalize="none"
-              keyboardType="email-address"
+              keyboardType="phone-pad"
             />
           </View>
 
@@ -87,6 +85,10 @@ export default function LoginScreen() {
               <ThemedText style={styles.loginBtnText}>Sign In</ThemedText>
             )}
           </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => router.push('/(auth)/signup')} style={{ marginTop: 20, alignItems: 'center' }}>
+               <ThemedText style={{ color: '#666', fontWeight: '600' }}>New Rider? Create Account</ThemedText>
+           </TouchableOpacity>
         </View>
       </View>
     </ThemedView>
@@ -96,7 +98,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#C2185B', // Brand background
+    backgroundColor: '#C2185B',
   },
   content: {
     flex: 1,

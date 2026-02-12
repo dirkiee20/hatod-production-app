@@ -1,44 +1,151 @@
-import { StyleSheet, ScrollView, TouchableOpacity, View, Image } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, View, Image, ActivityIndicator, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import api from '@/services/api';
+import Mapbox from '@rnmapbox/maps';
+import { useLocationTracker } from '@/hooks/useLocationTracker';
+import { getRoute } from '@/services/map';
+
+const formatVariant = (note: string) => {
+  if (!note) return '';
+  try {
+    const parsed = JSON.parse(note);
+    if (typeof parsed === 'object' && parsed !== null) {
+       return Object.entries(parsed).map(([key, val]) => `${key}: ${val}`).join(', ');
+    }
+    return note;
+  } catch (e) {
+    return note; 
+  }
+};
+
+const getCorrectedCoordinate = (lat: number, lng: number): [number, number] => {
+  if (!lat || !lng) return [120.9850, 14.6010]; 
+  if (Math.abs(lat) > 90) {
+      return [lat, lng]; 
+  }
+  return [lng, lat];
+};
 
 export default function OrderDetailsScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const [loading, setLoading] = useState(true);
+  const [order, setOrder] = useState<any>(null);
+  const [routeGeoJSON, setRouteGeoJSON] = useState<any>(null);
+  const { location } = useLocationTracker(true);
 
-  // Mock order details
-  const order = {
-    id: id,
-    status: 'Completed',
-    date: 'Oct 24, 2:30 PM',
-    distance: '3.2 km',
-    duration: '24 mins',
-    earnings: {
-      base: 45,
-      distance: 25,
-      surge: 15,
-      tip: 20,
-      total: 105,
-    },
-    restaurant: {
-      name: 'The Burger Mansion',
-      address: '123 Main St, Surigao City',
-    },
-    customer: {
-      name: 'Juan Dela Cruz',
-      address: 'Block 5 Lot 2, Villa Corito, Surigao City',
-      note: 'Gate is blue, please ring doorbell.',
-    },
-    items: [
-      { quantity: 2, name: 'Signature Double Cheese', subtext: 'Large' },
-      { quantity: 1, name: 'Classic Fries', subtext: 'Regular' },
-    ]
+  useEffect(() => {
+    if (id) {
+      fetchOrderDetails();
+    }
+  }, [id]);
+
+  useEffect(() => {
+      if (!order || !location) return;
+
+      const fetchRoute = async () => {
+          const riderLoc: [number, number] = [location.coords.longitude, location.coords.latitude];
+          let endLoc: [number, number] | null = null;
+
+          if (order.status === 'READY_FOR_PICKUP' || order.status === 'PREPARING') {
+              // Target: Merchant
+              if (order.merchant?.longitude) {
+                  endLoc = [order.merchant.longitude, order.merchant.latitude];
+              }
+          } else if (order.status === 'PICKED_UP' || order.status === 'DELIVERING') {
+              // Target: Customer
+              if (order.address?.longitude) {
+                  endLoc = [order.address.longitude, order.address.latitude];
+              }
+          }
+
+          if (endLoc && endLoc[0] && endLoc[1]) {
+               const route = await getRoute(riderLoc, endLoc);
+               if (route) setRouteGeoJSON(route);
+          }
+      };
+      
+      fetchRoute();
+  }, [order, location]);
+
+  const fetchOrderDetails = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get(`/orders/${id}`);
+      setOrder(response.data);
+    } catch (error) {
+      console.error('Error fetching order details:', error);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const handleStatusUpdate = async (status: string) => {
+    try {
+      setLoading(true);
+      if (status === 'CLAIM') {
+          await api.patch(`/orders/${id}/claim`);
+          Alert.alert('Success', 'Order accepted! Please proceed to the merchant.');
+      } else {
+          await api.patch(`/orders/${id}/status`, { status });
+      }
+      
+      await fetchOrderDetails();
+      if (status === 'DELIVERED') {
+         Alert.alert('Success', 'Order completed!');
+         router.back();
+      }
+    } catch (error: any) {
+       console.error(error);
+       const msg = error.response?.data?.message || 'Failed to update status';
+       Alert.alert('Error', msg);
+       setLoading(false);
+    }
+  };
+
+  const getActionBtn = () => {
+    if (!order) return null;
+
+    // Check availability for claiming
+    if (!order.riderId && (order.status === 'READY_FOR_PICKUP' || order.status === 'PREPARING')) {
+        return { label: 'Accept Order', status: 'CLAIM', color: '#2E7D32' };
+    }
+
+     switch(order.status) {
+         case 'READY_FOR_PICKUP':
+             return { label: 'Confirm Pickup', status: 'PICKED_UP', color: '#1976D2' };
+         case 'PICKED_UP':
+             return { label: 'Start Delivery', status: 'DELIVERING', color: '#FF9800' };
+         case 'DELIVERING':
+             return { label: 'Complete Delivery', status: 'DELIVERED', color: '#43A047' };
+         default:
+             return null;
+     }
+  };
+
+  const action = getActionBtn();
+
+  if (loading) {
+    return (
+      <ThemedView style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color="#C2185B" />
+      </ThemedView>
+    );
+  }
+
+  if (!order) {
+    return (
+      <ThemedView style={[styles.container, styles.centerContent]}>
+        <ThemedText>Order not found</ThemedText>
+      </ThemedView>
+    );
+  }
 
   return (
     <ThemedView style={styles.container}>
@@ -55,28 +162,68 @@ export default function OrderDetailsScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         
+        <View style={styles.mapContainer}>
+             <Mapbox.MapView style={styles.map}>
+                <Mapbox.Camera
+                    zoomLevel={13}
+                    centerCoordinate={
+                        order.address 
+                        ? getCorrectedCoordinate(order.address.latitude, order.address.longitude)
+                        : [120.9850, 14.6010]
+                    }
+                />
+                
+                {routeGeoJSON && (
+                  <Mapbox.ShapeSource id="routeSource" shape={routeGeoJSON}>
+                    <Mapbox.LineLayer
+                      id="routeFill"
+                      style={{
+                        lineColor: '#2E7D32', // Green for Rider
+                        lineWidth: 4,
+                        lineCap: 'round',
+                        lineJoin: 'round',
+                      }}
+                    />
+                  </Mapbox.ShapeSource>
+                )}
+
+                {order.merchant?.longitude && (
+                    <Mapbox.PointAnnotation
+                        id="merchant"
+                        coordinate={getCorrectedCoordinate(order.merchant.latitude, order.merchant.longitude)}
+                    >
+                         <View style={{backgroundColor:'white', padding:6, borderRadius:20, elevation:2}}><IconSymbol name="house.fill" size={20} color="#C2185B" /></View>
+                    </Mapbox.PointAnnotation>
+                )}
+                {order.address?.longitude && (
+                     <Mapbox.PointAnnotation
+                        id="customer"
+                        coordinate={getCorrectedCoordinate(order.address.latitude, order.address.longitude)}
+                    >
+                         <View style={{backgroundColor:'#1976D2', padding:6, borderRadius:20, elevation:2}}><IconSymbol name="account" size={20} color="white" /></View>
+                    </Mapbox.PointAnnotation>
+                )}
+                 {location && (
+                      <Mapbox.PointAnnotation
+                        id="rider"
+                        coordinate={[location.coords.longitude, location.coords.latitude]}
+                    >
+                         <View style={{backgroundColor:'#4CAF50', padding:6, borderRadius:20, elevation:2}}><IconSymbol name="paperplane.fill" size={20} color="white" /></View>
+                    </Mapbox.PointAnnotation>
+                 )}
+             </Mapbox.MapView>
+        </View>
+
         {/* Earnings Card */}
         <View style={styles.earningsCard}>
           <ThemedText style={styles.cardTitle}>Total Earnings</ThemedText>
-          <ThemedText style={styles.totalAmount}>₱{order.earnings.total}</ThemedText>
+          <ThemedText style={styles.totalAmount}>₱{order.deliveryFee}</ThemedText>
           
           <View style={styles.divider} />
           
           <View style={styles.breakdownRow}>
             <ThemedText style={styles.breakdownLabel}>Base Fare</ThemedText>
-            <ThemedText style={styles.breakdownValue}>₱{order.earnings.base}</ThemedText>
-          </View>
-          <View style={styles.breakdownRow}>
-            <ThemedText style={styles.breakdownLabel}>Distance Fee</ThemedText>
-            <ThemedText style={styles.breakdownValue}>₱{order.earnings.distance}</ThemedText>
-          </View>
-          <View style={styles.breakdownRow}>
-            <ThemedText style={styles.breakdownLabel}>Surge Bonus</ThemedText>
-            <ThemedText style={styles.breakdownValue}>₱{order.earnings.surge}</ThemedText>
-          </View>
-          <View style={styles.breakdownRow}>
-            <ThemedText style={styles.breakdownLabel}>Customer Tip</ThemedText>
-            <ThemedText style={[styles.breakdownValue, { color: '#388E3C' }]}>+₱{order.earnings.tip}</ThemedText>
+            <ThemedText style={styles.breakdownValue}>₱{order.deliveryFee}</ThemedText>
           </View>
         </View>
 
@@ -93,8 +240,10 @@ export default function OrderDetailsScreen() {
               </View>
               <View style={styles.locationContent}>
                 <ThemedText style={styles.locationLabel}>Pickup</ThemedText>
-                <ThemedText style={styles.locationName}>{order.restaurant.name}</ThemedText>
-                <ThemedText style={styles.address}>{order.restaurant.address}</ThemedText>
+                <ThemedText style={styles.locationName}>{order.merchant?.name}</ThemedText>
+                <ThemedText style={styles.address}>
+                  {order.merchant?.address}, {order.merchant?.city}
+                </ThemedText>
               </View>
             </View>
 
@@ -105,11 +254,17 @@ export default function OrderDetailsScreen() {
               </View>
               <View style={styles.locationContent}>
                 <ThemedText style={styles.locationLabel}>Drop-off</ThemedText>
-                <ThemedText style={styles.locationName}>{order.customer.name}</ThemedText>
-                <ThemedText style={styles.address}>{order.customer.address}</ThemedText>
-                <View style={styles.noteBox}>
-                  <ThemedText style={styles.noteText}>"{order.customer.note}"</ThemedText>
-                </View>
+                <ThemedText style={styles.locationName}>
+                  {order.customer?.firstName} {order.customer?.lastName}
+                </ThemedText>
+                <ThemedText style={styles.address}>
+                  {order.address?.street}, {order.address?.city}
+                </ThemedText>
+                {order.address?.instructions && (
+                  <View style={styles.noteBox}>
+                    <ThemedText style={styles.noteText}>"{order.address.instructions}"</ThemedText>
+                  </View>
+                )}
               </View>
             </View>
           </View>
@@ -119,14 +274,14 @@ export default function OrderDetailsScreen() {
         <View style={styles.section}>
           <ThemedText style={styles.sectionTitle}>Order Items</ThemedText>
           <View style={styles.itemsCard}>
-            {order.items.map((item, idx) => (
+            {order.items?.map((item: any, idx: number) => (
               <View key={idx} style={styles.itemRow}>
                 <View style={styles.quantityBadge}>
                   <ThemedText style={styles.quantityText}>{item.quantity}x</ThemedText>
                 </View>
                 <View>
-                  <ThemedText style={styles.itemName}>{item.name}</ThemedText>
-                  <ThemedText style={styles.itemSubtext}>{item.subtext}</ThemedText>
+                  <ThemedText style={styles.itemName}>{item.menuItem?.name}</ThemedText>
+                  {item.notes && <ThemedText style={styles.itemSubtext}>{formatVariant(item.notes)}</ThemedText>}
                 </View>
               </View>
             ))}
@@ -134,8 +289,10 @@ export default function OrderDetailsScreen() {
         </View>
 
         <View style={styles.metaInfo}>
-          <ThemedText style={styles.metaText}>Order ID: {order.id}</ThemedText>
-          <ThemedText style={styles.metaText}>{order.date}</ThemedText>
+          <ThemedText style={styles.metaText}>Order ID: {order.orderNumber || order.id}</ThemedText>
+          <ThemedText style={styles.metaText}>
+            {new Date(order.createdAt).toLocaleString()}
+          </ThemedText>
         </View>
 
         <View style={{ height: 50 }} />
@@ -143,6 +300,15 @@ export default function OrderDetailsScreen() {
 
       {/* Support Button Footer */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+        {action && (
+            <TouchableOpacity 
+                style={[styles.mainActionBtn, { backgroundColor: action.color }]}
+                onPress={() => handleStatusUpdate(action.status)}
+            >
+              <ThemedText style={styles.mainActionText}>{action.label}</ThemedText>
+            </TouchableOpacity>
+        )}
+
         <TouchableOpacity style={styles.supportBtn}>
           <IconSymbol size={20} name="chat.bubble" color="#666" />
           <ThemedText style={styles.supportText}>Report an Issue</ThemedText>
@@ -156,6 +322,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FAFAFA',
+  },
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   scrollContent: {
     padding: 16,
@@ -328,5 +498,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#666',
+  },
+  mapContainer: {
+    height: 250,
+    borderRadius: 16,
+    marginBottom: 24,
+    overflow: 'hidden',
+    backgroundColor: '#EEE',
+  },
+  map: {
+    flex: 1,
+  },
+  mainActionBtn: {
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 3,
+    },
+  mainActionText: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '800',
+    textTransform: 'uppercase',
   },
 });

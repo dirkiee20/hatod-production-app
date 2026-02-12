@@ -1,0 +1,21 @@
+--- Users List ---
+ID: f92e15e5-0950-47f5-be48-bb057d317f8b
+Email: admin@hatod.com
+Phone: null
+Role: ADMIN
+------------------
+ID: ce978ace-d5b9-4d88-8cbe-648376d6f1d3
+Email: merchant@hatod.com
+Phone: null
+Role: MERCHANT
+------------------
+ID: c46c5a42-66d8-4784-871d-f0fdadfdabc5
+Email: rider@hatod.com
+Phone: null
+Role: RIDER
+------------------
+ID: 9e0e8ca7-77ff-4e13-8ea5-7350bb1a88c3
+Email: customer@hatod.com
+Phone: +639123456789
+Role: CUSTOMER
+------------------

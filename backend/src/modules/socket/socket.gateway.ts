@@ -86,11 +86,14 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   // Order events
+  // Order events
   emitOrderCreated(order: any) {
     // Notify merchant
     this.emitToUser(order.merchant.userId, 'order:created', order);
     // Notify available riders
     this.emitToRole('RIDER', 'order:available', order);
+    // Notify admins
+    this.emitToRole('ADMIN', 'order:created', order);
   }
 
   emitOrderUpdated(order: any) {
@@ -98,6 +101,8 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.emitToUser(order.customer.userId, 'order:updated', order);
     // Notify merchant
     this.emitToUser(order.merchant.userId, 'order:updated', order);
+    // Notify admins
+    this.emitToRole('ADMIN', 'order:updated', order);
     // Notify rider if assigned
     if (order.rider) {
       this.emitToUser(order.rider.userId, 'order:updated', order);

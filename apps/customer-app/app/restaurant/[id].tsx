@@ -1,44 +1,87 @@
-import { StyleSheet, ScrollView, TouchableOpacity, Image, View, Animated } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, Image, View, Animated, ActivityIndicator } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { getMerchantById, getMenuItemsByMerchant } from '@/api/services';
+import { resolveImageUrl } from '@/api/client';
+import { Merchant, MenuItem } from '@/api/types';
+import { isMerchantOpen } from '@/utils/time';
+import { useCart } from '@/context/CartContext';
 
 export default function RestaurantDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
+  const { itemCount, cartTotal, addToCart } = useCart();
+  const insets = useSafeAreaInsets();
   const [activeCategory, setActiveCategory] = useState(0);
   const scrollY = useRef(new Animated.Value(0)).current;
+  const [merchant, setMerchant] = useState<Merchant | null>(null);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const restaurant = {
-    name: 'Greenwich - Surigao',
-    rating: '5.0',
-    reviews: '5000+ ratings',
-    time: '15-40 min',
-    distance: '1.2 km',
-    image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800',
-    logo: 'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=100', 
-    tags: ['Pizza', 'American', 'Fast Food'],
-    promos: ['50% off (WEMISSYOU)', 'Free delivery with ₱500 spend'],
+  useEffect(() => {
+    loadData();
+  }, [id]);
+
+  const loadData = async () => {
+    if (!id || typeof id !== 'string') return;
+    
+    setLoading(true);
+    const [merchantData, menuData] = await Promise.all([
+      getMerchantById(id),
+      getMenuItemsByMerchant(id)
+    ]);
+    
+    setMerchant(merchantData);
+    setMenuItems(menuData);
+    setLoading(false);
   };
 
-  const menu = [
-    {
-      title: 'Popular',
-      items: [
-        { id: '1', name: 'Signature Double Cheese', price: 299, description: 'Double beef patty, quadruple cheese, secret sauce.', image: 'https://images.unsplash.com/photo-1572802419224-296b0aeee0d9?w=400' },
-        { id: '2', name: 'Bacon Blast Burger', price: 349, description: 'Crispy bacon, smoky bbq sauce, onion rings.', image: 'https://images.unsplash.com/photo-1553979459-d2229ba7433b?w=400' },
-      ],
-    },
-    {
-      title: 'Solo Meals',
-      items: [
-        { id: '3', name: 'Classic Burger Solo', price: 150, description: 'Single patty with fresh veggies.', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400' },
-        { id: '4', name: 'Chicken Burger', price: 180, description: 'Deep fried chicken breast with mayo.', image: 'https://images.unsplash.com/photo-1510629954389-c1e0da47d414?w=400' },
-      ],
+  // Handle quick add to cart
+  const handleQuickAdd = (item: MenuItem) => {
+    if (!merchant) return;
+
+    // Check for required options in description (simple heuristic)
+    const hasRequired = (item.description || '').toLowerCase().includes('(required)');
+
+    if (hasRequired) {
+      router.push(`/menu-item/${item.id}`);
+      return;
     }
-  ];
+
+    addToCart({
+      id: Date.now().toString(),
+      menuItemId: item.id,
+      merchantId: merchant.id,
+      storeName: merchant.name,
+      deliveryFee: merchant.deliveryFee || 0,
+      name: item.name,
+      price: item.price,
+      quantity: 1,
+      image: item.image || item.imageUrl,
+      options: {
+        size: 'Regular',
+        addons: [],
+      },
+      totalPrice: item.price,
+    });
+  };
+
+  // Group menu items by category
+  const menuByCategory = menuItems.reduce((acc, item) => {
+    const categoryName = item.category?.name || 'Other';
+    if (!acc[categoryName]) {
+      acc[categoryName] = [];
+    }
+    acc[categoryName].push(item);
+    return acc;
+  }, {} as Record<string, MenuItem[]>);
+
+  const categoryKeys = Object.keys(menuByCategory);
+  const categories = ['All', ...categoryKeys];
 
   const headerOpacity = scrollY.interpolate({
     inputRange: [0, 80],
@@ -52,6 +95,35 @@ export default function RestaurantDetailScreen() {
     extrapolate: 'clamp',
   });
 
+  if (loading) {
+    return (
+      <ThemedView style={styles.container}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ThemedView style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#C2185B" />
+          <ThemedText style={styles.loadingText}>Loading restaurant...</ThemedText>
+        </ThemedView>
+      </ThemedView>
+    );
+  }
+
+  if (!merchant) {
+    return (
+      <ThemedView style={styles.container}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ThemedView style={styles.loadingContainer}>
+          <IconSymbol size={48} name="exclamationmark.triangle" color="#CCC" />
+          <ThemedText style={styles.loadingText}>Restaurant not found</ThemedText>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <ThemedText style={styles.backButtonText}>Go Back</ThemedText>
+          </TouchableOpacity>
+        </ThemedView>
+      </ThemedView>
+    );
+  }
+
+  const { isOpen: isStoreOpen, nextOpen } = merchant ? isMerchantOpen(merchant) : { isOpen: true, nextOpen: '' };
+
   return (
     <ThemedView style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
@@ -62,10 +134,9 @@ export default function RestaurantDetailScreen() {
           <TouchableOpacity onPress={() => router.back()}>
             <IconSymbol size={20} name="chevron.right" color="#000" style={{transform: [{rotate: '180deg'}]}} />
           </TouchableOpacity>
-          <ThemedText style={styles.headerTitle} numberOfLines={1}>{restaurant.name}</ThemedText>
+          <ThemedText style={styles.headerTitle} numberOfLines={1}>{merchant.name}</ThemedText>
           <View style={styles.headerActions}>
-            <IconSymbol size={18} name="filter" color="#000" style={{marginLeft: 15}} />
-            <IconSymbol size={18} name="person" color="#000" style={{marginLeft: 15}} />
+            <IconSymbol size={18} name="heart" color="#000" style={{marginLeft: 15}} />
           </View>
         </View>
       </Animated.View>
@@ -78,13 +149,10 @@ export default function RestaurantDetailScreen() {
         
         <ThemedView style={styles.rightActions}>
           <TouchableOpacity style={styles.floatingButton}>
-            <IconSymbol size={18} name="filter" color="#000" />
+            <IconSymbol size={18} name="heart" color="#000" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.floatingButton}>
-            <IconSymbol size={18} name="person" color="#000" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.floatingButton}>
-            <IconSymbol size={18} name="send" color="#000" />
+            <IconSymbol size={18} name="share" color="#000" />
           </TouchableOpacity>
         </ThemedView>
       </Animated.View>
@@ -98,12 +166,24 @@ export default function RestaurantDetailScreen() {
         scrollEventThrottle={16}
       >
         <ThemedView style={styles.bannerContainer}>
-          <Image source={{ uri: restaurant.image }} style={styles.bannerImage} />
+          <Image 
+            source={{ uri: resolveImageUrl(merchant.coverImage) || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800' }} 
+            style={styles.bannerImage} 
+          />
+          {!isStoreOpen && (
+            <ThemedView style={styles.closedBanner}>
+               <ThemedText style={styles.closedBannerText}>CLOSED</ThemedText>
+               <ThemedText style={styles.opensAtBannerText}>{nextOpen || 'Closed'}</ThemedText>
+            </ThemedView>
+          )}
           <ThemedView style={styles.identityRow}>
             <ThemedView style={styles.logoBox}>
-              <Image source={{ uri: restaurant.logo }} style={styles.restaurantLogo} />
+              <Image 
+                source={{ uri: resolveImageUrl(merchant.logo) || 'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=100' }} 
+                style={styles.restaurantLogo} 
+              />
             </ThemedView>
-            <ThemedText style={styles.restaurantNameBeside}>{restaurant.name}</ThemedText>
+            <ThemedText style={styles.restaurantNameBeside}>{merchant.name}</ThemedText>
           </ThemedView>
         </ThemedView>
         
@@ -111,77 +191,110 @@ export default function RestaurantDetailScreen() {
           <ThemedView style={styles.infoContent}>
             <ThemedView style={styles.ratingRow}>
               <ThemedText style={styles.ratingStar}>★</ThemedText>
-              <ThemedText style={styles.ratingValue}>{restaurant.rating}</ThemedText>
-              <ThemedText style={styles.ratingCount}>({restaurant.reviews})</ThemedText>
+              <ThemedText style={styles.ratingValue}>{merchant.rating?.toFixed(1) || 'New'}</ThemedText>
+              {merchant.reviewCount && (
+                <ThemedText style={styles.ratingCount}>({merchant.reviewCount} ratings)</ThemedText>
+              )}
             </ThemedView>
+
+            {merchant.description && (
+              <ThemedText style={styles.description}>{merchant.description}</ThemedText>
+            )}
 
             <ThemedView style={styles.deliveryCard}>
               <ThemedView style={styles.deliveryTextGroup}>
-                <ThemedText style={styles.deliveryTitle}>Delivery {restaurant.time}</ThemedText>
-                <ThemedText style={styles.deliverySub}>₱ 29.00 delivery or free with ₱ 349.00 spend</ThemedText>
+                <ThemedText style={styles.deliveryTitle}>
+                  Delivery {merchant.deliveryTime || '15-30 min'}
+                </ThemedText>
+                <ThemedText style={styles.deliverySub}>
+                  ₱ {merchant.deliveryFee || 29}.00 delivery fee
+                </ThemedText>
               </ThemedView>
-              <ThemedText style={styles.changeAction}>Change</ThemedText>
             </ThemedView>
 
-            <ThemedView style={styles.promoHighlight}>
-              <ThemedText style={styles.promoTitleText}>🎫 50% off (WEMISSYOU)</ThemedText>
-              <ThemedText style={styles.promoBodyText}>Min. order ₱ 149 Valid for all items.</ThemedText>
-            </ThemedView>
+            {merchant.address && (
+              <ThemedView style={styles.addressCard}>
+                <IconSymbol size={14} name="location.fill" color="#C2185B" />
+                <ThemedText style={styles.addressText}>{merchant.address}</ThemedText>
+              </ThemedView>
+            )}
           </ThemedView>
         </ThemedView>
 
         {/* Categories */}
-        <ThemedView style={styles.tabContainer}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScroll}>
-            {menu.map((cat, i) => (
-              <TouchableOpacity key={i} onPress={() => setActiveCategory(i)} style={[styles.tab, activeCategory === i && styles.activeTab]}>
-                <ThemedText style={[styles.tabText, activeCategory === i && styles.activeTabText]}>{cat.title}</ThemedText>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </ThemedView>
-
-        {/* Menu Items */}
-        <ThemedView style={styles.menuSection}>
-          {menu.map((section, sIndex) => (
-            <ThemedView key={sIndex} style={styles.menuGroup}>
-              <ThemedText style={styles.groupTitle}>{section.title}</ThemedText>
-              {section.items.map((item) => (
-                <TouchableOpacity 
-                   key={item.id} 
-                   style={styles.menuItem}
-                   onPress={() => router.push(`/menu-item/${item.id}`)}
-                >
-                  <ThemedView style={styles.itemInfo}>
-                    <ThemedText style={styles.itemName}>{item.name}</ThemedText>
-                    <ThemedText style={styles.itemDesc} numberOfLines={2}>{item.description}</ThemedText>
-                    <ThemedText style={styles.itemPrice}>₱{item.price}</ThemedText>
-                  </ThemedView>
-                  <ThemedView style={styles.itemImageWrapper}>
-                    <Image source={{ uri: item.image }} style={styles.itemImg} />
-                    <TouchableOpacity style={styles.addBtn}>
-                      <IconSymbol size={22} name="add" color="#C2185B" />
-                    </TouchableOpacity>
-                  </ThemedView>
+        {categories.length > 0 && (
+          <ThemedView style={styles.tabContainer}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScroll}>
+              {categories.map((cat, i) => (
+                <TouchableOpacity key={i} onPress={() => setActiveCategory(i)} style={[styles.tab, activeCategory === i && styles.activeTab]}>
+                  <ThemedText style={[styles.tabText, activeCategory === i && styles.activeTabText]}>{cat}</ThemedText>
                 </TouchableOpacity>
               ))}
+            </ScrollView>
+          </ThemedView>
+        )}
+
+          {/* Menu Items */}
+        <ThemedView style={styles.menuSection}>
+          {menuItems.length === 0 ? (
+            <ThemedView style={styles.emptyMenu}>
+              <IconSymbol size={48} name="fork.knife" color="#CCC" />
+              <ThemedText style={styles.emptyText}>No menu items available</ThemedText>
             </ThemedView>
-          ))}
+          ) : (
+            (activeCategory === 0 ? categoryKeys : [categories[activeCategory]]).map((categoryName, sIndex) => (
+              <ThemedView key={sIndex} style={styles.menuGroup}>
+                <ThemedText style={styles.groupTitle}>{categoryName}</ThemedText>
+                {menuByCategory[categoryName]?.map((item) => (
+                  <TouchableOpacity 
+                    key={item.id} 
+                    style={[styles.menuItem, !isStoreOpen && { opacity: 0.6 }]}
+                    onPress={() => isStoreOpen && router.push(`/menu-item/${item.id}`)}
+                    activeOpacity={isStoreOpen ? 0.7 : 1}
+                  >
+                    <ThemedView style={styles.itemInfo}>
+                      <ThemedText style={styles.itemName}>{item.name}</ThemedText>
+                      {item.description && (
+                        <ThemedText style={styles.itemDesc} numberOfLines={2}>{item.description}</ThemedText>
+                      )}
+                      <ThemedText style={styles.itemPrice}>₱{item.price.toFixed(2)}</ThemedText>
+                      {!item.isAvailable && (
+                        <ThemedText style={styles.unavailableText}>Currently unavailable</ThemedText>
+                      )}
+                    </ThemedView>
+                    <ThemedView style={styles.itemImageWrapper}>
+                      <Image 
+                        source={{ uri: resolveImageUrl(item.image || item.imageUrl) || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400' }} 
+                        style={styles.itemImg} 
+                      />
+                      {item.isAvailable && isStoreOpen && (
+                        <TouchableOpacity style={styles.addBtn} onPress={() => handleQuickAdd(item)}>
+                          <IconSymbol size={22} name="add" color="#C2185B" />
+                        </TouchableOpacity>
+                      )}
+                    </ThemedView>
+                  </TouchableOpacity>
+                ))}
+              </ThemedView>
+            ))
+          )}
         </ThemedView>
         
         <ThemedView style={{ height: 120 }} />
       </Animated.ScrollView>
 
       {/* Cart Preview */}
-      <ThemedView style={styles.cartPreview}>
-        <ThemedView style={styles.cartInfo}>
-          <ThemedText style={styles.cartQty}>2 ITEMS</ThemedText>
-          <ThemedText style={styles.cartTotal}>₱598</ThemedText>
+      {itemCount > 0 && (
+        <ThemedView style={[styles.cartPreview, { bottom: Math.max(20, insets.bottom + 10) }]}>
+          <ThemedView style={styles.cartInfo}>
+            <ThemedText style={styles.cartQty}>{itemCount} ITEMS</ThemedText>
+            <ThemedText style={styles.cartTotal}>₱{cartTotal}</ThemedText>
+          </ThemedView>
+          <TouchableOpacity style={styles.viewBtn} onPress={() => router.push('/(tabs)/cart')}>
+            <ThemedText style={styles.viewBtnText}>View Cart</ThemedText>
+          </TouchableOpacity>
         </ThemedView>
-        <TouchableOpacity style={styles.viewBtn} onPress={() => router.push('/cart')}>
-          <ThemedText style={styles.viewBtnText}>View Cart</ThemedText>
-        </TouchableOpacity>
-      </ThemedView>
+      )}
     </ThemedView>
   );
 }
@@ -190,6 +303,29 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFF',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#777',
+  },
+  backButton: {
+    marginTop: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: '#C2185B',
+    borderRadius: 8,
+  },
+  backButtonText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
   stickyHeader: {
     position: 'absolute',
@@ -230,7 +366,7 @@ const styles = StyleSheet.create({
     right: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    zIndex: 90, // Lower than stickyHeader
+    zIndex: 90,
     backgroundColor: 'transparent',
   },
   rightActions: {
@@ -258,7 +394,7 @@ const styles = StyleSheet.create({
   },
   identityRow: {
     position: 'absolute',
-    bottom: -45, // Moved lower
+    bottom: -45,
     left: 16,
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -290,7 +426,7 @@ const styles = StyleSheet.create({
     marginBottom: 10, 
   },
   infoCard: {
-    paddingTop: 55, // Increased to accommodate the lower logo
+    paddingTop: 55,
     paddingHorizontal: 16,
     paddingBottom: 20,
     backgroundColor: '#FFF',
@@ -298,10 +434,11 @@ const styles = StyleSheet.create({
   infoContent: {
     backgroundColor: 'transparent',
   },
-  restaurantName: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#333',
+  description: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 8,
+    lineHeight: 18,
   },
   ratingRow: {
     flexDirection: 'row',
@@ -347,29 +484,19 @@ const styles = StyleSheet.create({
     color: '#888',
     marginTop: 2,
   },
-  changeAction: {
-    fontSize: 12,
-    color: '#888',
-    fontWeight: '600',
-  },
-  promoHighlight: {
+  addressCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 12,
     padding: 12,
     backgroundColor: '#FFF5F8',
     borderRadius: 10,
-    borderColor: '#FFECF2',
-    borderWidth: 1,
   },
-  promoTitleText: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#C2185B',
-  },
-  promoBodyText: {
-    fontSize: 10,
-    color: '#C2185B',
-    marginTop: 2,
-    opacity: 0.8,
+  addressText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 8,
+    flex: 1,
   },
   tabContainer: {
     marginTop: 10,
@@ -399,6 +526,16 @@ const styles = StyleSheet.create({
   },
   menuSection: {
     padding: 16,
+  },
+  emptyMenu: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    backgroundColor: 'transparent',
+  },
+  emptyText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#999',
   },
   menuGroup: {
     marginBottom: 24,
@@ -434,6 +571,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginTop: 6,
   },
+  unavailableText: {
+    fontSize: 11,
+    color: '#FF6B6B',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
   itemImageWrapper: {
     width: 90,
     height: 90,
@@ -464,15 +607,19 @@ const styles = StyleSheet.create({
   },
   cartPreview: {
     position: 'absolute',
-    bottom: 25,
-    left: 16,
-    right: 16,
+    left: 10,
+    right: 10,
     backgroundColor: '#C2185B',
-    padding: 15,
-    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 30,
     flexDirection: 'row',
     alignItems: 'center',
     elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
   },
   cartInfo: {
     flex: 1,
@@ -495,5 +642,28 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 14,
     fontWeight: '800',
+  },
+  closedBanner: {
+    position: 'absolute',
+    top: 0, 
+    left: 0, 
+    right: 0, 
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  closedBannerText: {
+    color: '#FFF',
+    fontSize: 24,
+    fontWeight: '900',
+    letterSpacing: 2,
+  },
+  opensAtBannerText: {
+    color: '#DDD',
+    fontSize: 14,
+    marginTop: 8,
+    fontWeight: '600',
   },
 });

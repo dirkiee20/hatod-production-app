@@ -29,4 +29,20 @@ export class UsersService {
 
     return user;
   }
+  async findAll() {
+    return this.prisma.user.findMany({
+      select: {
+        id: true,
+        email: true,
+        phone: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        customer: { select: { firstName: true, lastName: true } },
+        merchant: { select: { name: true } },
+        rider: { select: { firstName: true, lastName: true } },
+        admin: { select: { firstName: true, lastName: true } },
+      },
+    });
+  }
 }

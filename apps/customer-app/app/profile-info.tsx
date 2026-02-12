@@ -5,20 +5,43 @@ import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import React, { useState } from 'react';
 
+import { useUser } from '@/context/UserContext';
+
 export default function ProfileScreen() {
   const router = useRouter();
+  const { user, updateUserLocal } = useUser();
   
-  // Dummy data state
-  const [userInfo, setUserInfo] = useState({
-    firstName: 'John',
-    lastName: 'Doe',
-    email: 'john.doe@example.com',
-    phone: '09123456789',
-    birthdate: '1995-12-15',
+  const [formData, setFormData] = useState({
+    firstName: user?.customer?.firstName || '',
+    lastName: user?.customer?.lastName || '',
+    email: '',
+    phone: user?.phone || '', 
   });
 
+  React.useEffect(() => {
+    if (user) {
+        let emailDisplay = user.email || '';
+        if (emailDisplay.endsWith('@hatod.com')) {
+            emailDisplay = ''; 
+        }
+        setFormData({
+            firstName: user.customer?.firstName || '',
+            lastName: user.customer?.lastName || '',
+            email: emailDisplay,
+            phone: user.phone || user.email?.replace('@hatod.com','') || '',
+        });
+    }
+  }, [user]);
+
   const handleSave = () => {
-    // Logic to save profile changes will go here
+    // Optimistic update locally
+    updateUserLocal({
+        customer: {
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+        },
+        // Phone/Email update logic would need backend support
+    });
     router.back();
   };
 
@@ -40,7 +63,7 @@ export default function ProfileScreen() {
         {/* Avatar Section */}
         <View style={styles.avatarSection}>
             <View style={styles.avatarContainer}>
-                <ThemedText style={styles.avatarText}>{userInfo.firstName[0]}{userInfo.lastName[0]}</ThemedText>
+                <ThemedText style={styles.avatarText}>{formData.firstName[0]}{formData.lastName[0]}</ThemedText>
                 <TouchableOpacity style={styles.cameraBtn}>
                     <IconSymbol size={16} name="add" color="#FFF" /> 
                 </TouchableOpacity>
@@ -54,8 +77,8 @@ export default function ProfileScreen() {
                 <ThemedText style={styles.label}>First Name</ThemedText>
                 <TextInput 
                     style={styles.input} 
-                    value={userInfo.firstName}
-                    onChangeText={(text) => setUserInfo({...userInfo, firstName: text})}
+                    value={formData.firstName}
+                    onChangeText={(text) => setFormData({...formData, firstName: text})}
                 />
             </View>
 
@@ -63,8 +86,8 @@ export default function ProfileScreen() {
                 <ThemedText style={styles.label}>Last Name</ThemedText>
                 <TextInput 
                     style={styles.input} 
-                    value={userInfo.lastName}
-                    onChangeText={(text) => setUserInfo({...userInfo, lastName: text})}
+                    value={formData.lastName}
+                    onChangeText={(text) => setFormData({...formData, lastName: text})}
                 />
             </View>
 
@@ -72,8 +95,9 @@ export default function ProfileScreen() {
                 <ThemedText style={styles.label}>Email Address</ThemedText>
                 <TextInput 
                     style={[styles.input, styles.inputDisabled]} 
-                    value={userInfo.email}
+                    value={formData.email}
                     editable={false}
+                    placeholder="Not Set"
                 />
                 <IconSymbol size={16} name="person" color="#aaa" style={styles.fieldIcon} />
             </View>
@@ -82,9 +106,9 @@ export default function ProfileScreen() {
                 <ThemedText style={styles.label}>Phone Number</ThemedText>
                 <TextInput 
                     style={styles.input} 
-                    value={userInfo.phone}
+                    value={formData.phone}
                     keyboardType="phone-pad"
-                    onChangeText={(text) => setUserInfo({...userInfo, phone: text})}
+                    onChangeText={(text) => setFormData({...formData, phone: text})}
                 />
             </View>
         </View>
@@ -114,24 +138,24 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#FCE4EC',
+    backgroundColor: '#E8EAF6',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#F8BBD0',
+    borderColor: '#C5CAE9',
     marginBottom: 12,
     position: 'relative',
   },
   avatarText: {
     fontSize: 32,
     fontWeight: '800',
-    color: '#C2185B',
+    color: '#5c6cc9',
   },
   cameraBtn: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: '#C2185B',
+    backgroundColor: '#f78734',
     padding: 8,
     borderRadius: 20,
     borderWidth: 2,
@@ -139,7 +163,7 @@ const styles = StyleSheet.create({
   },
   avatarCta: {
     fontSize: 14,
-    color: '#C2185B',
+    color: '#5c6cc9',
     fontWeight: '700',
   },
   formSection: {
@@ -185,11 +209,11 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     height: 50,
-    backgroundColor: '#C2185B',
+    backgroundColor: '#f78734',
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#C2185B',
+    shadowColor: '#f78734',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,

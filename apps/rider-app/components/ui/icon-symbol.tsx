@@ -16,6 +16,7 @@ const MAPPING = {
   'account': 'person',
   'chat.bubble': 'chat-bubble',
   'receipt': 'receipt',
+  'fees': 'attach-money',
 } as const;
 
 type IconSymbolName = keyof typeof MAPPING;

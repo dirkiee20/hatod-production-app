@@ -41,6 +41,21 @@ export class UpdateMerchantDto {
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
+  name?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  address?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
   description?: string;
 
   @ApiProperty({ required: false })
@@ -52,4 +67,23 @@ export class UpdateMerchantDto {
   @IsOptional()
   @IsString()
   logo?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  coverImage?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  latitude?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  longitude?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  operatingHours?: any;
 }

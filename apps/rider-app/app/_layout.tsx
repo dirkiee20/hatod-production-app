@@ -4,7 +4,11 @@ import * as SecureStore from 'expo-secure-store';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { StatusBar } from 'expo-status-bar';
+import Mapbox from '@rnmapbox/maps';
 import 'react-native-reanimated';
+
+// Initialize Mapbox access token early in app lifecycle
+Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN || '');
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();

@@ -1,29 +1,84 @@
-import { StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { useState, useCallback } from 'react';
+import { StyleSheet, ScrollView, TouchableOpacity, Image, Alert, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useUser } from '@/context/UserContext';
 
 export default function AccountScreen() {
   const router = useRouter();
+  const { user, refreshProfile, logoutUser } = useUser();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await refreshProfile();
+    setRefreshing(false);
+  };
+
   const menuItems = [
-    { icon: 'person', label: 'Profile Information', color: '#C2185B' },
-    { icon: 'shopping-cart', label: 'My Food Orders', color: '#5856D6' },
+    { icon: 'person', label: 'Profile Information', color: '#f78734' },
+    { icon: 'cart', label: 'My Food Orders', color: '#5856D6' },
     { icon: 'grocery', label: 'My Grocery Orders', color: '#4CAF50' },
-    { icon: 'account-balance', label: 'Government Transcripts', color: '#4CD964' },
-    { icon: 'send', label: 'Support & Feedback', color: '#FF9500' },
+    { icon: 'government', label: 'Government Transcripts', color: '#4CD964' },
+    { icon: 'paperplane.fill', label: 'Support & Feedback', color: '#FF9500' },
   ];
 
+  const handleLogout = () => {
+    Alert.alert(
+      "Log Out",
+      "Are you sure you want to log out?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        { 
+          text: "Log Out", 
+          style: "destructive",
+          onPress: () => {
+             logoutUser();
+          }
+        }
+      ]
+    );
+  };
+
+  const getInitials = () => {
+      if (!user?.customer) return 'JD';
+      const first = user.customer.firstName?.charAt(0) || '';
+      const last = user.customer.lastName?.charAt(0) || '';
+      return (first + last).toUpperCase() || 'JD';
+  };
+
+  const getFullName = () => {
+      if (!user?.customer) return 'Loading...';
+      return `${user.customer.firstName} ${user.customer.lastName}`;
+  };
+
+  const getEmailOrPhone = () => {
+      if (user?.phone) return user.phone;
+      if (user?.email && user.email.endsWith('@hatod.com')) {
+          return user.email.replace('@hatod.com', '');
+      }
+      return user?.email || '';
+  };
+
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView 
+        style={styles.container} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
       <ThemedView style={styles.header}>
         <ThemedView style={styles.profileContainer}>
           <ThemedView style={styles.avatarPlaceholder}>
-            <ThemedText style={styles.avatarText}>JD</ThemedText>
+            <ThemedText style={styles.avatarText}>{getInitials()}</ThemedText>
           </ThemedView>
           <ThemedView style={styles.profileInfo}>
-            <ThemedText style={styles.userName}>John Doe</ThemedText>
-            <ThemedText style={styles.email}>john.doe@example.com</ThemedText>
+            <ThemedText style={styles.userName}>{getFullName()}</ThemedText>
+            <ThemedText style={styles.email}>{getEmailOrPhone()}</ThemedText>
           </ThemedView>
         </ThemedView>
       </ThemedView>
@@ -57,7 +112,7 @@ export default function AccountScreen() {
         ))}
       </ThemedView>
 
-      <TouchableOpacity style={styles.logoutButton}>
+      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
         <ThemedText style={styles.logoutText}>Log Out</ThemedText>
       </TouchableOpacity>
 
@@ -77,7 +132,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 25,
-    backgroundColor: '#C2185B', // Clean pink theme to match header
+    backgroundColor: '#5c6cc9', // Hatod Purple
   },
   profileContainer: {
     flexDirection: 'row',
@@ -100,7 +155,7 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#C2185B',
+    color: '#5c6cc9',
   },
   profileInfo: {
     marginLeft: 15,

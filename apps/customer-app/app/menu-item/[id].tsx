@@ -3,45 +3,90 @@ import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React, { useState } from 'react';
+import { getMenuItemById } from '@/api/services';
+import { resolveImageUrl } from '@/api/client';
+import { MenuItem } from '@/api/types';
+import { ActivityIndicator } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { useCart } from '@/context/CartContext';
 
 export default function ItemDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
+  const { addToCart } = useCart();
   const [quantity, setQuantity] = useState(1);
   const [selectedSize, setSelectedSize] = useState('Regular');
   const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
+  const [item, setItem] = useState<MenuItem | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Mock data for the specific item
-  const item = {
-    name: 'Signature Double Cheese',
-    price: 299,
-    description: 'Double beef patty, quadruple cheese, secret sauce, and fresh vegetables on a brioche bun.',
-    image: 'https://images.unsplash.com/photo-1572802419224-296b0aeee0d9?w=800',
-    options: [
-      {
-        title: 'Choose Size',
-        required: true,
-        type: 'radio',
-        items: [
-          { name: 'Regular', price: 0 },
-          { name: 'Large', price: 50 },
-          { name: 'Monster Size', price: 120 },
-        ]
-      },
-      {
-        title: 'Extra Add-ons',
-        required: false,
-        type: 'checkbox',
-        items: [
-          { name: 'Extra Cheese', price: 25 },
-          { name: 'Bacon Strips', price: 45 },
-          { name: 'Fried Egg', price: 20 },
-          { name: 'Caramelized Onions', price: 15 },
-        ]
+  useEffect(() => {
+    async function fetchItem() {
+      if (id) {
+        setLoading(true);
+        const data = await getMenuItemById(id as string);
+        if (data) {
+           // Parse description and variants (same logic as Merchant App)
+           const { description, options } = parseVariants(data.description || '');
+           setItem({
+               ...data,
+               description,
+               options: options.length > 0 ? options : (data.options || [])
+           });
+        }
+        setLoading(false);
       }
-    ]
+    }
+    fetchItem();
+  }, [id]);
+
+  const parseVariants = (fullDesc: string) => {
+      const variantRegex = /\[(.*?)\s\((.*?)\):\s(.*?)\]/g;
+      const options = [];
+      let cleanDescription = fullDesc.replace(variantRegex, '').trim();
+
+      let match;
+      while ((match = variantRegex.exec(fullDesc)) !== null) {
+          const title = match[1];
+          const reqText = match[2]; // Required or Optional
+          const itemsStr = match[3];
+
+          const isRequired = reqText.toLowerCase() === 'required';
+          
+          const items = itemsStr.split(', ').map(s => {
+              const itemMatch = s.match(/(.*?)\s\(\+\$(\d+(?:\.\d+)?)\)/);
+              if (itemMatch) {
+                  return { name: itemMatch[1], price: parseFloat(itemMatch[2]) };
+              }
+              return { name: s, price: 0 };
+          });
+
+          options.push({
+              title,
+              required: isRequired,
+              type: isRequired ? 'radio' : 'checkbox', // Heuristic
+              items
+          });
+      }
+
+      return { description: cleanDescription, options };
   };
+
+  if (loading) {
+    return (
+        <ThemedView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+            <ActivityIndicator size="large" color="#C2185B" />
+        </ThemedView>
+    );
+  }
+
+  if (!item) {
+     return (
+        <ThemedView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+            <ThemedText>Item not found</ThemedText>
+        </ThemedView>
+    );
+  }
 
   const toggleAddon = (name: string) => {
     if (selectedAddons.includes(name)) {
@@ -53,15 +98,43 @@ export default function ItemDetailScreen() {
 
   const calculateTotal = () => {
     let extra = 0;
-    const sizeOption = item.options[0].items.find(i => i.name === selectedSize);
-    if (sizeOption) extra += sizeOption.price;
-    
-    selectedAddons.forEach(addonName => {
-      const addon = item.options[1].items.find(i => i.name === addonName);
-      if (addon) extra += addon.price;
-    });
+    // Safety check for options
+    if (item.options && item.options.length > 0) {
+        if (item.options[0]?.items) {
+             const sizeOption = item.options[0].items.find((i: any) => i.name === selectedSize);
+             if (sizeOption) extra += sizeOption.price;
+        }
+        
+        selectedAddons.forEach(addonName => {
+            if(item.options && item.options[1]?.items) {
+               const addon = item.options[1].items.find((i: any) => i.name === addonName);
+               if (addon) extra += addon.price;
+            }
+        });
+    }
 
     return (item.price + extra) * quantity;
+  };
+
+  const handleAddToCart = () => {
+    const total = calculateTotal();
+    addToCart({
+      id: Date.now().toString(),
+      menuItemId: id as string || 'mock-id',
+      merchantId: item.merchantId,
+      storeName: item.merchant?.name,
+      deliveryFee: item.merchant?.deliveryFee ?? 50,
+      name: item.name,
+      price: item.price,
+      quantity,
+      image: item.image,
+      options: {
+        size: selectedSize,
+        addons: selectedAddons,
+      },
+      totalPrice: total,
+    });
+    router.back();
   };
 
   return (
@@ -75,7 +148,7 @@ export default function ItemDetailScreen() {
       </TouchableOpacity>
 
       <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
-        <Image source={{ uri: item.image }} style={styles.heroImage} />
+        <Image source={{ uri: resolveImageUrl(item.image || item.imageUrl) || 'https://via.placeholder.com/400' }} style={styles.heroImage} />
         
         <ThemedView style={styles.content}>
           <ThemedView style={styles.headerRow}>
@@ -84,7 +157,7 @@ export default function ItemDetailScreen() {
           </ThemedView>
           <ThemedText style={styles.itemDescription}>{item.description}</ThemedText>
 
-          {item.options.map((option, idx) => (
+          {item.options?.map((option: any, idx: number) => (
             <ThemedView key={idx} style={styles.optionSection}>
               <ThemedView style={styles.optionHeader}>
                 <ThemedView>
@@ -98,7 +171,7 @@ export default function ItemDetailScreen() {
                 )}
               </ThemedView>
 
-              {option.items.map((choice, cIdx) => (
+              {option.items.map((choice: any, cIdx: number) => (
                 <TouchableOpacity 
                   key={cIdx} 
                   style={styles.choiceRow}
@@ -150,7 +223,7 @@ export default function ItemDetailScreen() {
           </TouchableOpacity>
         </ThemedView>
 
-        <TouchableOpacity style={styles.addToCartBtn}>
+        <TouchableOpacity style={styles.addToCartBtn} onPress={handleAddToCart}>
           <ThemedText style={styles.addToCartText}>Add to Cart — ₱{calculateTotal()}</ThemedText>
         </TouchableOpacity>
       </ThemedView>

@@ -1,23 +1,126 @@
-import { StyleSheet, ScrollView, TouchableOpacity, View, Switch } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, View, Switch, RefreshControl, ActivityIndicator, Alert } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
+import { useRouter } from 'expo-router';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import api from '@/services/api';
+import { useLocationTracker } from '@/hooks/useLocationTracker';
 
 export default function DashboardScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [isOnline, setIsOnline] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [userData, setUserData] = useState<any>(null);
+  useLocationTracker(isOnline);
+  const [recentOrders, setRecentOrders] = useState<any[]>([]);
+  const [activeOrder, setActiveOrder] = useState<any>(null);
+  const [stats, setStats] = useState({
+    earnings: 0,
+    orders: 0,
+    onlineHours: '0h',
+  });
 
-  const stats = [
-    { label: 'Earnings', value: '₱1,250', icon: 'fees', color: '#388E3C' },
-    { label: 'Orders', value: '12', icon: 'orders', color: '#1976D2' },
-    { label: 'Online', value: '4h 30m', icon: 'dashboard', color: '#F57C00' },
-  ];
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [userRes, ordersRes] = await Promise.all([
+        api.get('/users/me'),
+        api.get('/orders'),
+      ]);
 
-  const recentOrders = [
-    { id: 'ORD-1001', restaurant: 'The Burger Mansion', income: '₱85', time: '15 mins ago', status: 'Completed' },
-    { id: 'ORD-1002', restaurant: 'Pizza Palace', income: '₱120', time: '1 hour ago', status: 'Completed' },
+      setUserData(userRes.data);
+      
+      const allOrders = ordersRes.data;
+      // Filter for delivered orders
+      const deliveredOrders = allOrders.filter((o: any) => o.status === 'DELIVERED');
+      
+      // Find active order (Assigned to me and active)
+      // Note: Backend findAll might return unassigned READY orders too, so check riderId.
+      const myId = userRes.data.rider?.id;
+      
+      // 1. Check for Active Order (Assigned to me and in progress)
+      let active = allOrders.find((o: any) => 
+        (o.status === 'READY_FOR_PICKUP' || o.status === 'DELIVERING') && 
+        o.rider?.id === myId
+      );
+
+      // 2. If no active order, check for Available Orders (Ready and Unassigned)
+      // Only if rider is ONLINE
+      if (!active && (userRes.data.rider?.status === 'AVAILABLE' || userRes.data.rider?.status === 'BUSY')) {
+          active = allOrders.find((o: any) => 
+            o.status === 'READY_FOR_PICKUP' && 
+            !o.riderId // Unassigned
+          );
+          if (active) {
+              active.isAvailableRequest = true;
+          }
+      }
+
+      setActiveOrder(active || null);
+
+      const totalEarnings = deliveredOrders.reduce((sum: number, order: any) => sum + (order.deliveryFee || 0), 0);
+      
+      setStats({
+        earnings: totalEarnings,
+        orders: deliveredOrders.length,
+        onlineHours: '4h 30m', 
+      });
+      
+      const sortedOrders = allOrders.sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      setRecentOrders(sortedOrders.slice(0, 5));
+      
+      if (userRes.data.rider?.status === 'AVAILABLE' || userRes.data.rider?.status === 'BUSY') {
+        setIsOnline(true);
+      } else {
+        setIsOnline(false);
+      }
+
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchData();
+  }, []);
+
+  const toggleOnlineStatus = async (value: boolean) => {
+    setIsOnline(value);
+    try {
+        await api.patch('/riders/status', { status: value ? 'AVAILABLE' : 'OFFLINE' });
+    } catch (error) {
+        console.error('Failed to update status', error);
+        setIsOnline(!value);
+        Alert.alert('Error', 'Failed to update status');
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'DELIVERED': return '#388E3C';
+      case 'CANCELLED': return '#D32F2F';
+      case 'DELIVERING': return '#1976D2';
+      case 'READY_FOR_PICKUP': return '#FBC02D';
+      default: return '#999';
+    }
+  };
+
+  const dashboardStats = [
+    { label: 'Earnings', value: `₱${stats.earnings.toFixed(2)}`, icon: 'fees', color: '#388E3C' },
+    { label: 'Orders', value: stats.orders.toString(), icon: 'orders', color: '#1976D2' },
+    { label: 'Online', value: stats.onlineHours, icon: 'dashboard', color: '#F57C00' },
   ];
 
   return (
@@ -25,8 +128,10 @@ export default function DashboardScreen() {
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <View>
-          <ThemedText style={styles.greeting}>Good afternoon,</ThemedText>
-          <ThemedText style={styles.riderName}>Pedro Penduko</ThemedText>
+          <ThemedText style={styles.greeting}>Good day,</ThemedText>
+          <ThemedText style={styles.riderName}>
+            {userData?.rider ? `${userData.rider.firstName} ${userData.rider.lastName}` : 'Rider'}
+          </ThemedText>
         </View>
         <View style={styles.statusToggle}>
           <ThemedText style={[styles.statusText, { color: isOnline ? '#388E3C' : '#999' }]}>
@@ -34,18 +139,24 @@ export default function DashboardScreen() {
           </ThemedText>
           <Switch 
             value={isOnline} 
-            onValueChange={setIsOnline}
+            onValueChange={toggleOnlineStatus}
             trackColor={{ false: '#DDD', true: '#A5D6A7' }}
             thumbColor={isOnline ? '#388E3C' : '#F5F5F5'}
           />
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#C2185B']} />
+        }
+      >
         
         {/* Stats Grid */}
         <View style={styles.statsGrid}>
-          {stats.map((stat, index) => (
+          {dashboardStats.map((stat, index) => (
             <View key={index} style={styles.statCard}>
               <View style={[styles.statIcon, { backgroundColor: `${stat.color}15` }]}>
                 <IconSymbol size={20} name={stat.icon as any} color={stat.color} />
@@ -62,12 +173,46 @@ export default function DashboardScreen() {
         {isOnline && (
           <View style={styles.currentTaskCard}>
             <ThemedText style={styles.sectionTitle}>Current Task</ThemedText>
-            <View style={styles.taskContent}>
-              <ThemedText style={styles.waitingText}>Scanning for nearby orders...</ThemedText>
-              <View style={styles.radarAnimation}>
-                <IconSymbol size={32} name="map" color="#C2185B" />
-              </View>
-            </View>
+            {activeOrder ? (
+                 <View style={styles.taskContent}>
+                    <View style={{ alignItems: 'flex-start', width: '100%', marginBottom: 10 }}>
+                        <ThemedText style={{ fontSize: 18, fontWeight: '800', color: activeOrder.isAvailableRequest ? '#2E7D32' : '#333' }}>
+                            {activeOrder.isAvailableRequest 
+                                ? 'New Delivery Request' 
+                                : (activeOrder.status === 'READY_FOR_PICKUP' ? 'Prepare for Pickup' : 'Delivery in Progress')
+                            }
+                        </ThemedText>
+                        <ThemedText style={{ color: '#666' }}>ID: #{activeOrder.id.slice(0,8)}</ThemedText>
+                    </View>
+                    
+                    <View style={{ width: '100%', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+                         <View>
+                              <ThemedText style={{ fontSize: 12, color: '#888' }}>Merchant</ThemedText>
+                              <ThemedText style={{ fontWeight: '600' }}>{activeOrder.merchant?.name}</ThemedText>
+                         </View>
+                         <View style={{ alignItems: 'flex-end' }}>
+                              <ThemedText style={{ fontSize: 12, color: '#888' }}>Customer</ThemedText>
+                              <ThemedText style={{ fontWeight: '600' }}>{activeOrder.customer?.firstName}</ThemedText>
+                         </View>
+                    </View>
+
+                    <TouchableOpacity 
+                        style={[styles.actionBtn, activeOrder.isAvailableRequest && { backgroundColor: '#2E7D32' }]}
+                        onPress={() => router.push(`/order-details/${activeOrder.id}`)}
+                    >
+                        <ThemedText style={styles.actionBtnText}>
+                            {activeOrder.isAvailableRequest ? 'View & Accept' : 'View Details / Proceed'}
+                        </ThemedText>
+                    </TouchableOpacity>
+                 </View>
+            ) : (
+                <View style={styles.taskContent}>
+                <ThemedText style={styles.waitingText}>Scanning for assigned orders...</ThemedText>
+                <View style={styles.radarAnimation}>
+                    <IconSymbol size={32} name="map" color="#C2185B" />
+                </View>
+                </View>
+            )}
           </View>
         )}
 
@@ -80,18 +225,32 @@ export default function DashboardScreen() {
             </TouchableOpacity>
           </View>
 
-          {recentOrders.map((order, idx) => (
-            <View key={idx} style={styles.orderCard}>
-              <View style={styles.orderIcon}>
-                <IconSymbol size={20} name="receipt" color="#C2185B" />
+          {loading && !refreshing ? (
+            <ActivityIndicator size="small" color="#C2185B" style={{ marginTop: 20 }} />
+          ) : recentOrders.length === 0 ? (
+            <ThemedText style={styles.emptyText}>No recent orders</ThemedText>
+          ) : (
+            recentOrders.map((order, idx) => (
+              <View key={idx} style={styles.orderCard}>
+                <View style={[styles.orderIcon, { backgroundColor: order.status === 'DELIVERED' ? '#E8F5E9' : '#FCE4EC' }]}>
+                  <IconSymbol 
+                    size={20} 
+                    name="receipt" 
+                    color={order.status === 'DELIVERED' ? '#388E3C' : '#C2185B'} 
+                  />
+                </View>
+                <View style={styles.orderInfo}>
+                  <ThemedText style={styles.orderRestaurant}>
+                    {order.merchant?.name || 'Unknown Merchant'}
+                  </ThemedText>
+                  <ThemedText style={styles.orderTime}>
+                    {new Date(order.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • <ThemedText style={{ color: getStatusColor(order.status), fontWeight: '600' }}>{order.status}</ThemedText>
+                  </ThemedText>
+                </View>
+                <ThemedText style={styles.orderIncome}>₱{order.deliveryFee}</ThemedText>
               </View>
-              <View style={styles.orderInfo}>
-                <ThemedText style={styles.orderRestaurant}>{order.restaurant}</ThemedText>
-                <ThemedText style={styles.orderTime}>{order.time} • {order.status}</ThemedText>
-              </View>
-              <ThemedText style={styles.orderIncome}>{order.income}</ThemedText>
-            </View>
-          ))}
+            ))
+          )}
         </View>
 
       </ScrollView>
@@ -248,5 +407,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     color: '#388E3C',
+  },
+  emptyText: {
+    textAlign: 'center',
+    color: '#999',
+    marginTop: 20,
+    fontStyle: 'italic',
+  },
+  actionBtn: {
+    backgroundColor: '#C2185B',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginTop: 10,
+    width: '100%',
+    alignItems: 'center',
+  },
+  actionBtnText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '800',
   },
 });

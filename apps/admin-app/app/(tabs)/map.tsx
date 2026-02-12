@@ -1,39 +1,80 @@
-import { StyleSheet, View, TouchableOpacity, TextInput } from 'react-native';
+
+import { StyleSheet, View, TouchableOpacity, TextInput, ActivityIndicator, Alert, Image } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MapView } from '@/components/ui/map-view';
+import Mapbox from '@rnmapbox/maps';
+import { getMerchants, getAllOrders, getRiders } from '../../api/services';
+import { Merchant, Order, Rider } from '../../api/types';
+
+// Initialize Mapbox with the same token key as other apps
+Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN || '');
 
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const [selectedFilter, setSelectedFilter] = useState('All');
+  const [merchants, setMerchants] = useState<Merchant[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [riders, setRiders] = useState<Rider[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filters = ['All', 'Restaurants', 'Drivers', 'Active Orders'];
+  const filters = ['All', 'Restaurants', 'Active Riders'];
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+        const [merchantsData, ordersData, ridersData] = await Promise.all([
+            getMerchants(),
+            getAllOrders(),
+            getRiders()
+        ]);
+        setMerchants(merchantsData);
+        setOrders(ordersData);
+        setRiders(ridersData);
+    } catch (e) {
+        console.error(e);
+        Alert.alert('Error', 'Failed to load map data');
+    } finally {
+        setLoading(false);
+    }
+  };
+
+  const getActiveOrders = () => {
+      return orders.filter(o => ['PENDING', 'PREPARING', 'READY', 'PICKED_UP'].includes(o.status));
+  };
+
+  const getActiveRiders = () => {
+      // Riders who have active orders or are marked as BUSY/AVAILABLE (online)
+      // The requirement was "riders that is not yet delivered", which implies actively delivering
+      return riders.filter(r => 
+        (r.status === 'BUSY' || (r.orders && r.orders.length > 0)) && r.currentLatitude && r.currentLongitude
+      );
+  };
+
+  const getAllOnlineRiders = () => {
+    return riders.filter(r => r.status !== 'OFFLINE');
+  };
+
+  const shouldShowRestaurants = selectedFilter === 'All' || selectedFilter === 'Restaurants';
+  const shouldShowRiders = selectedFilter === 'All' || selectedFilter === 'Active Riders';
 
   return (
     <ThemedView style={styles.container}>
       <ThemedView style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <View>
           <ThemedText style={styles.headerTitle}>Live Map</ThemedText>
-          <ThemedText style={styles.headerSubtitle}>Track restaurants, drivers & orders</ThemedText>
+          <ThemedText style={styles.headerSubtitle}>Real-time monitoring</ThemedText>
         </View>
-        <TouchableOpacity style={styles.refreshBtn}>
+        <TouchableOpacity style={styles.refreshBtn} onPress={fetchData}>
           <IconSymbol size={20} name="dashboard" color="#FFF" />
         </TouchableOpacity>
       </ThemedView>
-
-      <View style={styles.searchContainer}>
-        <View style={styles.searchBar}>
-          <IconSymbol size={18} name="restaurants" color="#999" />
-          <TextInput 
-            style={styles.searchInput}
-            placeholder="Search location..."
-            placeholderTextColor="#999"
-          />
-        </View>
-      </View>
 
       <View style={styles.filterContainer}>
         {filters.map((filter) => (
@@ -51,21 +92,103 @@ export default function MapScreen() {
 
       {/* Map View */}
       <View style={styles.mapContainer}>
-        <MapView style={StyleSheet.absoluteFill} />
+        {loading && (
+            <View style={styles.loadingOverlay}>
+                <ActivityIndicator size="large" color="#C2185B" />
+            </View>
+        )}
+        
+        <Mapbox.MapView 
+            style={styles.map} 
+            styleURL={Mapbox.StyleURL.Street}
+            logoEnabled={false}
+            attributionEnabled={false}
+        >
+            <Mapbox.Camera
+                zoomLevel={11}
+                centerCoordinate={[120.9842, 14.5995]}
+                animationMode={'flyTo'}
+                animationDuration={2000}
+                ref={(c) => {
+                    if (c) {
+                        const coordinates = [
+                            ...merchants.filter(m => m.longitude && m.latitude).map(m => [m.longitude!, m.latitude!]),
+                            ...riders.filter(r => r.currentLongitude && r.currentLatitude).map(r => [r.currentLongitude!, r.currentLatitude!])
+                        ];
 
-        {/* Mock Map Markers Info Overlays */}
+                        if (coordinates.length > 0) {
+                            const minLng = Math.min(...coordinates.map(c => c[0]));
+                            const maxLng = Math.max(...coordinates.map(c => c[0]));
+                            const minLat = Math.min(...coordinates.map(c => c[1]));
+                            const maxLat = Math.max(...coordinates.map(c => c[1]));
+
+                            // If only one point
+                            if (minLng === maxLng && minLat === maxLat) {
+                                c.setCamera({
+                                    centerCoordinate: [minLng, minLat],
+                                    zoomLevel: 14,
+                                    animationDuration: 2000,
+                                });
+                            } else {
+                                // Add 10% padding
+                                const latDiff = maxLat - minLat;
+                                const lngDiff = maxLng - minLng;
+                                
+                                c.fitBounds(
+                                    [maxLng + lngDiff * 0.1, maxLat + latDiff * 0.1], // ne
+                                    [minLng - lngDiff * 0.1, minLat - latDiff * 0.1], // sw
+                                    50, // padding
+                                    2000 // duration
+                                );
+                            }
+                        }
+                    }
+                }}
+            />
+
+            {/* Restaurant Markers */}
+            {shouldShowRestaurants && merchants.map((merchant) => (
+                merchant.latitude && merchant.longitude && (
+                    <Mapbox.PointAnnotation 
+                        key={`merchant-${merchant.id}`} 
+                        id={`merchant-${merchant.id}`} 
+                        coordinate={[merchant.longitude, merchant.latitude]}
+                    >
+                         <View style={styles.merchantMarker}>
+                             <IconSymbol size={16} name="restaurants" color="#FFF" />
+                         </View>
+                         <Mapbox.Callout title={merchant.name} />
+                    </Mapbox.PointAnnotation>
+                )
+            ))}
+
+            {/* Active Rider Markers */}
+            {shouldShowRiders && getActiveRiders().map((rider) => (
+                rider.currentLatitude && rider.currentLongitude && (
+                    <Mapbox.PointAnnotation 
+                        key={`rider-${rider.id}`} 
+                        id={`rider-${rider.id}`} 
+                        coordinate={[rider.currentLongitude, rider.currentLatitude]}
+                    >
+                         <View style={styles.riderMarker}>
+                             <IconSymbol size={16} name="map" color="#FFF" /> 
+                         </View>
+                         <Mapbox.Callout title={`${rider.firstName} ${rider.lastName}`} />
+                    </Mapbox.PointAnnotation>
+                )
+            ))}
+            
+        </Mapbox.MapView>
+
+        {/* Floating Info Card */}
         <View style={styles.markerInfoContainer}>
           <View style={styles.markerInfo}>
             <View style={[styles.markerDot, { backgroundColor: '#F57C00' }]} />
-            <ThemedText style={styles.markerLabel}>Restaurants: 2</ThemedText>
+            <ThemedText style={styles.markerLabel}>Restaurants: {merchants.filter(m => m.latitude).length}</ThemedText>
           </View>
           <View style={styles.markerInfo}>
-            <View style={[styles.markerDot, { backgroundColor: '#1976D2' }]} />
-            <ThemedText style={styles.markerLabel}>Drivers: 2</ThemedText>
-          </View>
-          <View style={styles.markerInfo}>
-            <View style={[styles.markerDot, { backgroundColor: '#388E3C' }]} />
-            <ThemedText style={styles.markerLabel}>Orders: 1</ThemedText>
+             <View style={[styles.markerDot, { backgroundColor: '#43A047' }]} />
+             <ThemedText style={styles.markerLabel}>Active Riders: {getActiveRiders().length}</ThemedText>
           </View>
         </View>
       </View>
@@ -73,18 +196,18 @@ export default function MapScreen() {
       {/* Bottom Stats */}
       <View style={[styles.bottomStats, { paddingBottom: insets.bottom + 16 }]}>
         <View style={styles.statItem}>
-          <ThemedText style={styles.statValue}>5</ThemedText>
-          <ThemedText style={styles.statLabel}>Active Locations</ThemedText>
+          <ThemedText style={styles.statValue}>{merchants.length}</ThemedText>
+          <ThemedText style={styles.statLabel}>Locations</ThemedText>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
-          <ThemedText style={styles.statValue}>2</ThemedText>
-          <ThemedText style={styles.statLabel}>Drivers Online</ThemedText>
+          <ThemedText style={styles.statValue}>{getActiveOrders().length}</ThemedText>
+          <ThemedText style={styles.statLabel}>Orders</ThemedText>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
-          <ThemedText style={styles.statValue}>1</ThemedText>
-          <ThemedText style={styles.statLabel}>In Transit</ThemedText>
+          <ThemedText style={styles.statValue}>{getAllOnlineRiders().length}</ThemedText>
+          <ThemedText style={styles.statLabel}>Riders Online</ThemedText>
         </View>
       </View>
     </ThemedView>
@@ -122,26 +245,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  searchContainer: {
-    backgroundColor: '#FFF',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 44,
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: 10,
-    fontSize: 14,
-    color: '#333',
-  },
   filterContainer: {
     flexDirection: 'row',
     padding: 16,
@@ -171,6 +274,46 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#E8F5E9',
     position: 'relative',
+  },
+  map: {
+    flex: 1,
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  merchantMarker: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F57C00',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  riderMarker: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#43A047',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
   markerInfoContainer: {
     position: 'absolute',

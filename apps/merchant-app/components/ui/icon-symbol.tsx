@@ -44,6 +44,10 @@ const MAPPING = {
   'doc.text.fill': 'article',
   'play.rectangle.fill': 'smart-display',
   'trash.fill': 'delete',
+  'phone': 'phone',
+  'checkmark': 'check',
+  'person.fill': 'person',
+  'location.fill': 'location-on',
 } as const;
 
 type IconSymbolName = keyof typeof MAPPING;

@@ -24,6 +24,13 @@ export class MenuController {
     return this.menuService.getCategories(req.user.userId);
   }
 
+  @Delete('categories/:id')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  deleteCategory(@Req() req: any, @Param('id') id: string) {
+    return this.menuService.deleteCategory(req.user.userId, id);
+  }
+
   @Post('items')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
@@ -44,6 +51,12 @@ export class MenuController {
     return this.menuService.getMenuItemsByMerchantId(merchantId);
   }
 
+  @Get('public/items/:id')
+  @ApiOperation({ summary: 'Get menu item by ID (Public)' })
+  getMenuItemPublic(@Param('id') id: string) {
+    return this.menuService.getMenuItemById(id);
+  }
+
   @Delete('items/:id')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
@@ -55,6 +68,6 @@ export class MenuController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   updateMenuItem(@Req() req: any, @Param('id') id: string, @Body() updateDto: Partial<CreateMenuItemDto>) {
-      return this.menuService.updateMenuItem(req.user.userId, id, updateDto);
+      return this.menuService.updateMenuItem(req.user, id, updateDto);
   }
 }

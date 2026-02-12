@@ -1,12 +1,42 @@
-import { StyleSheet, ScrollView, TouchableOpacity, View, Image, Switch } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, View, Image, Alert } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
+import api from '@/services/api';
 
 export default function AccountScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  const fetchProfile = async () => {
+    try {
+      const response = await api.get('/users/me');
+      setUser(response.data);
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      // Optional: Call logout endpoint if exists
+      // await api.post('/auth/logout');
+      
+      await SecureStore.deleteItemAsync('authToken');
+      router.replace('/(auth)/login');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to log out');
+    }
+  };
 
   const menuItems = [
     { icon: 'fees', label: 'Earnings & Payouts', color: '#388E3C' },
@@ -16,20 +46,28 @@ export default function AccountScreen() {
     { icon: 'account', label: 'Settings', color: '#666' },
   ];
 
+  const rider = user?.rider;
+
   return (
     <ThemedView style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + 20 }]}>
         <View style={styles.profileRow}>
           <Image 
-            source={{ uri: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=200' }} 
+            source={{ uri: rider?.avatar || 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=200' }} 
             style={styles.avatar} 
           />
           <View style={styles.profileInfo}>
-            <ThemedText style={styles.name}>Pedro Penduko</ThemedText>
-            <ThemedText style={styles.vehicle}>Yamaha NMAX • ABC 1234</ThemedText>
+            <ThemedText style={styles.name}>
+              {rider ? `${rider.firstName} ${rider.lastName}` : 'Loading...'}
+            </ThemedText>
+            <ThemedText style={styles.vehicle}>
+              {rider ? `${rider.vehicleType} • ${rider.vehicleNumber || 'No plate'}` : '...'}
+            </ThemedText>
             <View style={styles.ratingBadge}>
               <IconSymbol size={12} name="dashboard" color="#FFF" />
-              <ThemedText style={styles.ratingText}>4.9 (1,240 deliveries)</ThemedText>
+              <ThemedText style={styles.ratingText}>
+                {rider?.rating?.toFixed(1) || '0.0'} ({rider?.totalDeliveries || 0} deliveries)
+              </ThemedText>
             </View>
           </View>
         </View>
@@ -41,7 +79,8 @@ export default function AccountScreen() {
         <View style={styles.walletCard}>
           <View>
             <ThemedText style={styles.walletLabel}>Available Balance</ThemedText>
-            <ThemedText style={styles.walletAmount}>₱1,250.50</ThemedText>
+            <ThemedText style={styles.walletAmount}>₱0.00</ThemedText> 
+            {/* Wallet balance backend integration pending */}
           </View>
           <TouchableOpacity style={styles.cashoutBtn}>
             <ThemedText style={styles.cashoutText}>Cash Out</ThemedText>
@@ -61,7 +100,7 @@ export default function AccountScreen() {
           ))}
         </View>
 
-        <TouchableOpacity style={styles.logoutBtn}>
+        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
           <ThemedText style={styles.logoutText}>Log Out</ThemedText>
         </TouchableOpacity>
 

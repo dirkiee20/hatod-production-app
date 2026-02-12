@@ -1,30 +1,81 @@
-import { StyleSheet, ScrollView, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, View, RefreshControl } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import React from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useSocket } from '@/context/SocketContext';
+import { Alert } from 'react-native';
+
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
+  const { socket } = useSocket();
+  const [stats, setStats] = React.useState<any>({
+    totalRevenue: 0,
+    activeOrders: 0,
+    totalUsers: 0,
+    totalMerchants: 0,
+    recentActivity: []
+  });
+  const [loading, setLoading] = React.useState(true);
+  const [refreshing, setRefreshing] = React.useState(false);
 
-  const stats = [
-    { label: 'Total Revenue', value: '₱125,450', icon: 'fees', color: '#388E3C', change: '+12%' },
-    { label: 'Active Orders', value: '24', icon: 'orders', color: '#1976D2', change: '+5%' },
-    { label: 'Total Users', value: '1,234', icon: 'users', color: '#7B1FA2', change: '+8%' },
-    { label: 'Restaurants', value: '45', icon: 'restaurants', color: '#F57C00', change: '+3%' },
-  ];
+  const fetchStats = async () => {
+    try {
+      const { getDashboardStats } = await import('../../api/services');
+      const data = await getDashboardStats();
+      setStats(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
-  const recentActivity = [
-    { id: '1', type: 'order', message: 'New order #ORD-1234 placed', time: '2 mins ago' },
-    { id: '2', type: 'restaurant', message: 'Pizza Palace updated menu', time: '15 mins ago' },
-    { id: '3', type: 'user', message: 'New merchant registered', time: '1 hour ago' },
-    { id: '4', type: 'order', message: 'Order #ORD-1230 completed', time: '2 hours ago' },
+  React.useEffect(() => {
+    fetchStats();
+  }, []);
+
+  // Socket Listener
+  React.useEffect(() => {
+    if (!socket) return;
+
+    const handleNewOrder = (data: any) => {
+        console.log('Admin: New order received', data);
+        Alert.alert('New Order Received', `Order #${data.orderNumber} placed.`);
+        fetchStats(); // Refresh stats
+    };
+
+    socket.on('order:created', handleNewOrder);
+    
+    return () => {
+        socket.off('order:created', handleNewOrder);
+    };
+  }, [socket]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchStats();
+  };
+
+  const statCards = [
+    { label: 'Total Revenue', value: `₱${stats.totalRevenue.toLocaleString()}`, icon: 'fees', color: '#388E3C', change: '+12%' },
+    { label: 'Active Orders', value: stats.activeOrders.toString(), icon: 'orders', color: '#1976D2', change: '+5%' },
+    { label: 'Total Users', value: stats.totalUsers.toString(), icon: 'users', color: '#7B1FA2', change: '+8%' }, // Placeholder
+    { label: 'Restaurants', value: stats.totalMerchants.toString(), icon: 'restaurants', color: '#F57C00', change: '+3%' },
   ];
 
   return (
     <ThemedView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
         {/* Compact Header */}
         <View style={[styles.header, { marginTop: insets.top }]}>
           <View>
@@ -37,7 +88,7 @@ export default function DashboardScreen() {
         </View>
 
         <View style={styles.statsGrid}>
-          {stats.map((stat, index) => (
+          {statCards.map((stat, index) => (
             <TouchableOpacity key={index} style={styles.statCard}>
               <View style={[styles.statIcon, { backgroundColor: `${stat.color}15` }]}>
                 <IconSymbol size={20} name={stat.icon as any} color={stat.color} />
@@ -58,19 +109,23 @@ export default function DashboardScreen() {
             </TouchableOpacity>
           </View>
 
-          {recentActivity.map((activity) => (
-            <TouchableOpacity key={activity.id} style={styles.activityCard}>
-              <View style={[styles.activityDot, { 
-                backgroundColor: activity.type === 'order' ? '#1976D2' : 
-                               activity.type === 'restaurant' ? '#F57C00' : '#7B1FA2' 
-              }]} />
-              <View style={styles.activityInfo}>
-                <ThemedText style={styles.activityMessage}>{activity.message}</ThemedText>
-                <ThemedText style={styles.activityTime}>{activity.time}</ThemedText>
-              </View>
-              <IconSymbol size={16} name="chevron.right" color="#DDD" />
-            </TouchableOpacity>
-          ))}
+          {stats.recentActivity.length === 0 ? (
+             <ThemedText style={{color: '#888', fontStyle: 'italic'}}>No recent activity</ThemedText>
+          ) : (
+            stats.recentActivity.map((activity: any) => (
+              <TouchableOpacity key={activity.id} style={styles.activityCard}>
+                <View style={[styles.activityDot, { 
+                  backgroundColor: activity.type === 'order' ? '#1976D2' : 
+                                 activity.type === 'restaurant' ? '#F57C00' : '#7B1FA2' 
+                }]} />
+                <View style={styles.activityInfo}>
+                  <ThemedText style={styles.activityMessage}>{activity.message}</ThemedText>
+                  <ThemedText style={styles.activityTime}>{activity.time}</ThemedText>
+                </View>
+                <IconSymbol size={16} name="chevron.right" color="#DDD" />
+              </TouchableOpacity>
+            ))
+          )}
         </View>
 
         <View style={styles.section}>

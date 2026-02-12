@@ -1,48 +1,135 @@
-import { StyleSheet, ScrollView, TouchableOpacity, View, Image, Switch } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, View, Image, Switch, Alert, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { authenticatedFetch, API_BASE, resolveImageUrl } from '../../api/client';
 
 export default function MenuDetailsScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const item = {
-    id: id,
-    name: 'Signature Double Cheese',
-    description: 'Double beef patty, quadruple cheese, secret sauce, and fresh vegetables on a brioche bun.',
-    price: 299,
-    category: 'Main Course',
-    image: 'https://images.unsplash.com/photo-1572802419224-296b0aeee0d9?w=800',
-    available: true,
-    options: [
-      {
-        title: 'Choose Size',
-        required: true,
-        type: 'radio',
-        items: [
-          { name: 'Regular', price: 0 },
-          { name: 'Large', price: 50 },
-          { name: 'Monster Size', price: 120 },
-        ]
-      },
-      {
-        title: 'Extra Add-ons',
-        required: false,
-        type: 'checkbox',
-        items: [
-          { name: 'Extra Cheese', price: 25 },
-          { name: 'Bacon Strips', price: 45 },
-          { name: 'Fried Egg', price: 20 },
-          { name: 'Caramelized Onions', price: 15 },
-        ]
+  const [item, setItem] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchItem();
+  }, [id]);
+
+  const fetchItem = async () => {
+      try {
+          const res = await authenticatedFetch(`/menu/public/items/${id}`);
+          if (res.ok) {
+              const data = await res.json();
+              
+              // Parse description and variants
+              const { description, options } = parseVariants(data.description || '');
+              
+              setItem({
+                  ...data,
+                  description,
+                  options,
+                  available: data.isAvailable
+              });
+          } else {
+              Alert.alert('Error', 'Failed to load item');
+          }
+      } catch (error) {
+          console.error(error);
+          Alert.alert('Error', 'An error occurred');
+      } finally {
+          setLoading(false);
       }
-    ]
   };
+
+  const parseVariants = (fullDesc: string) => {
+      const variantRegex = /\[(.*?)\s\((.*?)\):\s(.*?)\]/g;
+      const options = [];
+      let cleanDescription = fullDesc.replace(variantRegex, '').trim();
+
+      let match;
+      while ((match = variantRegex.exec(fullDesc)) !== null) {
+          const title = match[1];
+          const reqText = match[2]; // Required or Optional
+          const itemsStr = match[3];
+
+          const isRequired = reqText.toLowerCase() === 'required';
+          
+          const items = itemsStr.split(', ').map(s => {
+              const itemMatch = s.match(/(.*?)\s\(\+\$(\d+(?:\.\d+)?)\)/);
+              if (itemMatch) {
+                  return { name: itemMatch[1], price: parseFloat(itemMatch[2]) };
+              }
+              return { name: s, price: 0 };
+          });
+
+          options.push({
+              title,
+              required: isRequired,
+              type: isRequired ? 'radio' : 'checkbox', // Heuristic
+              items
+          });
+      }
+
+      return { description: cleanDescription, options };
+  };
+
+  const handleToggleAvailability = async (val: boolean) => {
+      // Optimistic update
+      setItem((prev: any) => ({ ...prev, available: val }));
+      
+      try {
+          await authenticatedFetch(`/menu/items/${id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ isAvailable: val })
+          });
+      } catch (e) {
+          console.error(e);
+          // Revert on error
+          setItem((prev: any) => ({ ...prev, available: !val }));
+      }
+  };
+
+  const handleDelete = () => {
+      Alert.alert(
+          "Delete Item",
+          "Are you sure you want to delete this menu item?",
+          [
+              { text: "Cancel", style: "cancel" },
+              { text: "Delete", style: "destructive", onPress: async () => {
+                  try {
+                       const res = await authenticatedFetch(`/menu/items/${id}`, { method: 'DELETE' });
+                       if (res.ok) {
+                           router.back();
+                       } else {
+                           Alert.alert("Error", "Failed to delete item");
+                       }
+                  } catch (e) {
+                      Alert.alert("Error", "An error occurred");
+                  }
+              }}
+          ]
+      );
+  };
+
+  if (loading) {
+      return (
+          <ThemedView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+              <ActivityIndicator size="large" color="#C2185B" />
+          </ThemedView>
+      );
+  }
+
+  if (!item) {
+      return (
+          <ThemedView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+              <ThemedText>Item not found</ThemedText>
+          </ThemedView>
+      );
+  }
 
   return (
     <ThemedView style={styles.container}>
@@ -61,7 +148,7 @@ export default function MenuDetailsScreen() {
       </TouchableOpacity>
 
       <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
-        <Image source={{ uri: item.image }} style={styles.heroImage} />
+        <Image source={{ uri: resolveImageUrl(item.image) }} style={styles.heroImage} />
         
         <ThemedView style={styles.content}>
           <ThemedView style={styles.headerRow}>
@@ -70,11 +157,12 @@ export default function MenuDetailsScreen() {
           </ThemedView>
           
           <ThemedView style={styles.categoryRow}>
-            <ThemedText style={styles.itemCategory}>{item.category}</ThemedText>
+            <ThemedText style={styles.itemCategory}>{item.category?.name || 'Uncategorized'}</ThemedText>
             <ThemedView style={styles.availabilityToggle}>
               <ThemedText style={styles.availabilityLabel}>Available</ThemedText>
               <Switch 
                 value={item.available} 
+                onValueChange={handleToggleAvailability}
                 trackColor={{ false: '#DDD', true: '#F48FB1' }}
                 thumbColor={item.available ? '#C2185B' : '#FFF'}
               />
@@ -83,7 +171,7 @@ export default function MenuDetailsScreen() {
           
           <ThemedText style={styles.itemDescription}>{item.description}</ThemedText>
 
-          {item.options.map((option, idx) => (
+          {item.options.map((option: any, idx: number) => (
             <ThemedView key={idx} style={styles.optionSection}>
               <ThemedView style={styles.optionHeader}>
                 <ThemedView>
@@ -97,7 +185,7 @@ export default function MenuDetailsScreen() {
                 )}
               </ThemedView>
 
-              {option.items.map((choice, cIdx) => (
+              {option.items.map((choice: any, cIdx: number) => (
                 <View 
                   key={cIdx} 
                   style={styles.choiceRow}
@@ -124,7 +212,7 @@ export default function MenuDetailsScreen() {
 
       {/* Footer Actions */}
       <ThemedView style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-         <TouchableOpacity style={styles.deleteBtn}>
+         <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
             <ThemedText style={styles.deleteBtnText}>Delete Item</ThemedText>
          </TouchableOpacity>
          <TouchableOpacity style={styles.saveBtn} onPress={() => router.back()}>

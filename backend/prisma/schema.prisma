@@ -6,8 +6,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum UserRole {
@@ -96,8 +97,38 @@ model Customer {
   addresses Address[]
   orders    Order[]
   reviews   Review[]
+  cart      Cart?
 
   @@map("customers")
+}
+
+model Cart {
+  id        String     @id @default(uuid())
+  customerId String    @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  
+  customer  Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  items     CartItem[]
+
+  @@map("carts")
+}
+
+model CartItem {
+  id         String   @id @default(uuid())
+  cartId     String
+  menuItemId String
+  quantity   Int
+  options    Json?    // Store selected options/notes
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  cart     Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+
+  @@index([cartId])
+  @@index([menuItemId])
+  @@map("cart_items")
 }
 
 model Address {
@@ -161,7 +192,9 @@ model Merchant {
   longitude   Float
   phone       String
   email       String?
+  isApproved  Boolean  @default(false)
   isOpen      Boolean  @default(true)
+  operatingHours Json?
   rating      Float    @default(0)
   totalOrders Int      @default(0)
   createdAt   DateTime @default(now())
@@ -207,6 +240,7 @@ model MenuItem {
   merchant   Merchant     @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   category   Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   orderItems OrderItem[]
+  cartItems  CartItem[]
 
   @@index([merchantId])
   @@index([categoryId])
@@ -316,4 +350,15 @@ model Admin {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("admins")
+}
+
+model DeliveryFeeConfig {
+  id          String   @id @default(uuid())
+  minDistance Float
+  maxDistance Float
+  fee         Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("delivery_fee_configs")
 }

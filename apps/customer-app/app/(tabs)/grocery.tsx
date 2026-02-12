@@ -1,40 +1,38 @@
-import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Image, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Image, useWindowDimensions, View, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useState, useEffect } from 'react';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { getMerchants } from '@/api/services';
+import { Merchant } from '@/api/types';
 
 export default function GroceryScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
-  
-  const popularShops = [
-    { id: '1', name: 'Shell Select\n(Borromeo Su...', color: '#FFD700', text: 'Shell\nSelect' },
-    { id: '2', name: 'Watsons (Casa\nDomingo Suri...', color: '#009688', text: 'watsons' },
-    { id: '3', name: 'Merrymart\nGrocery - City...', color: '#FFFFFF', text: 'MERRYMART', textColor: '#00A859' },
-  ];
+  const [merchants, setMerchants] = useState<Merchant[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeFilter, setActiveFilter] = useState('All');
 
-  const promos = [
-    { id: '1', title: '30% off', subtitle: '12-month plan', code: 'GOPRONA', color: '#6A1B9A' },
-    { id: '2', title: 'Unlock up to 30% OFF', subtitle: 'Go PRO', code: '', color: '#8E24AA' },
-  ];
+  useEffect(() => {
+    loadMerchants();
+  }, []);
 
-  const stores = [
-    { 
-      id: '1', 
-      name: 'Shell Select (Borromeo Surigao)', 
-      status: 'Opens at Sun, 10:00 AM', 
-      info: '₱39 or Free with ₱799 spend',
-      image: 'https://images.unsplash.com/photo-1534723452862-4c874018d66d?w=400' 
-    },
-    { 
-      id: '2', 
-      name: 'Watsons Pharmacy', 
-      status: 'Open Now', 
-      info: '₱25 Delivery Fee',
-      image: 'https://images.unsplash.com/photo-1586015555751-63bb77f4322a?w=400' 
-    }
-  ];
+  const loadMerchants = async () => {
+    setLoading(true);
+    const data = await getMerchants();
+    // For now, showing all active merchants as grocery stores
+    // In production, you'd filter by merchant type/category
+    setMerchants(data.filter(m => m.isActive));
+    setLoading(false);
+  };
+
+  const filteredMerchants = merchants.filter(m => 
+    m.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const popularShops = filteredMerchants.slice(0, 6);
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false} bounces={false}>
@@ -42,94 +40,134 @@ export default function GroceryScreen() {
       <ThemedView style={styles.headerBackground}>
         <ThemedView style={styles.searchRow}>
           <ThemedView style={styles.searchBar}>
-            <IconSymbol size={18} name="chevron.right" color="#777" style={{ transform: [{ rotate: '90deg' }], marginRight: 8 }} />
+            <IconSymbol size={18} name="magnifyingglass" color="#777" style={{ marginRight: 8 }} />
             <TextInput
               placeholder="Looking for something?"
               style={styles.searchInput}
               placeholderTextColor="#777"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
             />
           </ThemedView>
           <TouchableOpacity style={styles.filterButton}>
-            <IconSymbol size={20} name="filter" color="#FFF" />
+            <IconSymbol size={20} name="line.3.horizontal.decrease.circle" color="#FFF" />
           </TouchableOpacity>
         </ThemedView>
       </ThemedView>
 
       <ThemedView style={styles.contentBody}>
-        {/* Popular Shops */}
-        <ThemedView style={styles.sectionContainer}>
-          <ThemedText style={styles.sectionTitle}>Popular Shops</ThemedText>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
-            {popularShops.map((shop) => (
-              <TouchableOpacity key={shop.id} style={styles.shopItem} onPress={() => router.push(`/grocery-store/${shop.id}`)}>
-                <ThemedView style={[styles.shopIcon, { backgroundColor: shop.color }]}>
-                  <ThemedText style={[styles.shopIconText, { color: shop.textColor || '#FFF' }]}>
-                    {shop.text}
+        {loading ? (
+          <ThemedView style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#5c6cc9" />
+            <ThemedText style={styles.loadingText}>Loading stores...</ThemedText>
+          </ThemedView>
+        ) : (
+          <>
+            {/* Popular Shops */}
+            {popularShops.length > 0 && (
+              <ThemedView style={styles.sectionContainer}>
+                <ThemedText style={styles.sectionTitle}>Popular Shops</ThemedText>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
+                  {popularShops.map((shop) => (
+                    <TouchableOpacity key={shop.id} style={styles.shopItem} onPress={() => router.push(`/grocery-store/${shop.id}`)}>
+                      <ThemedView style={styles.shopIcon}>
+                        <Image 
+                          source={{ uri: shop.imageUrl || 'https://images.unsplash.com/photo-1534723452862-4c874018d66d?w=100' }} 
+                          style={styles.shopIconImage}
+                        />
+                      </ThemedView>
+                      <ThemedText style={styles.shopName} numberOfLines={2}>{shop.name}</ThemedText>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </ThemedView>
+            )}
+
+            {/* Shop by Store */}
+            <ThemedView style={styles.storeSection}>
+              <ThemedText style={styles.sectionTitle}>Shop by store</ThemedText>
+              <ThemedView style={styles.filterRow}>
+                <TouchableOpacity 
+                  style={[styles.filterChip, activeFilter === 'All' && styles.activeChip]}
+                  onPress={() => setActiveFilter('All')}
+                >
+                  <ThemedText style={activeFilter === 'All' ? styles.activeChipText : styles.chipText}>
+                    All
+                  </ThemedText>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.filterChip, activeFilter === 'Convenience' && styles.activeChip]}
+                  onPress={() => setActiveFilter('Convenience')}
+                >
+                  <ThemedText style={activeFilter === 'Convenience' ? styles.activeChipText : styles.chipText}>
+                    Convenience
+                  </ThemedText>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.filterChip, activeFilter === 'Pharmacy' && styles.activeChip]}
+                  onPress={() => setActiveFilter('Pharmacy')}
+                >
+                  <ThemedText style={activeFilter === 'Pharmacy' ? styles.activeChipText : styles.chipText}>
+                    Pharmacy
+                  </ThemedText>
+                </TouchableOpacity>
+              </ThemedView>
+
+              {filteredMerchants.length === 0 ? (
+                <ThemedView style={styles.emptyContainer}>
+                  <IconSymbol size={48} name="cart" color="#CCC" />
+                  <ThemedText style={styles.emptyText}>No stores found</ThemedText>
+                  <ThemedText style={styles.emptySubtext}>
+                    {searchQuery ? 'Try a different search term' : 'Check back later for new stores'}
                   </ThemedText>
                 </ThemedView>
-                <ThemedText style={styles.shopName} numberOfLines={2}>{shop.name}</ThemedText>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </ThemedView>
+              ) : (
+                filteredMerchants.map((store) => (
+                  <TouchableOpacity key={store.id} style={styles.storeCard} onPress={() => router.push(`/grocery-store/${store.id}`)}>
+                    <ThemedView style={styles.storeImageContainer}>
+                      <Image 
+                        source={{ uri: store.imageUrl || 'https://images.unsplash.com/photo-1534723452862-4c874018d66d?w=400' }} 
+                        style={styles.storeImage} 
+                      />
+                      <ThemedView style={styles.storeOverlay}>
+                        <ThemedText style={styles.storeStatusText}>
+                          {store.isActive ? 'Open Now' : 'Closed'}
+                        </ThemedText>
+                      </ThemedView>
+                      <ThemedView style={styles.heartButton}>
+                        <IconSymbol size={14} name="heart" color="#000" />
+                      </ThemedView>
+                    </ThemedView>
+                    <ThemedView style={styles.storeInfo}>
+                      <ThemedText style={styles.storeName} numberOfLines={1}>{store.name}</ThemedText>
+                      {store.description && (
+                        <ThemedText style={styles.storeDescription} numberOfLines={1}>
+                          {store.description}
+                        </ThemedText>
+                      )}
+                      <ThemedView style={styles.deliveryInfoRow}>
+                        <IconSymbol size={12} name="paperplane.fill" color="#888" />
+                        <ThemedText style={styles.deliveryText}>
+                          {store.deliveryTime || '15-30 min'} • ₱{store.deliveryFee || 29} delivery
+                        </ThemedText>
+                      </ThemedView>
+                      {store.rating && (
+                        <ThemedView style={styles.ratingRow}>
+                          <ThemedText style={styles.ratingText}>★ {store.rating.toFixed(1)}</ThemedText>
+                          {store.reviewCount && (
+                            <ThemedText style={styles.reviewText}>({store.reviewCount})</ThemedText>
+                          )}
+                        </ThemedView>
+                      )}
+                    </ThemedView>
+                  </TouchableOpacity>
+                ))
+              )}
+            </ThemedView>
 
-        {/* Save Big Section */}
-        <ThemedView style={styles.sectionContainer}>
-          <ThemedText style={styles.sectionTitle}>Save big on your groceries</ThemedText>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
-            {promos.map((promo) => (
-              <ThemedView key={promo.id} style={[styles.promoCard, { backgroundColor: promo.color }]}>
-                <ThemedText style={styles.promoTitle}>{promo.title}</ThemedText>
-                <ThemedText style={styles.promoSubtitle}>{promo.subtitle}</ThemedText>
-                {promo.code ? (
-                  <ThemedView style={styles.promoCodeContainer}>
-                    <ThemedText style={styles.promoCodeText}>code {promo.code}</ThemedText>
-                  </ThemedView>
-                ) : (
-                  <ThemedView style={styles.promoBadge}>
-                    <ThemedText style={styles.promoBadgeText}>Go PRO ›</ThemedText>
-                  </ThemedView>
-                )}
-              </ThemedView>
-            ))}
-          </ScrollView>
-        </ThemedView>
-
-        {/* Shop by Store */}
-        <ThemedView style={styles.storeSection}>
-          <ThemedText style={styles.sectionTitle}>Shop by store</ThemedText>
-          <ThemedView style={styles.filterRow}>
-            <TouchableOpacity style={[styles.filterChip, styles.activeChip]}>
-              <ThemedText style={styles.activeChipText}>All</ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.filterChip}>
-              <ThemedText style={styles.chipText}>Convenience</ThemedText>
-            </TouchableOpacity>
-          </ThemedView>
-
-          {stores.map((store) => (
-            <TouchableOpacity key={store.id} style={styles.storeCard} onPress={() => router.push(`/grocery-store/${store.id}`)}>
-              <ThemedView style={styles.storeImageContainer}>
-                <Image source={{ uri: store.image }} style={styles.storeImage} />
-                <ThemedView style={styles.storeOverlay}>
-                  <ThemedText style={styles.storeStatusText}>{store.status}</ThemedText>
-                </ThemedView>
-                <ThemedView style={styles.heartButton}>
-                   <IconSymbol size={14} name="person" color="#000" />
-                </ThemedView>
-              </ThemedView>
-              <ThemedView style={styles.storeInfo}>
-                <ThemedText style={styles.storeName} numberOfLines={1}>{store.name}</ThemedText>
-                <ThemedView style={styles.deliveryInfoRow}>
-                  <IconSymbol size={12} name="paperplane.fill" color="#888" />
-                  <ThemedText style={styles.deliveryText}>{store.info}</ThemedText>
-                </ThemedView>
-              </ThemedView>
-            </TouchableOpacity>
-          ))}
-        </ThemedView>
-
-        <ThemedView style={{ height: 100 }} />
+            <ThemedView style={{ height: 100 }} />
+          </>
+        )}
       </ThemedView>
     </ScrollView>
   );
@@ -141,7 +179,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
   },
   headerBackground: {
-    backgroundColor: '#C2185B',
+    backgroundColor: '#5c6cc9',
     paddingTop: 50,
     paddingBottom: 15,
   },
@@ -176,6 +214,38 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: 20,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+    backgroundColor: 'transparent',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#777',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 16,
+    backgroundColor: 'transparent',
+  },
+  emptyText: {
+    marginTop: 16,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  emptySubtext: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#777',
+    textAlign: 'center',
+  },
   sectionContainer: {
     marginBottom: 25,
     backgroundColor: 'transparent',
@@ -206,62 +276,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#F0F0F0',
     overflow: 'hidden',
+    backgroundColor: '#F5F5F5',
   },
-  shopIconText: {
-    fontSize: 12,
-    fontWeight: '900',
-    textAlign: 'center',
+  shopIconImage: {
+    width: '100%',
+    height: '100%',
   },
   shopName: {
     fontSize: 11,
     color: '#333',
     textAlign: 'center',
     lineHeight: 14,
-  },
-  promoCard: {
-    width: 200,
-    height: 120,
-    borderRadius: 12,
-    marginRight: 12,
-    padding: 15,
-    justifyContent: 'center',
-  },
-  promoTitle: {
-    color: '#FFF',
-    fontSize: 20,
-    fontWeight: '900',
-  },
-  promoSubtitle: {
-    color: '#FFF',
-    fontSize: 12,
-    marginTop: 2,
-    opacity: 0.9,
-  },
-  promoCodeContainer: {
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    marginTop: 10,
-    alignSelf: 'flex-start',
-  },
-  promoCodeText: {
-    color: '#FFF',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  promoBadge: {
-    backgroundColor: '#FFF',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 15,
-    marginTop: 10,
-    alignSelf: 'flex-start',
-  },
-  promoBadgeText: {
-    color: '#6A1B9A',
-    fontSize: 10,
-    fontWeight: '800',
   },
   storeSection: {
     paddingTop: 10,
@@ -347,6 +372,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#222',
   },
+  storeDescription: {
+    fontSize: 11,
+    color: '#666',
+    marginTop: 2,
+  },
   deliveryInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -357,5 +387,21 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#888',
     marginLeft: 4,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    backgroundColor: 'transparent',
+  },
+  ratingText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFD700',
+  },
+  reviewText: {
+    fontSize: 10,
+    color: '#888',
+    marginLeft: 2,
   },
 });

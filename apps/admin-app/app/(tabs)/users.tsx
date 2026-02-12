@@ -1,22 +1,54 @@
-import { StyleSheet, ScrollView, TouchableOpacity, View, TextInput } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, View, TextInput, ActivityIndicator, RefreshControl } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getUsers } from '../../api/services';
+import { User, UserRole } from '../../api/types';
 
 export default function UsersScreen() {
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState('All');
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const users = [
-    { id: '1', name: 'Juan Dela Cruz', email: 'juan@example.com', type: 'Customer', status: 'Active', orders: 24 },
-    { id: '2', name: 'Maria Santos', email: 'maria@example.com', type: 'Customer', status: 'Active', orders: 15 },
-    { id: '3', name: 'The Burger Mansion', email: 'burger@restaurant.com', type: 'Merchant', status: 'Active', orders: 156 },
-    { id: '4', name: 'Pizza Palace', email: 'pizza@restaurant.com', type: 'Merchant', status: 'Suspended', orders: 89 },
-  ];
+  const fetchUsers = async () => {
+    try {
+        const data = await getUsers();
+        setUsers(data);
+    } catch (e) {
+        console.error(e);
+    } finally {
+        setLoading(false);
+        setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchUsers();
+  };
 
   const userTabs = ['All', 'Customers', 'Merchants', 'Drivers'];
+
+  const getFilteredUsers = () => {
+    if (activeTab === 'All') return users;
+    return users.filter(u => {
+      const role = u.role?.toUpperCase();
+      if (activeTab === 'Customers') return role === 'CUSTOMER';
+      if (activeTab === 'Merchants') return role === 'MERCHANT';
+      if (activeTab === 'Drivers') return role === 'RIDER';
+      return false;
+    });
+  };
+
+  const filteredUsers = getFilteredUsers();
 
   return (
     <ThemedView style={styles.container}>
@@ -36,42 +68,67 @@ export default function UsersScreen() {
         </View>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabContainer}>
-        {userTabs.map((tab) => (
-          <TouchableOpacity 
-            key={tab} 
-            onPress={() => setActiveTab(tab)}
-            style={[styles.tab, activeTab === tab && styles.activeTab]}
-          >
-            <ThemedText style={[styles.tabText, activeTab === tab && styles.activeTabText]}>{tab}</ThemedText>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      <View style={{ height: 55 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabContainer} contentContainerStyle={{paddingRight: 20}}>
+            {userTabs.map((tab) => (
+              <TouchableOpacity 
+                key={tab} 
+                onPress={() => setActiveTab(tab)}
+                style={[styles.tab, activeTab === tab && styles.activeTab]}
+              >
+                <ThemedText style={[styles.tabText, activeTab === tab && styles.activeTabText]}>{tab}</ThemedText>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+      </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {users.map((user) => (
-          <TouchableOpacity key={user.id} style={styles.userCard}>
-            <View style={styles.avatarCircle}>
-              <ThemedText style={styles.avatarText}>{user.name.charAt(0)}</ThemedText>
-            </View>
-            
-            <View style={styles.userInfo}>
-              <ThemedText style={styles.userName}>{user.name}</ThemedText>
-              <ThemedText style={styles.userEmail}>{user.email}</ThemedText>
-              <View style={styles.userMeta}>
-                <View style={[styles.typeBadge, { backgroundColor: user.type === 'Merchant' ? '#E3F2FD' : '#F3E5F5' }]}>
-                  <ThemedText style={[styles.typeText, { color: user.type === 'Merchant' ? '#1976D2' : '#7B1FA2' }]}>
-                    {user.type}
-                  </ThemedText>
+      {loading ? (
+        <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
+           <ActivityIndicator size="large" color="#C2185B" />
+        </View>
+      ) : (
+        <ScrollView 
+          style={{flex: 1}}
+          showsVerticalScrollIndicator={false} 
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
+          {filteredUsers.length === 0 ? (
+             <View style={{alignItems: 'center', marginTop: 50}}>
+                <ThemedText style={{color: '#888', fontStyle: 'italic'}}>No users found</ThemedText>
+             </View>
+          ) : (
+            filteredUsers.map((user) => (
+              <TouchableOpacity key={user.id} style={styles.userCard}>
+                <View style={styles.avatarCircle}>
+                  <ThemedText style={styles.avatarText}>{(user.name || 'U').charAt(0)}</ThemedText>
                 </View>
-                <ThemedText style={styles.orderCount}>{user.orders} orders</ThemedText>
-              </View>
-            </View>
+                
+                <View style={styles.userInfo}>
+                  <ThemedText style={styles.userName}>{user.name || 'Unknown'}</ThemedText>
+                  <ThemedText style={styles.userEmail}>{user.email}</ThemedText>
+                  <View style={styles.userMeta}>
+                    <View style={[styles.typeBadge, { 
+                        backgroundColor: user.role === UserRole.MERCHANT ? '#E3F2FD' : 
+                                       user.role === UserRole.ADMIN ? '#FFF3E0' : '#F3E5F5' 
+                    }]}>
+                      <ThemedText style={[styles.typeText, { 
+                          color: user.role === UserRole.MERCHANT ? '#1976D2' : 
+                                 user.role === UserRole.ADMIN ? '#E65100' : '#7B1FA2' 
+                      }]}>
+                        {user.role}
+                      </ThemedText>
+                    </View>
+                    <ThemedText style={styles.orderCount}>0 orders</ThemedText>
+                  </View>
+                </View>
 
-            <View style={[styles.statusDot, { backgroundColor: user.status === 'Active' ? '#4CAF50' : '#F44336' }]} />
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+                <View style={[styles.statusDot, { backgroundColor: user.isActive ? '#4CAF50' : '#F44336' }]} />
+              </TouchableOpacity>
+            ))
+          )}
+        </ScrollView>
+      )}
     </ThemedView>
   );
 }

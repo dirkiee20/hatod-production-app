@@ -1,39 +1,56 @@
-import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Image, useWindowDimensions, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Image, useWindowDimensions, View, ActivityIndicator } from 'react-native';
+import { useRouter, Stack } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useEffect, useState } from 'react';
+import { getMenuItemsByMerchant } from '@/api/services';
+
+const GOV_MERCHANT_ID = '57d3838e-0678-4908-ba98-322960675688';
 
 export default function GovernmentScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
-  
-  const services = [
-    {
-      title: 'Business & Permits',
-      items: [
-        { id: '1', name: 'Business Permit Renewal', type: 'Permit', process: '3-5 Working Days', fee: '₱500 service fee', color: '#1A237E', icon: 'business' },
-        { id: '2', name: 'New Business Application', type: 'Permit', process: '7-10 Working Days', fee: '₱1,200 service fee', color: '#0D47A1', icon: 'add-business' },
-      ]
-    },
-    {
-      title: 'Civil Registry Documents',
-      items: [
-        { id: '3', name: 'PSA Birth Certificate', type: 'Document', process: '2-3 Working Days', fee: '₱150 service fee', color: '#E65100', icon: 'description' },
-        { id: '4', name: 'Marriage Certificate', type: 'Document', process: '2-3 Working Days', fee: '₱150 service fee', color: '#D84315', icon: 'description' },
-      ]
-    },
-    {
-      title: 'Clearances & ID',
-      items: [
-        { id: '5', name: 'NBI Clearance Delivery', type: 'Clearance', process: 'Next Day Delivery', fee: '₱100 delivery fee', color: '#004D40', icon: 'verified-user' },
-        { id: '6', name: 'Barangay Clearance', type: 'Clearance', process: 'Same Day', fee: '₱50 delivery fee', color: '#1B5E20', icon: 'home-work' },
-      ]
+  const [loading, setLoading] = useState(true);
+  const [groupedServices, setGroupedServices] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function fetchServices() {
+        setLoading(true);
+        const items = await getMenuItemsByMerchant(GOV_MERCHANT_ID);
+        
+        // Group by category
+        const groups: any = {};
+        items.forEach(item => {
+            const catName = item.category?.name || 'Other Services';
+            if (!groups[catName]) {
+                groups[catName] = {
+                    title: catName,
+                    items: []
+                };
+            }
+            groups[catName].items.push(item);
+        });
+        
+        // Convert to array
+        setGroupedServices(Object.values(groups));
+        setLoading(false);
     }
-  ];
+    fetchServices();
+  }, []);
+
+  if (loading) {
+     return (
+        <ThemedView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+            <ActivityIndicator size="large" color="#C2185B" />
+        </ThemedView>
+     );
+  }
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false} bounces={false}>
+    <>
+      <Stack.Screen options={{ headerShown: false }} />
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false} bounces={false}>
       {/* Pink Header with Search */}
       <ThemedView style={styles.headerBackground}>
         <ThemedView style={styles.searchRow}>
@@ -57,40 +74,48 @@ export default function GovernmentScreen() {
           <ThemedText style={styles.pageSubtitle}>Skip the line. We'll handle the delivery only for you.</ThemedText>
         </ThemedView>
 
-        {services.map((section, sIndex) => (
-          <ThemedView key={sIndex} style={styles.sectionContainer}>
-            <ThemedText style={styles.sectionTitle}>{section.title}</ThemedText>
-            
-            <ThemedView style={styles.itemsGrid}>
-              {section.items.map((item) => (
-                <TouchableOpacity 
-                   key={item.id} 
-                   style={styles.serviceCard}
-                   onPress={() => router.push(`/government-service/${item.id}`)}
-                >
-                  <ThemedView style={[styles.iconBox, { backgroundColor: item.color + '15' }]}>
-                    <IconSymbol size={24} name="government" color={item.color} />
-                  </ThemedView>
-                  
-                  <ThemedView style={styles.cardInfo}>
-                    <ThemedText style={styles.itemName} numberOfLines={1}>{item.name}</ThemedText>
-                    <ThemedText style={styles.itemMeta}>{item.process}</ThemedText>
-                    
-                    <ThemedView style={styles.feeHighlight}>
-                      <ThemedText style={styles.feeText}>{item.fee}</ThemedText>
-                    </ThemedView>
-                  </ThemedView>
-                  
-                  <IconSymbol size={18} name="chevron.right" color="#DDD" />
-                </TouchableOpacity>
-              ))}
+        {groupedServices.length === 0 ? (
+            <ThemedView style={{ padding: 20 }}>
+                <ThemedText>No services found.</ThemedText>
             </ThemedView>
-          </ThemedView>
-        ))}
+        ) : (
+            groupedServices.map((section, sIndex) => (
+            <ThemedView key={sIndex} style={styles.sectionContainer}>
+                <ThemedText style={styles.sectionTitle}>{section.title}</ThemedText>
+                
+                <ThemedView style={styles.itemsGrid}>
+                {section.items.map((item: any) => (
+                    <TouchableOpacity 
+                    key={item.id} 
+                    style={styles.serviceCard}
+                    onPress={() => router.push(`/menu-item/${item.id}`)}
+                    >
+                    <ThemedView style={[styles.iconBox, { backgroundColor: '#E3F2FD' }]}>
+                        {/* Use item.image as icon name if possible, else default */}
+                        <IconSymbol size={24} name={(item.image as any) || "description"} color="#1565C0" />
+                    </ThemedView>
+                    
+                    <ThemedView style={styles.cardInfo}>
+                        <ThemedText style={styles.itemName} numberOfLines={1}>{item.name}</ThemedText>
+                        <ThemedText style={styles.itemMeta} numberOfLines={1}>{item.description}</ThemedText>
+                        
+                        <ThemedView style={styles.feeHighlight}>
+                        <ThemedText style={styles.feeText}>₱{item.price} service fee</ThemedText>
+                        </ThemedView>
+                    </ThemedView>
+                    
+                    <IconSymbol size={18} name="chevron.right" color="#DDD" />
+                    </TouchableOpacity>
+                ))}
+                </ThemedView>
+            </ThemedView>
+            ))
+        )}
         
         <ThemedView style={{ height: 100 }} />
       </ThemedView>
     </ScrollView>
+    </>
   );
 }
 

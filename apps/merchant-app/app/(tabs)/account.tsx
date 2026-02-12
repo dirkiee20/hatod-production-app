@@ -1,9 +1,10 @@
-import { StyleSheet, ScrollView, TouchableOpacity, View, Image } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, View, Image, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import React from 'react';
+import { logout } from '@/api/client';
 
 export default function AccountScreen() {
   const router = useRouter();
@@ -15,6 +16,24 @@ export default function AccountScreen() {
     { title: 'Help Center', subtitle: 'Contact support', icon: 'paperplane.fill' },
   ];
 
+  const handleLogout = () => {
+    Alert.alert(
+      "Log Out",
+      "Are you sure you want to log out?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Log Out", 
+          style: "destructive",
+          onPress: () => {
+             logout();
+             router.replace('/login');
+          }
+        }
+      ]
+    );
+  };
+
   return (
     <ThemedView style={styles.container}>
       <ThemedView style={styles.profileHeader}>
@@ -24,7 +43,7 @@ export default function AccountScreen() {
                <IconSymbol size={12} name="dashboard" color="#FFF" />
             </TouchableOpacity>
          </View>
-         <ThemedText style={styles.storeName}>The Burger Mansion</ThemedText>
+         <ThemedText style={styles.storeName}>Merchant Account</ThemedText>
          <ThemedText style={styles.storeAddress}>Surigao City Central Plaza</ThemedText>
       </ThemedView>
 
@@ -48,7 +67,7 @@ export default function AccountScreen() {
              }}
            >
               <ThemedView style={styles.optionIconBox}>
-                 <IconSymbol size={20} name={option.icon as any} color="#C2185B" />
+                 <IconSymbol size={20} name={option.icon as any} color="#f78734" />
               </ThemedView>
               <ThemedView style={styles.optionInfo}>
                  <ThemedText style={styles.optionTitle}>{option.title}</ThemedText>
@@ -58,7 +77,7 @@ export default function AccountScreen() {
            </TouchableOpacity>
          ))}
 
-         <TouchableOpacity style={styles.logoutBtn}>
+         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
             <ThemedText style={styles.logoutText}>Log out of Merchant Console</ThemedText>
          </TouchableOpacity>
       </ScrollView>
@@ -99,7 +118,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#C2185B',
+    backgroundColor: '#5c6cc9',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,

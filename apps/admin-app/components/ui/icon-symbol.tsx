@@ -22,6 +22,8 @@ const MAPPING = {
   'restaurants': 'restaurant',
   'fees': 'attach-money',
   'map': 'map',
+  'location.fill': 'location-on',
+  'trash.fill': 'delete',
 } as const;
 
 type IconSymbolName = keyof typeof MAPPING;

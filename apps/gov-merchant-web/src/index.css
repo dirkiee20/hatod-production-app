@@ -1,0 +1,39 @@
+:root {
+  --primary: #C2185B;
+  --primary-light: #FCE4EC;
+  --secondary: #1565C0;
+  --accent: #FB8C00;
+  --bg-main: #F4F6F8;
+  --bg-sidebar: #FFF;
+  --text-main: #333;
+  --text-mute: #888;
+  --card-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  --border-radius: 12px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  min-height: 100vh;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #DDD;
+  border-radius: 4px;
+}

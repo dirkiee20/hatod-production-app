@@ -27,9 +27,11 @@
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.1.12",
     "@nestjs/platform-socket.io": "^11.1.12",
+    "@nestjs/serve-static": "^5.0.4",
     "@nestjs/swagger": "^11.2.5",
     "@nestjs/websockets": "^11.1.12",
-    "@prisma/client": "^7.3.0",
+    "@prisma/client": "6.19.2",
+    "axios": "^1.13.4",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.66.7",
     "class-transformer": "^0.5.1",
@@ -42,9 +44,13 @@
     "socket.io": "^4.8.3"
   },
   "devDependencies": {
+    "@nestjs/cli": "^11.0.16",
+    "@types/bcrypt": "^6.0.0",
     "@types/express": "^5.0.6",
+    "@types/multer": "^2.0.0",
     "@types/node": "^25.0.10",
-    "prisma": "^7.3.0",
+    "dotenv-cli": "^11.0.0",
+    "prisma": "6.19.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
   }

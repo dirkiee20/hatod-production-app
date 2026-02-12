@@ -5,6 +5,8 @@ import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import React, { useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { resolveImageUrl } from '../../api/client';
+import { approveMerchant, suspendMerchant } from '../../api/services';
 
 export default function RestaurantDetailsScreen() {
   const { id } = useLocalSearchParams();
@@ -26,7 +28,7 @@ export default function RestaurantDetailsScreen() {
   const fetchDetails = async () => {
     try {
         const { authenticatedFetch } = await import('../../api/client');
-        const res = await authenticatedFetch(`/merchants/${id}`);
+        const res = await authenticatedFetch(`/merchants/admin/${id}`);
         if (res.ok) {
             const data = await res.json();
             // Flatten menu items from categories for display, or adjust UI to support categories
@@ -54,13 +56,14 @@ export default function RestaurantDetailsScreen() {
                 ...data,
                 menu: flatMenu,
                 status: data.isOpen ? 'Active' : 'Closed',
-                logo: data.logo || 'https://images.unsplash.com/photo-1572802419224-296b0aeee0d9?w=200',
+                logo: data.logo || data.imageUrl || 'https://images.unsplash.com/photo-1572802419224-296b0aeee0d9?w=200',
                 banner: data.coverImage || 'https://images.unsplash.com/photo-1572802419224-296b0aeee0d9?w=800',
                 revenue: data.totalOrders * 200, // Estimate
-                commission: 20
+                commission: 20,
+                isApproved: data.isApproved
             });
         } else {
-            console.error("Failed to fetch details");
+            console.error("Failed to fetch details", res.status);
         }
     } catch (e) {
         console.error(e);
@@ -69,9 +72,41 @@ export default function RestaurantDetailsScreen() {
     }
   };
 
+  const handleToggleStatus = async () => {
+    if (!restaurant) return;
+    
+    let success = false;
+    if (restaurant.isApproved) {
+        success = await suspendMerchant(id as string);
+    } else {
+        success = await approveMerchant(id as string);
+    }
+
+    if (success) {
+        setRestaurant((prev: any) => ({ ...prev, isApproved: !prev.isApproved }));
+    } else {
+        alert('Failed to update status');
+    }
+  };
+
+  // Render Stack.Screen config immediately to prevent default filename title
+  const screenOptions = (
+      <Stack.Screen options={{ 
+        headerShown: true, 
+        title: 'Restaurant Details',
+        headerTitleStyle: { fontWeight: '900', fontSize: 16 },
+        headerLeft: () => (
+          <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 10 }}>
+            <IconSymbol size={20} name="chevron.right" color="#000" style={{ transform: [{ rotate: '180deg' }] }} />
+          </TouchableOpacity>
+        ),
+      }} />
+  );
+
   if (loading) {
       return (
           <ThemedView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+              {screenOptions}
               <ThemedText>Loading...</ThemedText>
           </ThemedView>
       );
@@ -80,6 +115,7 @@ export default function RestaurantDetailsScreen() {
   if (!restaurant) {
       return (
           <ThemedView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+              {screenOptions}
               <ThemedText>Restaurant not found</ThemedText>
           </ThemedView>
       );
@@ -93,24 +129,15 @@ export default function RestaurantDetailsScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <Stack.Screen options={{ 
-        headerShown: true, 
-        title: 'Restaurant Details',
-        headerTitleStyle: { fontWeight: '900', fontSize: 16 },
-        headerLeft: () => (
-          <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 10 }}>
-            <IconSymbol size={20} name="chevron.right" color="#000" style={{ transform: [{ rotate: '180deg' }] }} />
-          </TouchableOpacity>
-        ),
-      }} />
+      {screenOptions}
 
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Banner Image */}
-        <Image source={{ uri: restaurant.banner }} style={styles.bannerImage} />
+        <Image source={{ uri: resolveImageUrl(restaurant.banner) }} style={styles.bannerImage} />
         
         {/* Logo overlapping banner */}
         <View style={styles.logoContainer}>
-          <Image source={{ uri: restaurant.logo }} style={styles.logoImage} />
+          <Image source={{ uri: resolveImageUrl(restaurant.logo) }} style={styles.logoImage} />
         </View>
 
         <ThemedView style={styles.content}>
@@ -204,7 +231,7 @@ export default function RestaurantDetailsScreen() {
                   style={styles.menuItem}
                   onPress={() => router.push(`/menu-item-details/${item.id}`)}
                 >
-                  <Image source={{ uri: item.image }} style={styles.menuItemImage} />
+                  <Image source={{ uri: resolveImageUrl(item.image) }} style={styles.menuItemImage} />
                   
                   <View style={styles.menuItemInfo}>
                     <ThemedText style={styles.menuItemName}>{item.name}</ThemedText>
@@ -257,8 +284,13 @@ export default function RestaurantDetailsScreen() {
 
       {/* Footer Actions */}
       <ThemedView style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-         <TouchableOpacity style={styles.suspendBtn}>
-            <ThemedText style={styles.suspendBtnText}>Suspend Restaurant</ThemedText>
+         <TouchableOpacity 
+            style={[styles.suspendBtn, !restaurant.isApproved && { backgroundColor: '#E8F5E9' }]}
+            onPress={handleToggleStatus}
+         >
+            <ThemedText style={[styles.suspendBtnText, !restaurant.isApproved && { color: '#388E3C' }]}>
+                {restaurant.isApproved ? 'Suspend Restaurant' : 'Approve Restaurant'}
+            </ThemedText>
          </TouchableOpacity>
          <TouchableOpacity style={styles.saveBtn}>
             <ThemedText style={styles.saveBtnText}>Save Changes</ThemedText>

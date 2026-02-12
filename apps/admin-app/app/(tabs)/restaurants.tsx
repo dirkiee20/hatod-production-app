@@ -1,108 +1,151 @@
-import { StyleSheet, ScrollView, TouchableOpacity, View, Image, Switch } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, View, Image, Switch, RefreshControl, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getMerchants, approveMerchant } from '../../api/services';
+import { Merchant } from '../../api/types';
+import { resolveImageUrl } from '../../api/client';
 
 export default function RestaurantsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [restaurants, setRestaurants] = React.useState<any[]>([]);
-  const [loading, setLoading] = React.useState(true);
-
-  React.useEffect(() => {
-    fetchRestaurants();
-  }, []);
+  const [restaurants, setRestaurants] = useState<Merchant[]>([]);
+  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'pending'>('all');
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchRestaurants = async () => {
     try {
-        const { authenticatedFetch, API_BASE } = await import('../../api/client');
-        const res = await authenticatedFetch('/merchants');
-        if (res.ok) {
-            const data = await res.json();
-            // Transform data if necessary or use as is. 
-            // The backend returns Merchant objects.
-            setRestaurants(data);
-        } else {
-            console.error("Failed to fetch merchants");
-        }
+        const data = await getMerchants();
+        setRestaurants(data);
     } catch (e) {
         console.error(e);
     } finally {
         setLoading(false);
+        setRefreshing(false);
     }
   };
+
+  useEffect(() => {
+    fetchRestaurants();
+  }, []);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchRestaurants();
+  };
+
+  const handleApprove = async (id: string) => {
+    const success = await approveMerchant(id);
+    if (success) {
+        // Refresh local state
+        setRestaurants(prev => prev.map(r => r.id === id ? { ...r, isApproved: true } : r));
+    } else {
+        alert('Failed to approve merchant');
+    }
+  };
+
+  const filteredRestaurants = restaurants.filter(r => {
+    if (activeTab === 'active') return r.isApproved && r.isOpen;
+    if (activeTab === 'pending') return !r.isApproved;
+    return true;
+  });
 
   return (
     <ThemedView style={styles.container}>
       <View style={[styles.headerRow, { marginTop: insets.top + 16 }]}>
         <ThemedText style={styles.screenTitle}>Restaurants</ThemedText>
-        <TouchableOpacity style={styles.addBtn}>
+        <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/add-restaurant')}>
           <ThemedText style={styles.addBtnText}>+ Add New</ThemedText>
         </TouchableOpacity>
       </View>
 
       <View style={styles.statsRow}>
-        <View style={styles.statCard}>
-          <ThemedText style={styles.statValue}>{restaurants.length}</ThemedText>
-          <ThemedText style={styles.statLabel}>Total</ThemedText>
-        </View>
-        <View style={styles.statCard}>
-          <ThemedText style={styles.statValue}>{restaurants.filter(r => r.isOpen).length}</ThemedText>
-          <ThemedText style={styles.statLabel}>Active</ThemedText>
-        </View>
-        <View style={styles.statCard}>
-          <ThemedText style={styles.statValue}>0</ThemedText>
-          <ThemedText style={styles.statLabel}>Pending</ThemedText>
-        </View>
+        <TouchableOpacity style={[styles.statCard, activeTab === 'all' && styles.activeStatCard]} onPress={() => setActiveTab('all')}>
+          <ThemedText style={[styles.statValue, activeTab === 'all' && styles.activeStatText]}>{restaurants.length}</ThemedText>
+          <ThemedText style={[styles.statLabel, activeTab === 'all' && styles.activeStatText]}>Total</ThemedText>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.statCard, activeTab === 'active' && styles.activeStatCard]} onPress={() => setActiveTab('active')}>
+          <ThemedText style={[styles.statValue, activeTab === 'active' && styles.activeStatText]}>{restaurants.filter(r => r.isApproved && r.isOpen).length}</ThemedText>
+          <ThemedText style={[styles.statLabel, activeTab === 'active' && styles.activeStatText]}>Active</ThemedText>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.statCard, activeTab === 'pending' && styles.activeStatCard]} onPress={() => setActiveTab('pending')}>
+          <ThemedText style={[styles.statValue, activeTab === 'pending' && styles.activeStatText]}>{restaurants.filter(r => !r.isApproved).length}</ThemedText>
+          <ThemedText style={[styles.statLabel, activeTab === 'pending' && styles.activeStatText]}>Pending</ThemedText>
+        </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {restaurants.map((restaurant) => (
-          <TouchableOpacity 
-            key={restaurant.id} 
-            style={styles.restaurantCard}
-            onPress={() => router.push(`/restaurant-details/${restaurant.id}`)}
-          >
-            {/* Fallback image if restaurant.coverImage is null */}
-            <Image 
-                source={{ uri: restaurant.coverImage || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=500' }} 
-                style={styles.restaurantImage} 
-            />
-            
-            <View style={styles.restaurantInfo}>
-              <View style={styles.restaurantHeader}>
-                <ThemedText style={styles.restaurantName}>{restaurant.name}</ThemedText>
-                <Switch 
-                  value={restaurant.isOpen} 
-                  trackColor={{ false: '#DDD', true: '#F48FB1' }}
-                  thumbColor={restaurant.isOpen ? '#C2185B' : '#FFF'}
-                />
-              </View>
+      {loading ? (
+        <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
+           <ActivityIndicator size="large" color="#C2185B" />
+        </View>
+      ) : (
+        <ScrollView 
+          showsVerticalScrollIndicator={false} 
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
+          {filteredRestaurants.map((restaurant) => (
+            <TouchableOpacity 
+              key={restaurant.id} 
+              style={styles.restaurantCard}
+              onPress={() => router.push(`/restaurant-details/${restaurant.id}`)}
+            >
+               <Image 
+                  source={{ uri: resolveImageUrl(restaurant.coverImage || restaurant.imageUrl || restaurant.logo) || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=500' }} 
+                  style={styles.restaurantImage} 
+              />
               
-              <ThemedText style={styles.restaurantCategory}>{restaurant.city}</ThemedText>
-              
-              <View style={styles.restaurantStats}>
-                <View style={styles.statItem}>
-                  <IconSymbol size={14} name="dashboard" color="#F57C00" />
-                  <ThemedText style={styles.statText}>{restaurant.rating || 0} ★</ThemedText>
+              <View style={styles.restaurantInfo}>
+                <View style={styles.restaurantHeader}>
+                  <ThemedText style={styles.restaurantName}>
+                    {restaurant.name}
+                    {!restaurant.isApproved && <ThemedText style={{color: '#F57C00', fontSize: 12}}> (Pending)</ThemedText>}
+                  </ThemedText>
+                  
+                  {restaurant.isApproved ? (
+                    <Switch 
+                        value={restaurant.isOpen || false} 
+                        trackColor={{ false: '#DDD', true: '#F48FB1' }}
+                        thumbColor={restaurant.isOpen ? '#C2185B' : '#FFF'}
+                        onValueChange={() => {}} // Disabled for list view
+                        disabled
+                    />
+                  ) : (
+                    <TouchableOpacity 
+                        style={styles.approveBtn}
+                        onPress={() => handleApprove(restaurant.id)}
+                    >
+                        <ThemedText style={styles.approveBtnText}>Approve</ThemedText>
+                    </TouchableOpacity>
+                  )}
                 </View>
-                <View style={styles.statItem}>
-                  <IconSymbol size={14} name="orders" color="#1976D2" />
-                  <ThemedText style={styles.statText}>{restaurant.totalOrders || 0} orders</ThemedText>
+                
+                <ThemedText style={styles.restaurantCategory}>{restaurant.city || 'Unknown Location'}</ThemedText>
+                
+                <View style={styles.restaurantStats}>
+                  <View style={styles.statItem}>
+                    <IconSymbol size={14} name="dashboard" color="#F57C00" />
+                    <ThemedText style={styles.statText}>{restaurant.rating?.toFixed(1) || 'N/A'}</ThemedText>
+                  </View>
+                  <View style={styles.statItem}>
+                    <IconSymbol size={14} name="orders" color="#1976D2" />
+                    <ThemedText style={styles.statText}>{restaurant.totalOrders || 0} orders</ThemedText>
+                  </View>
+                </View>
+                
+                <View style={styles.revenueRow}>
+                  <ThemedText style={styles.revenueLabel}>Total Revenue</ThemedText>
+                  <ThemedText style={styles.revenueValue}>₱{((restaurant.totalOrders || 0) * 200).toLocaleString()} (Est)</ThemedText>
                 </View>
               </View>
-              
-              <View style={styles.revenueRow}>
-                <ThemedText style={styles.revenueLabel}>Total Revenue</ThemedText>
-                <ThemedText style={styles.revenueValue}>₱{(restaurant.totalOrders * 200).toLocaleString()} (Est)</ThemedText>
-              </View>
-            </View>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
     </ThemedView>
   );
 }
@@ -228,5 +271,23 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     color: '#388E3C',
+  },
+  activeStatCard: {
+    backgroundColor: '#C2185B',
+    borderColor: '#C2185B',
+  },
+  activeStatText: {
+    color: '#FFF',
+  },
+  approveBtn: {
+    backgroundColor: '#388E3C',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  approveBtnText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

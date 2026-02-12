@@ -3,69 +3,63 @@ import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useCart } from '@/context/CartContext';
 
 export default function CartScreen() {
   const router = useRouter();
-  const cartItems = [
-    {
-      id: '1',
-      store: 'The Burger Mansion',
-      name: 'Classic Cheeseburger',
-      price: 150,
-      quantity: 2,
-      image: 'https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=200',
-    },
-    {
-      id: '2',
-      store: 'Shell Select',
-      name: 'Cold Brew Coffee',
-      price: 120,
-      quantity: 1,
-      image: 'https://images.unsplash.com/photo-1534723452862-4c874018d66d?w=200',
-    },
-  ];
-
-  const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
-  const deliveryFee = 29;
-  const total = subtotal + deliveryFee;
+  const { items, cartTotal, updateQuantity, itemCount, deliveryFee } = useCart();
+  
+  const total = cartTotal + deliveryFee;
 
   return (
     <ThemedView style={styles.container}>
       {/* Pink Header */}
       <ThemedView style={styles.header}>
         <ThemedText style={styles.headerTitle}>My Cart</ThemedText>
-        <ThemedText style={styles.headerSubtitle}>{cartItems.length} items from 2 stores</ThemedText>
+        <ThemedText style={styles.headerSubtitle}>
+            {itemCount} items
+            {/* We could calculate unique stores if we want, but keeping it simple for now */}
+        </ThemedText>
       </ThemedView>
 
       <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {cartItems.map((item) => (
-          <ThemedView key={item.id} style={styles.cartItem}>
-            <Image source={{ uri: item.image }} style={styles.itemImage} />
-            <ThemedView style={styles.itemDetails}>
-              <ThemedText style={styles.storeName}>{item.store}</ThemedText>
-              <ThemedText style={styles.itemName}>{item.name}</ThemedText>
-              <ThemedText style={styles.itemPrice}>₱{item.price}</ThemedText>
-              
-              <ThemedView style={styles.quantityControls}>
-                <TouchableOpacity style={styles.qtyButton}>
-                  <ThemedText style={styles.qtyButtonText}>−</ThemedText>
+        {items.length === 0 ? (
+             <ThemedView style={{ padding: 40, alignItems: 'center' }}>
+                <ThemedText style={{ color: '#888' }}>Your cart is empty.</ThemedText>
+                <TouchableOpacity onPress={() => router.push('/')} style={{ marginTop: 20 }}>
+                     <ThemedText style={{ color: '#f78734', fontWeight: 'bold' }}>Browse Menu</ThemedText>
                 </TouchableOpacity>
-                <ThemedText style={styles.qtyText}>{item.quantity}</ThemedText>
-                <TouchableOpacity style={styles.qtyButton}>
-                  <ThemedText style={styles.qtyButtonText}>+</ThemedText>
-                </TouchableOpacity>
+             </ThemedView>
+        ) : (
+             items.map((item) => (
+              <ThemedView key={item.id} style={styles.cartItem}>
+                <Image source={{ uri: item.image || 'https://via.placeholder.com/200' }} style={styles.itemImage} />
+                <ThemedView style={styles.itemDetails}>
+                  <ThemedText style={styles.storeName}>{item.storeName || 'Unknown Store'}</ThemedText>
+                  <ThemedText style={styles.itemName}>{item.name}</ThemedText>
+                  <ThemedText style={styles.itemPrice}>₱{item.price}</ThemedText>
+                  
+                  <ThemedView style={styles.quantityControls}>
+                    <TouchableOpacity style={styles.qtyButton} onPress={() => updateQuantity(item.id, item.quantity - 1)}>
+                      <ThemedText style={styles.qtyButtonText}>−</ThemedText>
+                    </TouchableOpacity>
+                    <ThemedText style={styles.qtyText}>{item.quantity}</ThemedText>
+                    <TouchableOpacity style={styles.qtyButton} onPress={() => updateQuantity(item.id, item.quantity + 1)}>
+                      <ThemedText style={styles.qtyButtonText}>+</ThemedText>
+                    </TouchableOpacity>
+                  </ThemedView>
+                </ThemedView>
+                <ThemedText style={styles.itemTotal}>₱{item.totalPrice}</ThemedText>
               </ThemedView>
-            </ThemedView>
-            <ThemedText style={styles.itemTotal}>₱{item.price * item.quantity}</ThemedText>
-          </ThemedView>
-        ))}
+            ))
+        )}
 
         {/* Bill Details */}
         <ThemedView style={styles.billSection}>
           <ThemedText style={styles.sectionTitle}>Bill Summary</ThemedText>
           <ThemedView style={styles.billRow}>
             <ThemedText style={styles.billLabel}>Item Subtotal</ThemedText>
-            <ThemedText style={styles.billValue}>₱{subtotal}</ThemedText>
+            <ThemedText style={styles.billValue}>₱{cartTotal}</ThemedText>
           </ThemedView>
           <ThemedView style={styles.billRow}>
             <ThemedText style={styles.billLabel}>Delivery Fee</ThemedText>
@@ -102,7 +96,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 20,
-    backgroundColor: '#C2185B',
+    backgroundColor: '#5c6cc9',
   },
   headerTitle: {
     fontSize: 20,
@@ -221,7 +215,7 @@ const styles = StyleSheet.create({
   totalValue: {
     fontSize: 15,
     fontWeight: '900',
-    color: '#C2185B',
+    color: '#f78734',
   },
   footer: {
     flexDirection: 'row',
@@ -246,7 +240,7 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   checkoutButton: {
-    backgroundColor: '#C2185B',
+    backgroundColor: '#f78734',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 10,

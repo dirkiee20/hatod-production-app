@@ -31,10 +31,10 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="government"
+        name="services"
         options={{
-          title: 'Gov',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="government" color={color} />,
+          title: 'Services',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="services" color={color} />,
         }}
       />
       <Tabs.Screen

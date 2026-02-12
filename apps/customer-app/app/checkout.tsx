@@ -1,20 +1,78 @@
-import { StyleSheet, ScrollView, TouchableOpacity, View, Image } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, View, Image, Alert } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import React, { useState } from 'react';
+import { useCart } from '@/context/CartContext';
+import { createOrder } from '@/api/services';
 
 export default function CheckoutScreen() {
   const router = useRouter();
   const [selectedPayment, setSelectedPayment] = useState('COD');
 
+  const { items, cartTotal, clearCart, deliveryFee, deliveryAddress } = useCart();
+  
+  const platformFee = 5; // Platform fee might still be hardcoded or need config
+  const total = cartTotal + deliveryFee + platformFee;
+
+  const [loading, setLoading] = useState(false);
+
+  const handlePlaceOrder = async () => {
+    if (items.length === 0) return;
+
+    setLoading(true);
+    try {
+      if (!deliveryAddress) {
+          Alert.alert('Missing Address', 'Please select a delivery address.');
+          setLoading(false);
+          return;
+      }
+
+      // Assuming all items are from the same merchant (handled by UI logic elsewhere usually)
+      // Taking merchantId from the first item
+      const merchantId = items[0].merchantId;
+      
+      const orderData = {
+        merchantId: merchantId,
+        addressId: deliveryAddress.id, 
+        items: items.map(i => ({
+          menuItemId: i.menuItemId,
+          quantity: i.quantity,
+          notes: i.options ? JSON.stringify(i.options) : undefined
+        }))
+      };
+      
+      console.log('Placing order with data:', JSON.stringify(orderData, null, 2));
+
+      const order = await createOrder(orderData);
+
+      if (order) {
+         Alert.alert('Success', 'Order placed successfully!', [
+            { text: 'OK', onPress: () => {
+                clearCart();
+                router.replace('/(tabs)');
+                // Ideally navigate to order tracking or history, but ensuring stack reset is safer
+                setTimeout(() => router.push({ pathname: '/order-tracking', params: { id: order.id } }), 100);
+            }}
+         ]);
+      } else {
+         Alert.alert('Order Failed', 'Could not place order. Please check your connection and try again.');
+      }
+    } catch (error) {
+       console.error('Checkout error:', error);
+       Alert.alert('Error', 'An unexpected error occurred while placing your order.');
+    } finally {
+       setLoading(false);
+    }
+  };
+
   const orderSummary = {
-    items: 3,
-    subtotal: 420,
-    deliveryFee: 29,
-    platformFee: 5,
-    total: 454,
+    items: items.length,
+    subtotal: cartTotal,
+    deliveryFee: deliveryFee,
+    platformFee: platformFee,
+    total: total,
   };
 
   const paymentMethods = [
@@ -51,10 +109,33 @@ export default function CheckoutScreen() {
                 <IconSymbol size={18} name="house.fill" color="#C2185B" />
              </ThemedView>
              <ThemedView style={styles.addressInfo}>
-                <ThemedText style={styles.addressLabel}>Home</ThemedText>
-                <ThemedText style={styles.addressText} numberOfLines={1}>123 Rizal Street, Surigao City, Surigao del Norte</ThemedText>
+                <ThemedText style={styles.addressLabel}>{deliveryAddress ? deliveryAddress.label : 'Select Address'}</ThemedText>
+                <ThemedText style={styles.addressText} numberOfLines={1}>{deliveryAddress ? deliveryAddress.street : 'No address selected'}</ThemedText>
              </ThemedView>
           </ThemedView>
+        </ThemedView>
+
+        {/* Order Items Section */}
+        <ThemedView style={styles.section}>
+          <ThemedText style={styles.sectionTitle}>Order Items</ThemedText>
+          {items.map((item) => (
+            <ThemedView key={item.id} style={styles.itemRow}>
+              <ThemedView style={styles.itemInfo}>
+                <ThemedText style={styles.itemQty}>{item.quantity}x</ThemedText>
+                <ThemedView>
+                  <ThemedText style={styles.itemName}>{item.name}</ThemedText>
+                  {item.options?.size && <ThemedText style={styles.itemOptions}>Size: {item.options.size}</ThemedText>}
+                  {item.options?.addons && item.options.addons.length > 0 && (
+                     <ThemedText style={styles.itemOptions}>Addons: {item.options.addons.join(', ')}</ThemedText>
+                  )}
+                </ThemedView>
+              </ThemedView>
+              <ThemedText style={styles.itemPrice}>₱{item.totalPrice}</ThemedText>
+            </ThemedView>
+          ))}
+          {items.length === 0 && (
+             <ThemedText style={styles.emptyCartText}>Your cart is empty.</ThemedText>
+          )}
         </ThemedView>
 
         {/* Payment Methods Section */}
@@ -118,8 +199,8 @@ export default function CheckoutScreen() {
 
       {/* Place Order Footer */}
       <ThemedView style={styles.footer}>
-         <TouchableOpacity style={styles.placeOrderBtn} onPress={() => router.push('/order-tracking')}>
-            <ThemedText style={styles.placeOrderText}>Place Order — ₱{orderSummary.total}</ThemedText>
+         <TouchableOpacity style={[styles.placeOrderBtn, (items.length === 0 || loading) && styles.placeOrderBtnDisabled]} onPress={handlePlaceOrder} disabled={items.length === 0 || loading}>
+            <ThemedText style={styles.placeOrderText}>{loading ? 'Placing Order...' : `Place Order — ₱${orderSummary.total}`}</ThemedText>
          </TouchableOpacity>
       </ThemedView>
     </ThemedView>
@@ -332,5 +413,50 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 15,
     fontWeight: '900',
+  },
+  placeOrderBtnDisabled: {
+    backgroundColor: '#CCC',
+  },
+  itemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFF',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#EEE',
+  },
+  itemInfo: {
+    flexDirection: 'row',
+    flex: 1,
+  },
+  itemQty: {
+    fontWeight: '800',
+    color: '#C2185B',
+    marginRight: 10,
+    width: 25,
+  },
+  itemName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#333',
+  },
+  itemOptions: {
+    fontSize: 11,
+    color: '#888',
+    marginTop: 2,
+  },
+  itemPrice: {
+    fontWeight: '700',
+    color: '#333',
+    marginLeft: 10,
+  },
+  emptyCartText: {
+    textAlign: 'center',
+    color: '#999',
+    fontStyle: 'italic',
+    padding: 20,
   },
 });

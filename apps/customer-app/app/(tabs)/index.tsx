@@ -1,31 +1,112 @@
-import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Image, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Image, useWindowDimensions, View, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useState, useEffect } from 'react';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { getMerchants } from '@/api/services';
+import { Merchant } from '@/api/types';
+import { resolveImageUrl } from '@/api/client';
+import { isMerchantOpen } from '@/utils/time';
 
 export default function FoodScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
-  const cardWidth = screenWidth * 0.72; // Width matches 72% for horizontal feel
-  const cardHeight = cardWidth * (9 / 16); // 16:9 for the image part
+  const cardWidth = screenWidth * 0.72;
+  const cardHeight = cardWidth * (9 / 16);
   
+  const [merchants, setMerchants] = useState<Merchant[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    loadMerchants();
+  }, []);
+
+  const loadMerchants = async () => {
+    setLoading(true);
+    const data = await getMerchants();
+    setMerchants(data);
+    setLoading(false);
+  };
+
+  const filteredMerchants = merchants.filter(m => 
+    m.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Group merchants into sections
+  const recentMerchants = filteredMerchants.slice(0, 4);
+  const popularMerchants = filteredMerchants.slice(0, 6);
+
   const sections = [
     {
-      title: 'Order again',
-      items: [
-        { id: '1', name: 'Greenwich - Surigao', rating: '5.0', count: '5000+', time: '15-40 min', fee: '₱29', tag: '50% off ₱149: wemissyou', image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=400' },
-        { id: '2', name: 'Boulevard Food', rating: '4.8', count: '1000+', time: '15-40 min', fee: '₱39', tag: '50% off ₱149: welcome', image: 'https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=400' },
-      ]
+      title: 'Popular Restaurants',
+      items: popularMerchants
     },
     {
-      title: 'Fast delivery',
-      items: [
-        { id: '3', name: 'McDonald\'s - Surigao', rating: '4.9', count: '10k+', time: '5-30 min', fee: '₱19', tag: 'Free delivery', image: 'https://images.unsplash.com/photo-1561758033-d89a9ad46330?w=400' },
-        { id: '4', name: 'Jollibee - City Center', rating: '5.0', count: '20k+', time: '10-25 min', fee: '₱25', tag: 'Hot deal', image: 'https://images.unsplash.com/photo-1594212699903-ec8a3eca50f5?w=400' },
-      ]
+      title: 'All Restaurants',
+      items: filteredMerchants
     }
   ];
+
+  const renderMerchantCard = (merchant: Merchant) => {
+    const { isOpen, nextOpen } = isMerchantOpen(merchant);
+    
+    return (
+    <TouchableOpacity 
+      key={merchant.id} 
+      style={[styles.compactCard, { width: cardWidth }]}
+      onPress={() => router.push(`/restaurant/${merchant.id}`)}
+    >
+      <ThemedView style={[styles.imageContainer, { height: cardHeight }]}>
+        <Image 
+          source={{ uri: resolveImageUrl(merchant.coverImage) || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400' }} 
+          style={styles.restaurantImage} 
+        />
+        <ThemedView style={styles.heartIcon}>
+          <IconSymbol size={14} name="heart" color="#000" />
+        </ThemedView>
+        {!isOpen && (
+             <ThemedView style={styles.closedOverlay}>
+                <ThemedText style={styles.closedText}>Closed</ThemedText>
+                <ThemedText style={styles.opensAtText}>{nextOpen || 'Closed'}</ThemedText>
+             </ThemedView>
+        )}
+      </ThemedView>
+      
+      <ThemedView style={styles.cardInfo}>
+        <ThemedView style={styles.nameRow}>
+          <ThemedText style={styles.restaurantName} numberOfLines={1}>{merchant.name}</ThemedText>
+          {!!merchant.rating && (
+            <ThemedView style={styles.ratingRow}>
+              <ThemedText style={styles.ratingText}>★ {merchant.rating.toFixed(1)}</ThemedText>
+              {!!merchant.reviewCount && (
+                <ThemedText style={styles.countText}>({merchant.reviewCount})</ThemedText>
+              )}
+            </ThemedView>
+          )}
+        </ThemedView>
+        
+        {!!merchant.description && (
+          <ThemedText style={styles.subtitleText} numberOfLines={1}>{merchant.description}</ThemedText>
+        )}
+        
+        <ThemedView style={styles.feeRow}>
+          <IconSymbol size={12} name="paperplane.fill" color="#555" />
+          <ThemedText style={styles.feeText}>
+            {merchant.deliveryTime || '15-30 min'} • ₱{merchant.deliveryFee || 29}
+          </ThemedText>
+        </ThemedView>
+
+        {!!merchant.address && (
+          <ThemedView style={styles.promoBadge}>
+            <IconSymbol size={10} name="location.fill" color="#f78734" />
+            <ThemedText style={styles.promoText} numberOfLines={1}>{merchant.address}</ThemedText>
+          </ThemedView>
+        )}
+      </ThemedView>
+    </TouchableOpacity>
+  );};
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false} bounces={false}>
@@ -33,69 +114,50 @@ export default function FoodScreen() {
       <ThemedView style={styles.headerBackground}>
         <ThemedView style={styles.searchBarContainer}>
           <ThemedView style={styles.searchBar}>
-            <IconSymbol size={18} name="chevron.right" color="#777" style={{ transform: [{ rotate: '90deg' }], marginRight: 8 }} />
+            <IconSymbol size={18} name="magnifyingglass" color="#777" style={{ marginRight: 8 }} />
             <TextInput
-              placeholder="Search for restaurants and groceries"
+              placeholder="Search for restaurants"
               style={styles.searchInput}
               placeholderTextColor="#777"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
             />
           </ThemedView>
         </ThemedView>
       </ThemedView>
 
       <ThemedView style={styles.contentBody}>
-        {sections.map((section, sIndex) => (
-          <ThemedView key={sIndex} style={styles.sectionContainer}>
-            <ThemedView style={styles.sectionHeader}>
-              <ThemedText style={styles.sectionTitle}>{section.title}</ThemedText>
-              <TouchableOpacity style={styles.seeAllButton}>
-                <IconSymbol size={18} name="chevron.right" color="#555" />
-              </TouchableOpacity>
-            </ThemedView>
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
-              {section.items.map((item) => (
-                <TouchableOpacity 
-                   key={item.id} 
-                   style={[styles.compactCard, { width: cardWidth }]}
-                   onPress={() => router.push(`/restaurant/${item.id}`)}
-                >
-                  <ThemedView style={[styles.imageContainer, { height: cardHeight }]}>
-                    <Image source={{ uri: item.image }} style={styles.restaurantImage} />
-                    <ThemedView style={styles.heartIcon}>
-                      <IconSymbol size={14} name="person" color="#000" />
-                    </ThemedView>
-                    <ThemedView style={styles.adBadge}>
-                      <ThemedText style={styles.adText}>Ad</ThemedText>
-                    </ThemedView>
-                  </ThemedView>
-                  
-                  <ThemedView style={styles.cardInfo}>
-                    <ThemedView style={styles.nameRow}>
-                      <ThemedText style={styles.restaurantName} numberOfLines={1}>{item.name}</ThemedText>
-                      <ThemedView style={styles.ratingRow}>
-                        <ThemedText style={styles.ratingText}>★ {item.rating}</ThemedText>
-                        <ThemedText style={styles.countText}>({item.count})</ThemedText>
-                      </ThemedView>
-                    </ThemedView>
-                    
-                    <ThemedText style={styles.subtitleText}>{item.time} • ₱₱ • Pizza</ThemedText>
-                    
-                    <ThemedView style={styles.feeRow}>
-                      <IconSymbol size={12} name="paperplane.fill" color="#555" />
-                      <ThemedText style={styles.feeText}>{item.fee}</ThemedText>
-                    </ThemedView>
-
-                    <ThemedView style={styles.promoBadge}>
-                      <Image source={require('@/assets/images/favicon.png')} style={{width: 12, height: 12, marginRight: 4}} />
-                      <ThemedText style={styles.promoText} numberOfLines={1}>{item.tag}</ThemedText>
-                    </ThemedView>
-                  </ThemedView>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+        {loading ? (
+          <ThemedView style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#5c6cc9" />
+            <ThemedText style={styles.loadingText}>Loading restaurants...</ThemedText>
           </ThemedView>
-        ))}
+        ) : filteredMerchants.length === 0 ? (
+          <ThemedView style={styles.emptyContainer}>
+            <IconSymbol size={48} name="fork.knife" color="#CCC" />
+            <ThemedText style={styles.emptyText}>No restaurants found</ThemedText>
+            <ThemedText style={styles.emptySubtext}>
+              {searchQuery ? 'Try a different search term' : 'Check back later for new restaurants'}
+            </ThemedText>
+          </ThemedView>
+        ) : (
+          sections.map((section, sIndex) => (
+            section.items.length > 0 && (
+              <ThemedView key={sIndex} style={styles.sectionContainer}>
+                <ThemedView style={styles.sectionHeader}>
+                  <ThemedText style={styles.sectionTitle}>{section.title}</ThemedText>
+                  <TouchableOpacity style={styles.seeAllButton}>
+                    <IconSymbol size={18} name="chevron.right" color="#555" />
+                  </TouchableOpacity>
+                </ThemedView>
+
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
+                  {section.items.map(renderMerchantCard)}
+                </ScrollView>
+              </ThemedView>
+            )
+          ))
+        )}
         
         {/* Placeholder for more content */}
         <ThemedView style={{ height: 100 }} />
@@ -110,7 +172,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
   },
   headerBackground: {
-    backgroundColor: '#C2185B', // Deep pink mapping the reference image
+    backgroundColor: '#5c6cc9',
     paddingTop: 50,
     paddingBottom: 15,
   },
@@ -140,6 +202,37 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFF',
     paddingTop: 15,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+    backgroundColor: 'transparent',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#777',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+    backgroundColor: 'transparent',
+  },
+  emptyText: {
+    marginTop: 16,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  emptySubtext: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#777',
+    textAlign: 'center',
   },
   sectionContainer: {
     marginBottom: 24,
@@ -196,20 +289,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  adBadge: {
-    position: 'absolute',
-    bottom: 6,
-    right: 6,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 3,
-  },
-  adText: {
-    color: '#FFF',
-    fontSize: 9,
-    fontWeight: '700',
-  },
   cardInfo: {
     paddingTop: 6,
     backgroundColor: 'transparent',
@@ -261,7 +340,7 @@ const styles = StyleSheet.create({
   promoBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF0F5',
+    backgroundColor: '#E8EAF6',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -269,8 +348,26 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   promoText: {
-    color: '#D81B60',
+    color: '#5c6cc9',
     fontSize: 10,
     fontWeight: '700',
+    marginLeft: 4,
+  },
+  closedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closedText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  opensAtText: {
+    color: '#EEE',
+    fontSize: 12,
+    marginTop: 4,
   },
 });

@@ -5,7 +5,7 @@ import { SymbolWeight, SymbolViewProps } from 'expo-symbols';
 import { ComponentProps } from 'react';
 import { OpaqueColorValue, type StyleProp, type TextStyle } from 'react-native';
 
-type IconMapping = Record<SymbolViewProps['name'], ComponentProps<typeof MaterialIcons>['name']>;
+type IconMapping = Record<string, ComponentProps<typeof MaterialIcons>['name']>;
 type IconSymbolName = keyof typeof MAPPING;
 
 /**
@@ -23,9 +23,16 @@ const MAPPING = {
   'government': 'account-balance',
   'cart': 'shopping-cart',
   'person': 'person',
+  'person.fill': 'person',
   'filter': 'tune',
   'add': 'add',
   'star.fill': 'star',
+  'phone': 'phone',
+  'lock.fill': 'lock',
+  'location.fill': 'location-on',
+  'services': 'grid-view',
+  'map': 'map',
+  'pabili': 'shopping-bag',
 } as IconMapping;
 
 /**

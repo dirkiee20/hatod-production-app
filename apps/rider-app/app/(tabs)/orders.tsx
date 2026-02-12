@@ -1,44 +1,50 @@
-import { StyleSheet, ScrollView, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, View, ActivityIndicator, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import api from '@/services/api';
 
 export default function OrdersScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [orders, setOrders] = useState<any[]>([]);
 
-  const orders = [
-    { 
-      id: 'ORD-1001', 
-      date: 'Today, 2:30 PM', 
-      restaurant: 'The Burger Mansion', 
-      dropoff: 'Villa Corito, Surigao City',
-      earnings: 85,
-      status: 'Completed',
-      distance: '3.2 km'
-    },
-    { 
-      id: 'ORD-1002', 
-      date: 'Today, 11:15 AM', 
-      restaurant: 'Pizza Palace', 
-      dropoff: 'Kaskag Village',
-      earnings: 120,
-      status: 'Completed',
-      distance: '5.1 km'
-    },
-    { 
-      id: 'ORD-0998', 
-      date: 'Yesterday, 7:45 PM', 
-      restaurant: 'Sushi Bar', 
-      dropoff: 'Sabang 1',
-      earnings: 65,
-      status: 'Completed',
-      distance: '2.5 km'
-    },
-  ];
+  const fetchOrders = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get('/orders');
+      
+      // Sort by date desc
+      const sorted = response.data.sort((a: any, b: any) => 
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      );
+      setOrders(sorted);
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchOrders();
+  }, []);
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
 
   return (
     <ThemedView style={styles.container}>
@@ -49,46 +55,68 @@ export default function OrdersScreen() {
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {orders.map((order) => (
-          <TouchableOpacity 
-            key={order.id} 
-            style={styles.orderCard}
-            onPress={() => router.push(`/order-details/${order.id}`)}
-          >
-            <View style={styles.cardHeader}>
-              <View style={styles.dateRow}>
-                <ThemedText style={styles.orderDate}>{order.date}</ThemedText>
-                <ThemedText style={styles.orderId}>{order.id}</ThemedText>
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#C2185B']} />
+        }
+      >
+        {loading && !refreshing ? (
+          <ActivityIndicator size="large" color="#C2185B" style={{ marginTop: 40 }} />
+        ) : orders.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <IconSymbol size={48} name="receipt" color="#CCC" />
+            <ThemedText style={styles.emptyText}>No orders found</ThemedText>
+          </View>
+        ) : (
+          orders.map((order) => (
+            <TouchableOpacity 
+              key={order.id} 
+              style={styles.orderCard}
+              onPress={() => router.push(`/order-details/${order.id}`)}
+            >
+              <View style={styles.cardHeader}>
+                <View style={styles.dateRow}>
+                  <ThemedText style={styles.orderDate}>{formatDate(order.updatedAt)}</ThemedText>
+                  <ThemedText style={styles.orderId}>{order.orderNumber || order.id.slice(0, 8)}</ThemedText>
+                </View>
+                <ThemedText style={styles.earnings}>₱{order.deliveryFee}</ThemedText>
               </View>
-              <ThemedText style={styles.earnings}>₱{order.earnings}</ThemedText>
-            </View>
 
-            <View style={styles.divider} />
+              <View style={styles.divider} />
 
-            <View style={styles.routeContainer}>
-              <View style={styles.routeRow}>
-                <View style={[styles.dot, { backgroundColor: '#C2185B' }]} />
-                <ThemedText style={styles.locationText}>{order.restaurant}</ThemedText>
+              <View style={styles.routeContainer}>
+                <View style={styles.routeRow}>
+                  <View style={[styles.dot, { backgroundColor: '#C2185B' }]} />
+                  <ThemedText style={styles.locationText}>
+                    {order.merchant?.name || 'Unknown Merchant'}
+                  </ThemedText>
+                </View>
+                <View style={styles.routeLine} />
+                <View style={styles.routeRow}>
+                  <View style={[styles.dot, { backgroundColor: '#1976D2' }]} />
+                  <ThemedText style={styles.locationText} numberOfLines={1}>
+                    {order.address?.street}, {order.address?.city}
+                  </ThemedText>
+                </View>
               </View>
-              <View style={styles.routeLine} />
-              <View style={styles.routeRow}>
-                <View style={[styles.dot, { backgroundColor: '#1976D2' }]} />
-                <ThemedText style={styles.locationText}>{order.dropoff}</ThemedText>
-              </View>
-            </View>
 
-            <View style={styles.cardFooter}>
-              <View style={styles.statBadge}>
-                <IconSymbol size={14} name="map" color="#666" />
-                <ThemedText style={styles.statText}>{order.distance}</ThemedText>
+              <View style={styles.cardFooter}>
+                <View style={styles.statBadge}>
+                  <IconSymbol size={14} name="map" color="#666" />
+                  <ThemedText style={styles.statText}>-- km</ThemedText> 
+                  {/* Distance is not yet available in backend response */}
+                </View>
+                <View style={[styles.statusBadge, { backgroundColor: order.status === 'DELIVERED' ? '#E8F5E9' : '#FFF3E0' }]}>
+                  <ThemedText style={[styles.statusText, { color: order.status === 'DELIVERED' ? '#388E3C' : '#FF9800' }]}>
+                    {order.status}
+                  </ThemedText>
+                </View>
               </View>
-              <View style={[styles.statusBadge, { backgroundColor: '#E8F5E9' }]}>
-                <ThemedText style={styles.statusText}>{order.status}</ThemedText>
-              </View>
-            </View>
-          </TouchableOpacity>
-        ))}
+            </TouchableOpacity>
+          ))
+        )}
       </ScrollView>
     </ThemedView>
   );
@@ -215,4 +243,14 @@ const styles = StyleSheet.create({
     color: '#388E3C',
     fontWeight: '800',
   },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 60,
+  },
+  emptyText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#999',
+  }
 });

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMenuItemDto } from './dto/create-menu-item.dto';
 import { CreateCategoryDto } from './dto/create-category.dto';
@@ -22,6 +22,25 @@ export class MenuService {
         merchantId: merchant.id,
       },
     });
+  }
+
+  async deleteCategory(userId: string, categoryId: string) {
+      const merchant = await this.prisma.merchant.findUnique({ where: { userId } });
+      if (!merchant) throw new ForbiddenException('User is not a merchant');
+
+      const category = await this.prisma.category.findUnique({
+          where: { id: categoryId },
+          include: { _count: { select: { menuItems: true } } }
+      });
+
+      if (!category) throw new NotFoundException('Category not found');
+      if (category.merchantId !== merchant.id) throw new ForbiddenException('Not your category');
+      
+      if (category._count.menuItems > 0) {
+          throw new BadRequestException('Cannot delete category with assigned menu items.');
+      }
+
+      return this.prisma.category.delete({ where: { id: categoryId } });
   }
 
   async getCategories(userId: string) {
@@ -92,6 +111,17 @@ export class MenuService {
     });
   }
 
+  async getMenuItemById(id: string) {
+    const item = await this.prisma.menuItem.findUnique({
+      where: { id },
+      include: { category: true, merchant: true },
+    });
+    if (!item) {
+      throw new NotFoundException('Menu item not found');
+    }
+    return item;
+  }
+
   async deleteMenuItem(userId: string, id: string) {
      const merchant = await this.prisma.merchant.findUnique({
       where: { userId },
@@ -105,15 +135,17 @@ export class MenuService {
     return this.prisma.menuItem.delete({ where: { id } });
   }
 
-  async updateMenuItem(userId: string, id: string, dto: Partial<CreateMenuItemDto>) {
-     const merchant = await this.prisma.merchant.findUnique({
-      where: { userId },
-    });
-    if (!merchant) throw new ForbiddenException('User is not a merchant');
-
+  async updateMenuItem(user: { userId: string; role: string }, id: string, dto: Partial<CreateMenuItemDto>) {
     const item = await this.prisma.menuItem.findUnique({ where: { id } });
     if (!item) throw new NotFoundException('Item not found');
-    if (item.merchantId !== merchant.id) throw new ForbiddenException('Not your item');
+
+    if (user.role !== 'ADMIN') {
+        const merchant = await this.prisma.merchant.findUnique({
+            where: { userId: user.userId },
+        });
+        if (!merchant) throw new ForbiddenException('User is not a merchant');
+        if (item.merchantId !== merchant.id) throw new ForbiddenException('Not your item');
+    }
 
     return this.prisma.menuItem.update({
         where: { id },

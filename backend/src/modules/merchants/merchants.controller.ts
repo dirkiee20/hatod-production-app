@@ -12,6 +12,24 @@ import { UserRole } from '@prisma/client';
 export class MerchantsController {
   constructor(private merchantsService: MerchantsService) {}
 
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Get('admin/list')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Get all merchants (Admin only)' })
+  findAllAdmin() {
+    return this.merchantsService.findAllAdmin();
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Get('profile')
+  @Roles(UserRole.MERCHANT)
+  @ApiOperation({ summary: 'Get merchant profile' })
+  getProfile(@Req() req: any) {
+    return this.merchantsService.getProfile(req.user.userId);
+  }
+
   @Get()
   @ApiOperation({ summary: 'Get all active merchants' })
   findAll() {
@@ -22,6 +40,15 @@ export class MerchantsController {
   @ApiOperation({ summary: 'Get merchant details and menu' })
   findOne(@Param('id') id: string) {
     return this.merchantsService.findOne(id);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Get('admin/:id')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Get merchant details (Admin only)' })
+  findOneAdmin(@Param('id') id: string) {
+    return this.merchantsService.findOneAdmin(id);
   }
 
   @ApiBearerAuth()
@@ -53,5 +80,22 @@ export class MerchantsController {
     @Body() dto: Partial<CreateMenuItemDto>,
   ) {
     return this.merchantsService.updateMenuItem(req.user.userId, id, dto);
+  }
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Patch(':id/approve')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Approve a merchant (Admin only)' })
+  approve(@Param('id') id: string) {
+    return this.merchantsService.approveMerchant(id);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Patch(':id/suspend')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Suspend a merchant (Admin only)' })
+  suspend(@Param('id') id: string) {
+    return this.merchantsService.suspendMerchant(id);
   }
 }

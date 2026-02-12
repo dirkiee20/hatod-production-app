@@ -8,12 +8,25 @@ export class MerchantsService {
 
   async findAll() {
     return this.prisma.merchant.findMany({
-      where: { isOpen: true },
+      where: {
+        isApproved: true,
+      },
       include: {
         categories: {
           include: { menuItems: true },
         },
       },
+    });
+  }
+
+  async findAllAdmin() {
+    return this.prisma.merchant.findMany({
+      include: {
+        categories: {
+          include: { menuItems: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -29,6 +42,40 @@ export class MerchantsService {
 
     if (!merchant) {
       throw new NotFoundException('Merchant not found');
+    }
+
+    return merchant;
+  }
+
+  async findOneAdmin(id: string) {
+    const merchant = await this.prisma.merchant.findUnique({
+      where: { id },
+      include: {
+        categories: {
+          include: { menuItems: true }, // Include ALL items
+        },
+      },
+    });
+
+    if (!merchant) {
+      throw new NotFoundException('Merchant not found');
+    }
+
+    return merchant;
+  }
+
+  async getProfile(userId: string) {
+    const merchant = await this.prisma.merchant.findUnique({
+      where: { userId },
+      include: {
+        categories: {
+          include: { menuItems: true },
+        },
+      },
+    });
+
+    if (!merchant) {
+      throw new NotFoundException('Merchant profile not found');
     }
 
     return merchant;
@@ -83,6 +130,19 @@ export class MerchantsService {
     return this.prisma.menuItem.update({
       where: { id: itemId },
       data: dto,
+    });
+  }
+  async approveMerchant(id: string) {
+    return this.prisma.merchant.update({
+      where: { id },
+      data: { isApproved: true },
+    });
+  }
+
+  async suspendMerchant(id: string) {
+    return this.prisma.merchant.update({
+      where: { id },
+      data: { isApproved: false },
     });
   }
 }

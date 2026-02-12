@@ -1,13 +1,16 @@
-import { StyleSheet, ScrollView, TouchableOpacity, View, TextInput, Image, Switch } from 'react-native';
-import { useRouter, Stack } from 'expo-router';
+import { StyleSheet, ScrollView, TouchableOpacity, View, TextInput, Image, Switch, Platform } from 'react-native';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { API_BASE, authenticatedFetch, resolveImageUrl } from '../api/client'; // Import authenticatedFetch
 
 export default function AddMenuItemScreen() {
   const router = useRouter();
+  const { editId } = useLocalSearchParams(); // Get editId from params
   const insets = useSafeAreaInsets();
   
   const [formData, setFormData] = useState({
@@ -17,12 +20,84 @@ export default function AddMenuItemScreen() {
     category: 'Main Course',
     available: true,
   });
-
+  const [image, setImage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
   const [variants, setVariants] = useState<any[]>([]);
-
   const categories = ['Main Course', 'Appetizer', 'Beverages', 'Desserts', 'Promo'];
+
+  useEffect(() => {
+    if (editId) {
+        fetchItemDetails(editId as string);
+    }
+  }, [editId]);
+
+  const fetchItemDetails = async (id: string) => {
+      try {
+          const res = await authenticatedFetch(`/menu/public/items/${id}`);
+          if (res.ok) {
+              const data = await res.json();
+              const { description, variants: parsedVariants } = parseVariants(data.description || '');
+              
+              setFormData({
+                  name: data.name,
+                  description: description,
+                  price: data.price.toString(),
+                  category: data.category?.name || 'Main Course',
+                  available: data.isAvailable
+              });
+              
+              if (data.image) {
+                  const baseUrl = API_BASE.replace(/\/api\/?$/, '');
+                  // Check if it's already a full URL or relative
+                  if (data.image.startsWith('http')) setImage(data.image);
+                  else setImage(`${baseUrl}${data.image}`);
+              }
+
+              setVariants(parsedVariants);
+          }
+      } catch (e) {
+          console.error("Failed to fetch item for edit", e);
+      }
+  };
+
+  const parseVariants = (fullDesc: string) => {
+      const variantRegex = /\[(.*?)\s\((.*?)\):\s(.*?)\]/g;
+      const parsedVariants: any[] = [];
+      let cleanDescription = fullDesc.replace(variantRegex, '').trim();
+
+      let match;
+      while ((match = variantRegex.exec(fullDesc)) !== null) {
+          const name = match[1];
+          const reqText = match[2];
+          const itemsStr = match[3];
+          const isRequired = reqText.toLowerCase() === 'required';
+          
+          const options = itemsStr.split(', ').map(s => {
+              const itemMatch = s.match(/(.*?)\s\(\+\$(\d+(?:\.\d+)?)\)/);
+              if (itemMatch) {
+                  return { label: itemMatch[1], price: itemMatch[2] };
+              }
+              // Handle "Regular" or other 0 price items
+              return { label: s, price: '0' }; 
+          });
+
+          parsedVariants.push({ name, isRequired, options });
+      }
+      return { description: cleanDescription, variants: parsedVariants };
+  };
+
+  const pickImage = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1], // Square for menu items
+      quality: 0.5,
+    });
+
+    if (!result.canceled) {
+      setImage(result.assets[0].uri);
+    }
+  };
 
   const handleSave = async () => {
     if (!formData.name || !formData.price) {
@@ -32,57 +107,89 @@ export default function AddMenuItemScreen() {
 
     setIsSubmitting(true);
     try {
-        const { authenticatedFetch } = await import('../api/client');
-        
-        // 1. Ensure category exists (simplification: we might want to fetch IDs first, but for now we can create on the fly or just assume existence if we had IDs. The backend expects categoryId, but let's see if we can just pass a string or if we need to implement category lookup.
-        // For this demo, let's actually just fetch the categories first or create them. 
-        // To simplify, I'll update the backend to optional categoryId or handle text categories, OR we just assume 'Main Course' maps to something.
-        // Let's first fetch categories from backend to see if we can match.
-        
+        // Upload Image if selected and changed (local URI)
+        let imageUrl = image;
+        if (image && !image.startsWith('http')) {
+             // It's a local file, upload it
+            try {
+                const formData = new FormData();
+                formData.append('file', {
+                    uri: image,
+                    name: 'photo.jpg',
+                    type: 'image/jpeg',
+                } as any);
+
+                const uploadResponse = await fetch(`${API_BASE}/files/upload`, {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                });
+
+                if (uploadResponse.ok) {
+                    const uploadResult = await uploadResponse.json();
+                    const baseUrl = API_BASE.replace(/\/api\/?$/, '');
+                    imageUrl = `${baseUrl}${uploadResult.url}`; 
+                } else {
+                    console.error('Upload failed:', await uploadResponse.text());
+                }
+            } catch (err) {
+                console.error('Error uploading image:', err);
+            }
+        }
+
         const catRes = await authenticatedFetch('/menu/categories');
         let categoryId = null;
         if (catRes.ok) {
             const cats = await catRes.json();
-            const found = cats.find((c: any) => c.name === formData.category);
-            if (found) {
-                categoryId = found.id;
-            } else {
-                // Determine sort order
-                const sortOrder = cats.length; 
-                // Create category
-                 const newCatRes = await authenticatedFetch('/menu/categories', {
-                    method: 'POST',
-                    body: JSON.stringify({ name: formData.category, sortOrder })
-                 });
-                 if (newCatRes.ok) {
-                    const newCat = await newCatRes.json();
-                    categoryId = newCat.id;
-                 }
-            }
+             const found = cats.find((c: any) => c.name === formData.category);
+             if (found) {
+                 categoryId = found.id;
+             } else {
+                 const sortOrder = cats.length; 
+                  const newCatRes = await authenticatedFetch('/menu/categories', {
+                     method: 'POST',
+                     body: JSON.stringify({ name: formData.category, sortOrder })
+                  });
+                  if (newCatRes.ok) {
+                     const newCat = await newCatRes.json();
+                     categoryId = newCat.id;
+                  }
+             }
+        }
+
+        let finalDescription = formData.description;
+        if (variants.length > 0) {
+            const variantText = variants.map(g => {
+                const options = g.options.filter((o: any) => o.label).map((o: any) => `${o.label} (+$${o.price || 0})`).join(', ');
+                const reqText = g.isRequired ? 'Required' : 'Optional';
+                return `[${g.name} (${reqText}): ${options}]`;
+            }).join('\n');
+            finalDescription += '\n\n' + variantText; // Append variants to description
         }
 
         const body = {
             name: formData.name,
-            description: formData.description,
+            description: finalDescription,
             price: parseFloat(formData.price),
             categoryId: categoryId,
             isAvailable: formData.available,
-            // For variants, we might need a separate relation or store as JSON. 
-            // The current simple schema doesn't support deep variants, so let's append to description or ignore for now to keep it simple as requested.
-            // Or we could store it in description for this first pass.
+            image: imageUrl,
         };
 
-        const res = await authenticatedFetch('/menu/items', {
-            method: 'POST',
+        const url = editId ? `/menu/items/${editId}` : '/menu/items';
+        const method = editId ? 'PATCH' : 'POST';
+
+        const res = await authenticatedFetch(url, {
+            method: method,
             body: JSON.stringify(body)
         });
 
         if (res.ok) {
-            alert('Menu item added successfully!');
+            alert(editId ? 'Menu item updated!' : 'Menu item added successfully!');
             router.back();
         } else {
             console.error(await res.text());
-            alert('Failed to add item');
+            alert('Failed to save item');
         }
 
     } catch (e) {
@@ -97,7 +204,7 @@ export default function AddMenuItemScreen() {
     <ThemedView style={styles.container}>
       <Stack.Screen options={{ 
         headerShown: true, 
-        title: 'Add New Item',
+        title: editId ? 'Edit Item' : 'Add New Item',
         headerTitleStyle: { fontWeight: '900', fontSize: 16 },
         headerLeft: () => (
           <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 10 }}>
@@ -108,12 +215,18 @@ export default function AddMenuItemScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Image Upload Placeholder */}
-        <TouchableOpacity style={styles.imageUploadBox}>
-          <ThemedView style={styles.imagePlaceholderCircle}>
-             <IconSymbol size={30} name="dashboard" color="#888" />
-          </ThemedView>
-          <ThemedText style={styles.uploadText}>Upload Product Image</ThemedText>
-          <ThemedText style={styles.uploadSubtext}>JPG or PNG, max 5MB</ThemedText>
+        <TouchableOpacity style={styles.imageUploadBox} onPress={pickImage}>
+          {image ? (
+              <Image source={{ uri: image }} style={{ width: '100%', height: '100%', borderRadius: 16 }} />
+          ) : (
+            <>
+              <ThemedView style={styles.imagePlaceholderCircle}>
+                 <IconSymbol size={30} name="dashboard" color="#888" />
+              </ThemedView>
+              <ThemedText style={styles.uploadText}>Upload Product Image</ThemedText>
+              <ThemedText style={styles.uploadSubtext}>JPG or PNG, max 5MB</ThemedText>
+            </>
+          )}
         </TouchableOpacity>
 
         {/* Form Fields */}
@@ -142,7 +255,6 @@ export default function AddMenuItemScreen() {
             />
           </ThemedView>
 
-          {variants.length === 0 ? (
             <View style={styles.rowInputs}>
               <ThemedView style={[styles.inputGroup, { flex: 1, marginRight: 15 }]}>
                 <ThemedText style={styles.inputLabel}>Price (₱)</ThemedText>
@@ -158,30 +270,28 @@ export default function AddMenuItemScreen() {
 
               <ThemedView style={[styles.inputGroup, { flex: 1.5 }]}>
                 <ThemedText style={styles.inputLabel}>Category</ThemedText>
-                <ThemedView style={styles.categoryPicker}>
+                <TouchableOpacity 
+                  style={styles.categoryPicker}
+                  onPress={() => {
+                     const currentIndex = categories.indexOf(formData.category);
+                     const nextIndex = (currentIndex + 1) % categories.length;
+                     setFormData({...formData, category: categories[nextIndex]});
+                  }}
+                >
                    <ThemedText style={styles.categoryText}>{formData.category}</ThemedText>
                    <IconSymbol size={14} name="chevron.right" color="#888" style={{ transform: [{ rotate: '90deg' }] }} />
-                </ThemedView>
+                </TouchableOpacity>
               </ThemedView>
             </View>
-          ) : (
-            <>
-              <ThemedView style={styles.inputGroup}>
-                <ThemedText style={styles.inputLabel}>Category</ThemedText>
-                <ThemedView style={styles.categoryPicker}>
-                   <ThemedText style={styles.categoryText}>{formData.category}</ThemedText>
-                   <IconSymbol size={14} name="chevron.right" color="#888" style={{ transform: [{ rotate: '90deg' }] }} />
-                </ThemedView>
-              </ThemedView>
               
-              <ThemedView style={styles.variantPriceNotice}>
-                <IconSymbol size={16} name="dashboard" color="#C2185B" />
-                <ThemedText style={styles.variantPriceNoticeText}>
-                  Pricing is set through variant options below
-                </ThemedText>
-              </ThemedView>
-            </>
-          )}
+            {variants.length > 0 && (
+                <ThemedView style={styles.variantPriceNotice}>
+                    <IconSymbol size={16} name="dashboard" color="#C2185B" />
+                    <ThemedText style={styles.variantPriceNoticeText}>
+                    Variants will add to the base price above
+                    </ThemedText>
+                </ThemedView>
+            )}
 
           <ThemedView style={styles.switchGroup}>
              <View>
@@ -203,7 +313,7 @@ export default function AddMenuItemScreen() {
              <ThemedText style={styles.sectionTitle}>Variants & Options</ThemedText>
              <TouchableOpacity 
                style={styles.addGroupBtn}
-               onPress={() => setVariants([...variants, { name: '', options: [{ label: '', price: '' }] }])}
+               onPress={() => setVariants([...variants, { name: '', isRequired: false, options: [{ label: '', price: '' }] }])}
              >
                 <ThemedText style={styles.addGroupText}>+ Add Group</ThemedText>
              </TouchableOpacity>
@@ -228,6 +338,55 @@ export default function AddMenuItemScreen() {
                    </TouchableOpacity>
                 </ThemedView>
 
+                {/* Configuration: Required & Display Style */}
+                <View style={{ marginBottom: 15, paddingHorizontal: 2 }}>
+                    {/* Required Toggle */}
+                    <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 5, justifyContent: 'space-between'}}>
+                        <ThemedText style={{fontSize: 12, color: '#888', fontWeight: '600', textTransform: 'uppercase'}}>Requirement:</ThemedText>
+                        <View style={{flexDirection: 'row', backgroundColor: '#F5F5F5', borderRadius: 8, padding: 2}}>
+                             <TouchableOpacity 
+                                onPress={() => {
+                                    const newVariants = [...variants];
+                                    newVariants[gIdx].isRequired = true;
+                                    
+                                    // Auto-add "Regular" option if it doesn't exist
+                                    const hasRegular = newVariants[gIdx].options.some((opt: any) => opt.label.toLowerCase() === 'regular');
+                                    if (!hasRegular) {
+                                        newVariants[gIdx].options.unshift({ label: 'Regular', price: '0' });
+                                    }
+
+                                    setVariants(newVariants);
+                                }}
+                                style={{
+                                    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6,
+                                    backgroundColor: group.isRequired ? '#FFF' : 'transparent',
+                                    shadowColor: "#000", shadowOpacity: group.isRequired ? 0.1 : 0, shadowRadius: 2, elevation: group.isRequired ? 2 : 0
+                                }}
+                             >
+                                <ThemedText style={{fontSize: 12, fontWeight: '700', color: group.isRequired ? '#C2185B' : '#999'}}>Required</ThemedText>
+                             </TouchableOpacity>
+                             <TouchableOpacity 
+                                onPress={() => {
+                                    const newVariants = [...variants];
+                                    newVariants[gIdx].isRequired = false;
+                                    
+                                    // Remove "Regular" option if switching back to Optional
+                                    newVariants[gIdx].options = newVariants[gIdx].options.filter((opt: any) => opt.label.toLowerCase() !== 'regular');
+
+                                    setVariants(newVariants);
+                                }}
+                                style={{
+                                    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6,
+                                    backgroundColor: !group.isRequired ? '#FFF' : 'transparent',
+                                    shadowColor: "#000", shadowOpacity: !group.isRequired ? 0.1 : 0, shadowRadius: 2, elevation: !group.isRequired ? 2 : 0
+                                }}
+                             >
+                                <ThemedText style={{fontSize: 12, fontWeight: '700', color: !group.isRequired ? '#333' : '#999'}}>Optional</ThemedText>
+                             </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+
                 {group.options.map((opt: any, oIdx: number) => (
                    <ThemedView key={oIdx} style={styles.optionRow}>
                       <TextInput 
@@ -241,18 +400,24 @@ export default function AddMenuItemScreen() {
                         }}
                         placeholderTextColor="#999"
                       />
-                      <TextInput 
-                        style={[styles.textInput, { flex: 1, marginRight: 10 }]}
-                        placeholder="+₱ 0"
-                        keyboardType="numeric"
-                        value={opt.price}
-                        onChangeText={(text) => {
-                           const newVariants = [...variants];
-                           newVariants[gIdx].options[oIdx].price = text;
-                           setVariants(newVariants);
-                        }}
-                        placeholderTextColor="#999"
-                      />
+                       {opt.label.toLowerCase() === 'regular' ? (
+                           <View style={[styles.textInput, { flex: 1, marginRight: 10, justifyContent: 'center', backgroundColor: '#F5F5F5' }]}>
+                               <ThemedText style={{color: '#888', fontStyle: 'italic', fontSize: 13}}>Base Price</ThemedText>
+                           </View>
+                       ) : (
+                           <TextInput 
+                             style={[styles.textInput, { flex: 1, marginRight: 10 }]}
+                             placeholder="+₱ 0"
+                             keyboardType="numeric"
+                             value={opt.price}
+                             onChangeText={(text) => {
+                                const newVariants = [...variants];
+                                newVariants[gIdx].options[oIdx].price = text;
+                                setVariants(newVariants);
+                             }}
+                             placeholderTextColor="#999"
+                           />
+                       )}
                       <TouchableOpacity onPress={() => {
                          const newVariants = [...variants];
                          newVariants[gIdx].options = group.options.filter((_: any, i: number) => i !== oIdx);
@@ -288,7 +453,7 @@ export default function AddMenuItemScreen() {
             disabled={isSubmitting}
          >
             <ThemedText style={styles.saveBtnText}>
-                {isSubmitting ? 'Saving...' : 'Save and Add to Menu'}
+                {isSubmitting ? 'Saving...' : (editId ? 'Update Item' : 'Save and Add to Menu')}
             </ThemedText>
          </TouchableOpacity>
       </ThemedView>

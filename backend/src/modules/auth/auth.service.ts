@@ -2,7 +2,7 @@ import { Injectable, ConflictException, UnauthorizedException, BadRequestExcepti
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto, LoginDto } from './dto/auth.dto';
 import { UserRole } from '@prisma/client';
 
@@ -15,12 +15,25 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
-    const existingUser = await this.prisma.user.findUnique({
-      where: { email: dto.email },
+    let email = dto.email;
+    if (!email) {
+        if (!dto.phone) throw new BadRequestException('Email or Phone is required');
+        // Use phone as email
+        const cleanPhone = dto.phone.replace(/[^0-9]/g, '');
+        email = `${cleanPhone}@phone.hatod`;
+    }
+
+    const existingUser = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+            { email },
+            dto.phone ? { phone: dto.phone } : { email }
+        ]
+      },
     });
 
     if (existingUser) {
-      throw new ConflictException('User with this email already exists');
+      throw new ConflictException('User with this email or phone already exists');
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
@@ -28,7 +41,7 @@ export class AuthService {
     return this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: {
-          email: dto.email,
+          email: email,
           phone: dto.phone,
           password: hashedPassword,
           role: dto.role,
@@ -54,16 +67,16 @@ export class AuthService {
           },
         });
       } else if (dto.role === UserRole.MERCHANT) {
-        if (!dto.merchantName || !dto.address) {
-          throw new BadRequestException('Merchant name and address are required');
+        if (!dto.merchantName) {
+          throw new BadRequestException('Merchant name is required');
         }
         await tx.merchant.create({
           data: {
             userId: user.id,
             name: dto.merchantName,
-            address: dto.address,
+            address: dto.address || 'Pending Setup',
             phone: dto.phone || 'N/A',
-            city: 'Unknown', // Placeholder
+            city: dto.city || 'Unknown', // Placeholder
             state: 'Unknown',
             latitude: 0,
             longitude: 0,
@@ -71,14 +84,24 @@ export class AuthService {
         });
       }
 
-      return this.generateTokens(user.id, user.email, user.role);
+      return this.generateTokens(user.id, user.email, user.role, tx);
     });
   }
 
   async login(dto: LoginDto) {
-    const user = await this.prisma.user.findUnique({
-      where: { email: dto.email },
-    });
+    let user;
+    
+    if (dto.phone) {
+      user = await this.prisma.user.findUnique({
+        where: { phone: dto.phone },
+      });
+    } else if (dto.email) {
+      user = await this.prisma.user.findUnique({
+        where: { email: dto.email },
+      });
+    } else {
+      throw new BadRequestException('Email or Phone number is required');
+    }
 
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
@@ -97,8 +120,9 @@ export class AuthService {
     return this.generateTokens(user.id, user.email, user.role);
   }
 
-  private async generateTokens(userId: string, email: string, role: string) {
-    const payload = { sub: userId, email, role };
+  private async generateTokens(userId: string, email: string, role: string, tx?: any) {
+    const client = tx || this.prisma;
+    const payload = { sub: userId, email, role, nonce: Math.random() };
     
     const accessToken = await this.jwtService.signAsync(payload, {
       secret: this.configService.get('JWT_SECRET'),
@@ -111,7 +135,10 @@ export class AuthService {
     });
 
     // Store refresh token in DB
-    await this.prisma.refreshToken.create({
+    // Clear existing tokens for this user (optional: strictly one session per user for now to avoid issues)
+    await client.refreshToken.deleteMany({ where: { userId } });
+    
+    await client.refreshToken.create({
       data: {
         token: refreshToken,
         userId: userId,

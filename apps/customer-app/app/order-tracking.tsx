@@ -1,15 +1,35 @@
-import { StyleSheet, View, TouchableOpacity, Image, Animated, Easing } from 'react-native';
-import { useRouter, Stack } from 'expo-router';
+import { StyleSheet, View, TouchableOpacity, Image, Animated, Easing, Platform, ActivityIndicator, Alert, Modal, TextInput, KeyboardAvoidingView, ScrollView } from 'react-native';
+import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
+import Mapbox from '@rnmapbox/maps';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import React, { useEffect, useRef, useState } from 'react';
+import { getOrderById, getRoute, createReview } from '@/api/services';
+import { resolveImageUrl } from '@/api/client';
+import { useSocket } from '@/context/SocketContext';
+
+// Initialize Mapbox
+Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN || '');
+
 
 export default function OrderTrackingScreen() {
   const router = useRouter();
-  const [status, setStatus] = useState('FINDING_RIDER');
+  const { id } = useLocalSearchParams();
+  const { socket } = useSocket();
+  const [order, setOrder] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [routeGeoJSON, setRouteGeoJSON] = useState<any>(null);
+  
+  // Review States
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [rating, setRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+  
   // Animation for the "pulse" effect finding a rider
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const cameraRef = useRef<Mapbox.Camera>(null);
 
   useEffect(() => {
     // Pulse animation loop
@@ -30,36 +50,242 @@ export default function OrderTrackingScreen() {
       ])
     ).start();
 
-    // Simulate finding a rider after 3 seconds
-    const timer = setTimeout(() => {
-      setStatus('RIDER_FOUND');
-    }, 4000);
+    if (id) {
+      fetchOrder();
+    } else {
+       setLoading(false);
+       Alert.alert('Error', 'No order ID provided', [
+           { text: 'Go Back', onPress: () => router.back() }
+       ]);
+    }
+  }, [id]);
 
-    return () => clearTimeout(timer);
-  }, []);
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleOrderUpdate = (updatedOrder: any) => {
+        setOrder((currentOrder: any) => {
+            if (currentOrder && currentOrder.id === updatedOrder.id) {
+                return updatedOrder;
+            }
+            return currentOrder;
+        });
+    };
+
+    const handleRiderLocation = (data: { riderId: string, location: { latitude: number, longitude: number } }) => {
+         setOrder((currentOrder: any) => {
+             if (currentOrder && currentOrder.rider && currentOrder.rider.id === data.riderId) {
+                 return {
+                     ...currentOrder,
+                     rider: {
+                         ...currentOrder.rider,
+                         currentLatitude: data.location.latitude,
+                         currentLongitude: data.location.longitude
+                     }
+                 };
+             }
+             return currentOrder;
+         });
+    };
+
+    socket.on('order:updated', handleOrderUpdate);
+    socket.on('rider:location', handleRiderLocation);
+
+    return () => {
+      socket.off('order:updated', handleOrderUpdate);
+      socket.off('rider:location', handleRiderLocation);
+    };
+  }, [socket]);
+
+  useEffect(() => {
+    if (!order || !order.rider) return;
+
+    const fetchRoute = async () => {
+        const riderLoc = [order.rider.currentLongitude || 120.9842, order.rider.currentLatitude || 14.5995];
+        const merchantLoc = [order.merchant?.longitude, order.merchant?.latitude];
+        const customerLoc = [order.address?.longitude, order.address?.latitude];
+
+        // Ensure valid coords
+        if (!merchantLoc[0] || !customerLoc[0]) return;
+
+        let start: [number, number] = [riderLoc[0], riderLoc[1]];
+        let end: [number, number] = [customerLoc[0], customerLoc[1]];
+
+        // If picking up, go to merchant
+        if (order.status === 'READY_FOR_PICKUP' || order.status === 'PREPARING') {
+            end = [merchantLoc[0], merchantLoc[1]];
+        }
+
+        const route = await getRoute(start, end);
+        if (route) {
+            setRouteGeoJSON(route);
+        }
+    };
+
+    fetchRoute();
+  }, [order]);
+
+  const fetchOrder = async () => {
+      try {
+          const data = await getOrderById(id as string);
+          setOrder(data);
+          
+          // Initial Camera Position Logic
+          if (data) {
+              if (data.status === 'PENDING' || data.status === 'CONFIRMED' || data.status === 'PREPARING') {
+                   // Focus on Merchant
+                   const m = data.merchant;
+                   const lng = m?.longitude;
+                   const lat = m?.latitude;
+                   
+                   if (lng !== undefined && lat !== undefined) {
+                        setTimeout(() => {
+                            cameraRef.current?.setCamera({
+                                centerCoordinate: [lng, lat],
+                                zoomLevel: 15,
+                                animationDuration: 1000
+                            });
+                        }, 500);
+                   }
+              } else if (data.status === 'DELIVERING' || data.status === 'PICKED_UP') {
+                   // Focus on Rider (if real rider loc provided) or bounds
+                   // For now, keeping merchant focus or transitioning to customer
+                   // User specifically asked for PENDING -> Merchant
+              }
+          }
+
+      } catch (e) {
+          Alert.alert('Error', 'Failed to load order details');
+          router.back();
+      } finally {
+          setLoading(false);
+      }
+  };
+
+  if (loading) {
+      return (
+          <ThemedView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+              <ActivityIndicator size="large" color="#C2185B" />
+          </ThemedView>
+      );
+  }
+
+  if (!order) return null;
+
+  const isRiderAssigned = !!order.rider;
+  const showRider = isRiderAssigned && ['PREPARING', 'READY_FOR_PICKUP', 'PICKED_UP', 'DELIVERING', 'ON_THE_WAY'].includes(order.status);
+
+  // Coordinates
+  const merchantCoords = [order.merchant?.longitude || 120.9842, order.merchant?.latitude || 14.5995];
+  const customerCoords = [order.address?.longitude || 120.9850, order.address?.latitude || 14.6010]; 
+  // Rider Coords: Real app would stream this via socket. 
+  // For now using static or null.
+  const riderCoords = order.rider ? [order.rider.currentLongitude || 120.9842, order.rider.currentLatitude || 14.5995] : null;
+
+  const submitReview = async () => {
+    if (!order) return;
+    try {
+        setSubmittingReview(true);
+        await createReview(order.id, rating, reviewComment);
+        Alert.alert('Success', 'Thank you for your feedback!');
+        setShowReviewModal(false);
+        fetchOrder(); // Refresh to hide button
+    } catch (error: any) {
+        Alert.alert('Error', error.message || 'Failed to submit review');
+    } finally {
+        setSubmittingReview(false);
+    }
+  };
+
+  const renderStars = () => {
+      return (
+          <View style={{ flexDirection: 'row', gap: 8, marginVertical: 16 }}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                  <TouchableOpacity key={star} onPress={() => setRating(star)}>
+                      <IconSymbol 
+                        size={32} 
+                        name={star <= rating ? "star.fill" : "star"} 
+                        color={star <= rating ? "#FFD700" : "#CCC"} 
+                      />
+                  </TouchableOpacity>
+              ))}
+          </View>
+      );
+  };
 
   return (
     <ThemedView style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
       
-      {/* Map Placeholder Area */}
+      {/* Map Area */}
       <View style={styles.mapArea}>
-        <View style={styles.mapPlaceholder}>
-            {/* Simple grid pattern to look like a map */}
-            <View style={styles.gridLineHorizontal} />
-            <View style={[styles.gridLineHorizontal, { top: '30%' }]} />
-            <View style={[styles.gridLineHorizontal, { top: '60%' }]} />
-            
-            <View style={styles.gridLineVertical} />
-            <View style={[styles.gridLineVertical, { left: '30%' }]} />
-            <View style={[styles.gridLineVertical, { left: '60%' }]} />
+        <Mapbox.MapView 
+            style={styles.map} 
+            styleURL={Mapbox.StyleURL.Street}
+            logoEnabled={false}
+            attributionEnabled={false}
+        >
+            <Mapbox.Camera
+                ref={cameraRef}
+                zoomLevel={15}
+                centerCoordinate={merchantCoords} 
+                animationMode={'flyTo'}
+                animationDuration={2000}
+            />
 
-            {/* Path */}
-            <View style={styles.routePath} />
-        </View>
+            {/* Customer Location */}
+            <Mapbox.PointAnnotation id="customer" coordinate={customerCoords}>
+                <IconSymbol size={40} name="location.fill" color="#C2185B" />
+            </Mapbox.PointAnnotation>
+
+            {/* Route Line */}
+            {routeGeoJSON && (
+              <Mapbox.ShapeSource id="routeSource" shape={routeGeoJSON}>
+                <Mapbox.LineLayer
+                  id="routeFill"
+                  style={{
+                    lineColor: '#C2185B',
+                    lineWidth: 4,
+                    lineCap: 'round',
+                    lineJoin: 'round',
+                  }}
+                />
+              </Mapbox.ShapeSource>
+            )}
+
+            {/* Rider Location */}
+            {showRider && riderCoords && (
+                <Mapbox.PointAnnotation id="rider" coordinate={riderCoords}>
+                    <View style={styles.riderMarker}>
+                        <IconSymbol size={20} name="paperplane.fill" color="#FFF" />
+                    </View>
+                    <Mapbox.Callout title="Rider" />
+                </Mapbox.PointAnnotation>
+            )}
+
+            {/* Restaurant Location */}
+             <Mapbox.PointAnnotation id="restaurant" coordinate={merchantCoords}>
+                 {order.merchant?.logo ? (
+                    <View style={styles.restaurantMarkerContainer}>
+                        <View style={styles.logoFallback}>
+                             <IconSymbol size={18} name="food" color="#F57C00" />
+                        </View>
+                        <Image 
+                            source={{ uri: resolveImageUrl(order.merchant.logo) || undefined }} 
+                            style={styles.restaurantLogoMarker} 
+                        />
+                    </View>
+                 ) : (
+                    <View style={styles.restaurantMarker}>
+                        <IconSymbol size={16} name="food" color="#FFF" />
+                    </View>
+                 )}
+                 <Mapbox.Callout title={order.merchant?.name || 'Restaurant'} />
+            </Mapbox.PointAnnotation>
+        </Mapbox.MapView>
 
         {/* Back Button */}
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.replace('/')}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <IconSymbol size={24} name="chevron.right" color="#000" style={{ transform: [{ rotate: '180deg' }] }} />
         </TouchableOpacity>
       </View>
@@ -68,18 +294,24 @@ export default function OrderTrackingScreen() {
       <ThemedView style={styles.bottomSheet}>
         <View style={styles.dragHandle} />
         
-        {status === 'FINDING_RIDER' ? (
+        {!isRiderAssigned ? (
             <View style={styles.statusContainer}>
-                <ThemedText style={styles.statusTitle}>Finding your rider...</ThemedText>
-                <ThemedText style={styles.statusSub}>Connecting you with nearby riders</ThemedText>
+                <ThemedText style={styles.statusTitle}>{order.status.replace(/_/g, ' ')}</ThemedText>
+                <ThemedText style={styles.statusSub}>
+                    {order.status === 'PENDING' ? 'Waiting for restaurant confirmation' : 
+                     order.status === 'PREPARING' ? 'Restaurant is preparing your food' :
+                     'Searching for a rider...'}
+                </ThemedText>
                 
                 <Animated.View style={[styles.radarCircle, { transform: [{ scale: pulseAnim }] }]}>
-                    <IconSymbol size={40} name="paperplane.fill" color="#FFF" />
+                    <IconSymbol size={40} name="food" color="#FFF" />
                 </Animated.View>
                 
-                <TouchableOpacity style={styles.cancelBtn} onPress={() => router.back()}>
-                    <ThemedText style={styles.cancelText}>Cancel Order</ThemedText>
-                </TouchableOpacity>
+                {order.status === 'PENDING' && (
+                    <TouchableOpacity style={styles.cancelBtn} onPress={() => router.back()}>
+                        <ThemedText style={styles.cancelText}>Cancel Order</ThemedText>
+                    </TouchableOpacity>
+                )}
             </View>
         ) : (
             <View style={styles.statusContainer}>
@@ -88,14 +320,14 @@ export default function OrderTrackingScreen() {
                         <IconSymbol size={30} name="person" color="#555" />
                     </View>
                     <View style={{ flex: 1, marginLeft: 12 }}>
-                        <ThemedText style={styles.riderName}>Juan Dela Cruz</ThemedText>
+                        <ThemedText style={styles.riderName}>{order.rider.firstName} {order.rider.lastName}</ThemedText>
                         <View style={styles.ratingRow}>
                             <IconSymbol size={14} name="person" color="#FFD700" /> 
-                            <ThemedText style={styles.ratingText}>4.9 (124 deliveries)</ThemedText>
+                            <ThemedText style={styles.ratingText}>{order.rider.rating || '5.0'} ({order.rider.totalDeliveries || 0} deliveries)</ThemedText>
                         </View>
                     </View>
                     <View style={styles.plateBadge}>
-                        <ThemedText style={styles.plateText}>ABC 1234</ThemedText>
+                        <ThemedText style={styles.plateText}>{order.rider.vehicleNumber || 'No Plate'}</ThemedText>
                     </View>
                 </View>
 
@@ -105,33 +337,71 @@ export default function OrderTrackingScreen() {
                      <View style={styles.timelineItem}>
                         <View style={styles.timelineDotActive} />
                         <View style={{ flex: 1 }}>
-                            <ThemedText style={styles.timelineTitle}>Rider is on the way to restaurant</ThemedText>
-                            <ThemedText style={styles.timelineTime}>Arriving in 5 mins</ThemedText>
-                        </View>
-                     </View>
-                     <View style={styles.timelineLine} />
-                     <View style={styles.timelineItem}>
-                        <View style={styles.timelineDotInactive} />
-                        <View style={{ flex: 1 }}>
-                            <ThemedText style={styles.timelineTitleInactive}>Heading to you</ThemedText>
+                            <ThemedText style={styles.timelineTitle}>Order Status: {order.status.replace(/_/g, ' ')}</ThemedText>
                         </View>
                      </View>
                 </View>
 
-                <View style={styles.actionButtons}>
-                    <TouchableOpacity style={styles.messageBtn}>
-                        <IconSymbol size={20} name="paperplane.fill" color="#C2185B" />
-                        <ThemedText style={styles.messageText}>Message</ThemedText>
+                {order.status === 'DELIVERED' && !order.review ? (
+                    <TouchableOpacity style={styles.rateBtn} onPress={() => setShowReviewModal(true)}>
+                        <IconSymbol size={20} name="star.fill" color="#FFF" />
+                        <ThemedText style={styles.rateText}>Rate Order</ThemedText>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.callBtn}>
-                        <IconSymbol size={20} name="person" color="#FFF" /> 
-                        <ThemedText style={styles.callText}>Call</ThemedText>
-                    </TouchableOpacity>
-                </View>
+                ) : (
+                    <View style={styles.actionButtons}>
+                        <TouchableOpacity style={styles.messageBtn}>
+                            <IconSymbol size={20} name="message.fill" color="#C2185B" />
+                            <ThemedText style={styles.messageText}>Message</ThemedText>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.callBtn}>
+                            <IconSymbol size={20} name="phone.fill" color="#FFF" /> 
+                            <ThemedText style={styles.callText}>Call</ThemedText>
+                        </TouchableOpacity>
+                    </View>
+                )}
             </View>
         )}
 
       </ThemedView>
+      {/* Review Modal */}
+      <Modal
+        visible={showReviewModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowReviewModal(false)}
+      >
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+                <ThemedText style={styles.modalTitle}>Rate your Order</ThemedText>
+                <ThemedText style={styles.modalSubtitle}>How was your experience with {order?.merchant?.name}?</ThemedText>
+                
+                {renderStars()}
+
+                <TextInput 
+                    style={styles.input}
+                    placeholder="Write a comment (optional)"
+                    multiline
+                    numberOfLines={4}
+                    value={reviewComment}
+                    onChangeText={setReviewComment}
+                />
+
+                <View style={styles.modalButtons}>
+                    <TouchableOpacity style={styles.modalBtnCancel} onPress={() => setShowReviewModal(false)}>
+                        <ThemedText style={{ color: '#666' }}>Cancel</ThemedText>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                        style={[styles.modalBtnSubmit, submittingReview && { opacity: 0.7 }]} 
+                        onPress={submitReview}
+                        disabled={submittingReview}
+                    >
+                        {submittingReview ? <ActivityIndicator color="#FFF" /> : <ThemedText style={{ color: '#FFF', fontWeight: 'bold' }}>Submit Review</ThemedText>}
+                    </TouchableOpacity>
+                </View>
+            </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
     </ThemedView>
   );
 }
@@ -147,37 +417,70 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
   },
-  mapPlaceholder: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0.3,
+  map: {
+    flex: 1,
   },
-  gridLineHorizontal: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 1,
-    backgroundColor: '#90CAF9',
-    top: '10%'
+
+  riderMarker: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#C2185B',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
-  gridLineVertical: {
+  restaurantMarker: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F57C00',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  restaurantMarkerContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#F57C00',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+    overflow: 'hidden',
+  },
+  restaurantLogoMarker: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    resizeMode: 'cover',
+  },
+  logoFallback: {
     position: 'absolute',
     top: 0,
+    left: 0, 
+    right: 0,
     bottom: 0,
-    width: 1,
-    backgroundColor: '#90CAF9',
-    left: '10%'
-  },
-  routePath: {
-    position: 'absolute',
-    top: '30%',
-    left: '30%',
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    borderWidth: 4,
-    borderColor: '#C2185B',
-    borderStyle: 'dashed',
-    transform: [{ rotate: '45deg' }]
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   backBtn: {
     position: 'absolute',
@@ -381,4 +684,73 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 14,
   },
+  rateBtn: {
+    width: '100%',
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#C2185B',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  rateText: {
+    color: '#FFF',
+    fontWeight: '800',
+    fontSize: 16,
+  },
+  modalOverlay: { 
+    flex: 1, 
+    backgroundColor: 'rgba(0,0,0,0.5)', 
+    justifyContent: 'center', 
+    padding: 20 
+  },
+  modalContent: { 
+    backgroundColor: '#FFF', 
+    borderRadius: 20, 
+    padding: 24, 
+    alignItems: 'center', 
+    width: '100%' 
+  },
+  modalTitle: { 
+    fontSize: 20, 
+    fontWeight: 'bold', 
+    marginBottom: 8 
+  },
+  modalSubtitle: { 
+    fontSize: 14, 
+    color: '#666', 
+    marginBottom: 16, 
+    textAlign: 'center' 
+  },
+  input: { 
+    width: '100%', 
+    borderWidth: 1, 
+    borderColor: '#DDD', 
+    borderRadius: 12, 
+    padding: 12, 
+    height: 100, 
+    textAlignVertical: 'top', 
+    marginBottom: 20 
+  },
+  modalButtons: { 
+    flexDirection: 'row', 
+    width: '100%', 
+    gap: 12 
+  },
+  modalBtnCancel: { 
+    flex: 1, 
+    padding: 14, 
+    borderRadius: 12, 
+    backgroundColor: '#F5F5F5', 
+    alignItems: 'center' 
+  },
+  modalBtnSubmit: { 
+    flex: 1, 
+    padding: 14, 
+    borderRadius: 12, 
+    backgroundColor: '#C2185B', 
+    alignItems: 'center' 
+  },
 });
+

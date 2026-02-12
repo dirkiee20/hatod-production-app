@@ -3,17 +3,18 @@ import { UserRole } from '@prisma/client';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class RegisterDto {
-  @ApiProperty({ example: 'user@example.com' })
+  @ApiProperty({ example: 'user@example.com', required: false })
   @IsEmail()
-  email: string;
+  @IsOptional()
+  email?: string;
 
   @ApiProperty({ example: 'password123', minLength: 6 })
   @IsString()
   @MinLength(6)
   password: string;
 
-  @ApiProperty({ example: '+639123456789' })
-  @IsPhoneNumber()
+  @ApiProperty({ example: '09123456789' })
+  @IsPhoneNumber('PH')
   @IsOptional()
   phone?: string;
 
@@ -39,12 +40,23 @@ export class RegisterDto {
   @IsOptional()
   @IsString()
   address?: string;
+
+  @ApiProperty({ example: 'Manila', required: false })
+  @IsOptional()
+  @IsString()
+  city?: string;
 }
 
 export class LoginDto {
-  @ApiProperty({ example: 'user@example.com' })
+  @ApiProperty({ example: 'user@example.com', required: false })
   @IsEmail()
-  email: string;
+  @IsOptional()
+  email?: string;
+
+  @ApiProperty({ example: '+639123456789', required: false })
+  @IsString()
+  @IsOptional()
+  phone?: string;
 
   @ApiProperty({ example: 'password123' })
   @IsString()

@@ -1,44 +1,31 @@
-import { StyleSheet, ScrollView, TouchableOpacity, View, Image, Switch } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, View, Image, Switch, ActivityIndicator } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
+import { getMenuItems } from '@/api/services';
+import { MenuItem } from '@/api/types';
+import { resolveImageUrl } from '@/api/client';
 
 export default function MenuScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [activeTab, setActiveTab] = useState('All');
-  const [menuItems, setMenuItems] = useState<any[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useFocusEffect(
-    React.useCallback(() => {
-      fetchMenuItems();
+    useCallback(() => {
+      fetchData();
     }, [])
   );
 
-  const fetchMenuItems = async () => {
-    try {
-        const { authenticatedFetch } = await import('../../api/client');
-        const res = await authenticatedFetch('/menu/items');
-        if (res.ok) {
-            const data = await res.json();
-            setMenuItems(data.map((item: any) => ({
-                id: item.id,
-                name: item.name,
-                price: item.price,
-                image: item.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400',
-                available: item.isAvailable,
-                // If we need category sorting later: item.category?.name
-            })));
-        }
-    } catch (e) {
-        console.error(e);
-    } finally {
-        setLoading(false);
-    }
+  const fetchData = async () => {
+    setLoading(true);
+    const data = await getMenuItems();
+    setMenuItems(data);
+    setLoading(false);
   };
 
   return (
@@ -57,7 +44,9 @@ export default function MenuScreen() {
         </View>
 
         {loading ? (
-             <ThemedText style={{ textAlign: 'center', marginTop: 20 }}>Loading menu...</ThemedText>
+             <ActivityIndicator size="large" color="#f78734" style={{ marginTop: 20 }} />
+        ) : menuItems.length === 0 ? (
+             <ThemedText style={{ textAlign: 'center', marginTop: 20, color: '#999' }}>No menu items found.</ThemedText>
         ) : (
             menuItems.map((item) => (
             <TouchableOpacity 
@@ -65,18 +54,22 @@ export default function MenuScreen() {
                 style={styles.menuItem}
                 onPress={() => router.push(`/menu-details/${item.id}`)}
             >
-                <Image source={{ uri: item.image }} style={styles.itemImg} />
+                <Image 
+                    source={{ uri: resolveImageUrl(item.image || item.imageUrl) || 'https://via.placeholder.com/150' }} 
+                    style={styles.itemImg} 
+                />
                 <ThemedView style={styles.itemInfo}>
                 <ThemedText style={styles.itemName}>{item.name}</ThemedText>
                 <ThemedText style={styles.itemPrice}>₱{item.price}</ThemedText>
                 <ThemedView style={styles.statusRow}>
-                    <ThemedText style={[styles.statusLabel, { color: item.available ? '#388E3C' : '#D32F2F' }]}>
-                        {item.available ? 'Available' : 'Out of Stock'}
+                    <ThemedText style={[styles.statusLabel, { color: item.isAvailable ? '#388E3C' : '#D32F2F' }]}>
+                        {item.isAvailable ? 'Available' : 'Out of Stock'}
                     </ThemedText>
                     <Switch 
-                        value={item.available} 
+                        value={item.isAvailable} 
                         trackColor={{ false: '#DDD', true: '#F48FB1' }}
-                        thumbColor={item.available ? '#C2185B' : '#FFF'}
+                        thumbColor={item.isAvailable ? '#f78734' : '#FFF'}
+                        disabled={true} // Disable pending implementation
                     />
                 </ThemedView>
                 </ThemedView>
@@ -113,7 +106,7 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   addBtn: {
-    backgroundColor: '#C2185B',
+    backgroundColor: '#5c6cc9',
     paddingHorizontal: 15,
     paddingVertical: 8,
     borderRadius: 8,

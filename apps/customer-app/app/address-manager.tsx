@@ -1,37 +1,101 @@
-import { StyleSheet, ScrollView, TouchableOpacity, View, TextInput } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, View, TextInput, RefreshControl } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import Mapbox from '@rnmapbox/maps';
+import { Dimensions, Alert } from 'react-native';
+import { reverseGeocode, getAddresses } from '@/api/services';
+import * as Location from 'expo-location';
+import { useCart } from '@/context/CartContext';
+import { useFocusEffect } from 'expo-router';
+
+// Initialize Mapbox
+Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN || '');
 
 export default function AddressManagerScreen() {
   const router = useRouter();
+  const { setDeliveryAddress } = useCart();
   const [selectedId, setSelectedId] = useState('1');
+  const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  
+  // Default to Surigao City [lng, lat]
+  const [coordinates, setCoordinates] = useState([125.4947, 9.7891]);
+  const [zoomLevel, setZoomLevel] = useState(14);
+  const [addressText, setAddressText] = useState('');
+  const cameraRef = useRef<Mapbox.Camera>(null);
+  const debounceTimer = useRef<any>(null);
 
-  const addresses = [
-    {
-      id: '1',
-      label: 'Home',
-      address: '123 Rizal Street, Surigao City',
-      landmark: 'Near the blue gate',
-      icon: 'house.fill',
-    },
-    {
-      id: '2',
-      label: 'Work',
-      address: 'Surigao City Hall, Borromeo St.',
-      landmark: 'Department of Public Works',
-      icon: 'grocery', // Using grocery as a generic business/work icon
-    },
-    {
-      id: '3',
-      label: 'Others',
-      address: 'SM City Surigao, Km 4, National Highway',
-      landmark: 'Main Entrance',
-      icon: 'person',
-    }
-  ];
+  // Load addresses whenever screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadAddresses();
+    }, [])
+  );
+
+  const loadAddresses = async () => {
+      try {
+          const data = await getAddresses();
+          if (Array.isArray(data)) {
+              setSavedAddresses(data);
+          }
+      } catch (e) {
+          console.error("Failed to load addresses", e);
+      }
+  };
+
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    await loadAddresses();
+    setRefreshing(false);
+  }, []);
+
+
+  useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission to access location was denied');
+        return;
+      }
+
+      let location = await Location.getCurrentPositionAsync({});
+      const newCoords = [location.coords.longitude, location.coords.latitude];
+      setCoordinates(newCoords);
+      fetchAddress(newCoords[0], newCoords[1]);
+      
+      // Animate to user location
+      cameraRef.current?.setCamera({
+         centerCoordinate: newCoords,
+         zoomLevel: 15, // Zoom in closer for user location
+         animationDuration: 2000,
+      });
+      setZoomLevel(15);
+    })();
+  }, []);
+
+  const fetchAddress = async (lng: number, lat: number) => {
+      const address = await reverseGeocode(lat, lng);
+      if (address) {
+          setAddressText(address);
+      }
+  };
+
+  const onCameraChanged = (state: any) => {
+       const { center, zoom } = state.properties;
+       setCoordinates(center);
+       setZoomLevel(zoom);
+       
+       // Debounce geocoding
+       if (debounceTimer.current) clearTimeout(debounceTimer.current);
+       debounceTimer.current = setTimeout(() => {
+           fetchAddress(center[0], center[1]);
+       }, 800);
+  };
+
+
 
   return (
     <ThemedView style={styles.container}>
@@ -46,18 +110,34 @@ export default function AddressManagerScreen() {
         ),
       }} />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {/* Search & Map Placeholder */}
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        
         <ThemedView style={styles.searchSection}>
           <ThemedView style={styles.searchBar}>
-            <IconSymbol size={18} name="filter" color="#777" />
+            <IconSymbol size={18} name="location" color="#C2185B" />
             <TextInput 
-              placeholder="Search for a new address..."
+              placeholder="Search or detect location..."
               style={styles.searchInput}
               placeholderTextColor="#999"
+              value={addressText}
+              onChangeText={setAddressText}
             />
           </ThemedView>
-          <TouchableOpacity style={styles.currentLocationBtn}>
+          <TouchableOpacity style={styles.currentLocationBtn} onPress={async () => {
+              // Fetch current location
+              let { status } = await Location.requestForegroundPermissionsAsync();
+              if (status !== 'granted') return;
+
+              let location = await Location.getCurrentPositionAsync({});
+              const address = await reverseGeocode(location.coords.latitude, location.coords.longitude);
+              if (address) {
+                  setAddressText(address);
+              }
+          }}>
              <IconSymbol size={16} name="paperplane.fill" color="#C2185B" />
              <ThemedText style={styles.currentLocationText}>Use current location</ThemedText>
           </TouchableOpacity>
@@ -67,30 +147,36 @@ export default function AddressManagerScreen() {
            <ThemedText style={styles.sectionTitle}>Saved Addresses</ThemedText>
         </ThemedView>
 
-        {addresses.map((item) => (
-          <TouchableOpacity 
-            key={item.id} 
-            style={[styles.addressItem, selectedId === item.id && styles.addressItemActive]}
-            onPress={() => setSelectedId(item.id)}
-          >
-            <ThemedView style={styles.itemMain}>
-               <ThemedView style={[styles.iconContainer, selectedId === item.id && styles.iconActive]}>
-                  <IconSymbol size={20} name={item.icon as any} color={selectedId === item.id ? '#FFF' : '#C2185B'} />
-               </ThemedView>
-               <ThemedView style={styles.addressDetails}>
-                  <ThemedText style={styles.label}>{item.label}</ThemedText>
-                  <ThemedText style={styles.street} numberOfLines={1}>{item.address}</ThemedText>
-                  <ThemedText style={styles.landmark}>Nearby: {item.landmark}</ThemedText>
-               </ThemedView>
-            </ThemedView>
-            
-            <ThemedView style={[styles.radio, selectedId === item.id && styles.radioActive]}>
-               {selectedId === item.id && <ThemedView style={styles.radioInner} />}
-            </ThemedView>
-          </TouchableOpacity>
-        ))}
+        {savedAddresses.length === 0 ? (
+             <ThemedView style={{ padding: 20, alignItems: 'center' }}>
+                 <ThemedText style={{ color: '#999' }}>No saved addresses found.</ThemedText>
+             </ThemedView>
+        ) : (
+            savedAddresses.map((item) => (
+              <TouchableOpacity 
+                key={item.id} 
+                style={[styles.addressItem, selectedId === item.id && styles.addressItemActive]}
+                onPress={() => setSelectedId(item.id)}
+              >
+                <ThemedView style={styles.itemMain}>
+                   <ThemedView style={[styles.iconContainer, selectedId === item.id && styles.iconActive]}>
+                      <IconSymbol size={20} name={item.label.toLowerCase() === 'home' ? 'house.fill' : 'person'} color={selectedId === item.id ? '#FFF' : '#C2185B'} />
+                   </ThemedView>
+                   <ThemedView style={styles.addressDetails}>
+                      <ThemedText style={styles.label}>{item.label}</ThemedText>
+                      <ThemedText style={styles.street} numberOfLines={1}>{item.street}</ThemedText>
+                      <ThemedText style={styles.landmark}>Nearby: {item.instructions || 'N/A'}</ThemedText>
+                   </ThemedView>
+                </ThemedView>
+                
+                <ThemedView style={[styles.radio, selectedId === item.id && styles.radioActive]}>
+                   {selectedId === item.id && <ThemedView style={styles.radioInner} />}
+                </ThemedView>
+              </TouchableOpacity>
+            ))
+        )}
 
-        <TouchableOpacity style={styles.addNewBtn}>
+        <TouchableOpacity style={styles.addNewBtn} onPress={() => router.push('/add-address')}>
            <ThemedView style={styles.addIconCircle}>
               <ThemedText style={styles.plusText}>+</ThemedText>
            </ThemedView>
@@ -102,7 +188,13 @@ export default function AddressManagerScreen() {
 
       {/* Confirm Action */}
       <ThemedView style={styles.footer}>
-         <TouchableOpacity style={styles.confirmBtn} onPress={() => router.back()}>
+         <TouchableOpacity style={styles.confirmBtn} onPress={() => {
+             const selected = savedAddresses.find(addr => addr.id === selectedId);
+             if (selected) {
+                 setDeliveryAddress(selected);
+             }
+             router.back();
+         }}>
             <ThemedText style={styles.confirmBtnText}>Confirm and Continue</ThemedText>
          </TouchableOpacity>
       </ThemedView>
@@ -139,6 +231,22 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     fontSize: 14,
     color: '#333',
+  },
+  mapContainer: {
+    height: 250,
+    width: '100%',
+    position: 'relative',
+  },
+  map: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  centerMarkerContainer: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginLeft: -16,
+    marginTop: -32,
+    zIndex: 10,
   },
   currentLocationBtn: {
     flexDirection: 'row',

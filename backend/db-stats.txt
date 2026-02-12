@@ -1,0 +1,9 @@
+
+--- Database Stats ---
+Users: 4
+Merchants: 1
+Customers: 1
+Riders: 1
+Orders: 0
+Menu Items: 4
+----------------------

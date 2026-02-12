@@ -6,18 +6,27 @@ Structured and scalable backend for a mobile-only food delivery platform.
 - **NestJS**: Structured architecture
 - **Prisma**: Type-safe database ORM
 - **PostgreSQL**: Primary database
-- **Redis**: Caching and Socket.IO adapter
+- **Redis**: Caching and Socket.IO adapter (optional)
 - **Socket.IO**: Live order and rider tracking
 - **JWT + RBAC**: Secure authentication with role-based access control
-- **BullMQ**: Background job processing
+- **BullMQ**: Background job processing (requires Redis)
 - **Swagger**: API Documentation
+
+### Redis Configuration
+Redis is optional for development. To disable Redis:
+1. Set `REDIS_ENABLED=false` in your `.env` file
+2. The app will start without Redis, but queue features will be disabled
+
+To use Redis:
+1. Install and start Redis locally (default port: 6379)
+2. Or set `REDIS_HOST` and `REDIS_PORT` in your `.env` file
 
 ## Getting Started
 
 ### 1. Prerequisites
 - Node.js (v18+)
 - PostgreSQL
-- Redis
+- Redis (optional - can be disabled by setting `REDIS_ENABLED=false` in `.env`)
 
 ### 2. Setup
 ```bash

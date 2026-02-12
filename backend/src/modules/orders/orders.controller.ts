@@ -14,6 +14,13 @@ import { UserRole } from '@prisma/client';
 export class OrdersController {
   constructor(private ordersService: OrdersService) {}
 
+  @Get('admin/list')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Get all orders (Admin only)' })
+  findAllAdmin() {
+    return this.ordersService.findAllAdmin();
+  }
+
   @Post()
   @Roles(UserRole.CUSTOMER)
   @ApiOperation({ summary: 'Create a new order' })
@@ -48,5 +55,22 @@ export class OrdersController {
   @ApiOperation({ summary: 'Rider accepts an order for delivery' })
   acceptOrder(@Param('id') id: string, @Req() req: any) {
     return this.ordersService.acceptOrder(id, req.user.userId);
+  }
+
+  @Patch(':id/claim')
+  @Roles(UserRole.RIDER)
+  @ApiOperation({ summary: 'Rider claims an order' })
+  claimOrder(@Param('id') id: string, @Req() req: any) {
+    return this.ordersService.claimOrder(id, req.user.userId);
+  }
+
+  @Patch(':id/assign-rider')
+  @Roles(UserRole.MERCHANT)
+  @ApiOperation({ summary: 'Merchant assigns a rider to an order' })
+  assignRider(
+    @Param('id') id: string,
+    @Body('riderId') riderId: string,
+  ) {
+    return this.ordersService.assignRider(id, riderId);
   }
 }

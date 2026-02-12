@@ -1,23 +1,53 @@
-import { StyleSheet, ScrollView, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, View, RefreshControl, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getAllOrders } from '../../api/services';
+import { Order } from '../../api/types';
 
 export default function OrdersScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('All');
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const orders = [
-    { id: 'ORD-1001', customer: 'Juan Dela Cruz', restaurant: 'The Burger Mansion', total: 450, status: 'Pending', time: '5 mins ago' },
-    { id: 'ORD-1002', customer: 'Maria Santos', restaurant: 'Pizza Palace', total: 890, status: 'Delivered', time: '15 mins ago' },
-    { id: 'ORD-1003', customer: 'Jose Rizal', restaurant: 'Sushi Bar', total: 1250, status: 'In Progress', time: '30 mins ago' },
-  ];
+  const fetchOrders = async () => {
+    try {
+      const data = await getAllOrders();
+      setOrders(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchOrders();
+  };
 
   const statusTabs = ['All', 'Pending', 'In Progress', 'Delivered', 'Cancelled'];
+
+  const filteredOrders = activeTab === 'All' 
+    ? orders 
+    : orders.filter(o => {
+        if (activeTab === 'Pending') return o.status === 'PENDING';
+        if (activeTab === 'In Progress') return ['CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP'].includes(o.status);
+        if (activeTab === 'Delivered') return o.status === 'DELIVERED';
+        if (activeTab === 'Cancelled') return o.status === 'CANCELLED';
+        return true;
+      });
 
   return (
     <ThemedView style={styles.container}>
@@ -39,39 +69,63 @@ export default function OrdersScreen() {
         </ScrollView>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {orders.map((order) => (
-          <TouchableOpacity 
-            key={order.id} 
-            style={styles.orderCard}
-            onPress={() => router.push(`/order-details/${order.id}`)}
-          >
-            <View style={styles.orderHeader}>
-              <View>
-                <ThemedText style={styles.orderId}>{order.id}</ThemedText>
-                <ThemedText style={styles.orderTime}>{order.time}</ThemedText>
-              </View>
-              <View style={[styles.statusBadge, { backgroundColor: order.status === 'Delivered' ? '#E8F5E9' : order.status === 'Cancelled' ? '#FFEBEE' : '#FFF3E0' }]}>
-                <ThemedText style={[styles.statusText, { color: order.status === 'Delivered' ? '#388E3C' : order.status === 'Cancelled' ? '#D32F2F' : '#F57C00' }]}>
-                  {order.status}
-                </ThemedText>
-              </View>
-            </View>
-            
-            <View style={styles.divider} />
-            
-            <View style={styles.orderDetails}>
-              <ThemedText style={styles.customerName}>{order.customer}</ThemedText>
-              <ThemedText style={styles.restaurantName}>{order.restaurant}</ThemedText>
-            </View>
-            
-            <View style={styles.orderFooter}>
-              <ThemedText style={styles.orderTotal}>₱{order.total}</ThemedText>
-              <IconSymbol size={16} name="chevron.right" color="#CCC" />
-            </View>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      {loading ? (
+        <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
+          <ActivityIndicator size="large" color="#C2185B" />
+        </View>
+      ) : (
+        <ScrollView 
+          showsVerticalScrollIndicator={false} 
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
+          {filteredOrders.length === 0 ? (
+             <View style={{alignItems: 'center', marginTop: 50}}>
+                <ThemedText style={{color: '#888', fontStyle: 'italic'}}>No orders found</ThemedText>
+             </View>
+          ) : (
+            filteredOrders.map((order) => (
+              <TouchableOpacity 
+                key={order.id} 
+                style={styles.orderCard}
+                onPress={() => router.push(`/order-details/${order.id}`)}
+              >
+                <View style={styles.orderHeader}>
+                  <View>
+                    <ThemedText style={styles.orderId}>#{order.id.slice(0, 8)}...</ThemedText>
+                    <ThemedText style={styles.orderTime}>
+                      {new Date(order.createdAt).toLocaleDateString()} {new Date(order.createdAt).toLocaleTimeString()}
+                    </ThemedText>
+                  </View>
+                  <View style={[styles.statusBadge, { 
+                    backgroundColor: order.status === 'DELIVERED' ? '#E8F5E9' : 
+                                   order.status === 'CANCELLED' ? '#FFEBEE' : '#FFF3E0' 
+                  }]}>
+                    <ThemedText style={[styles.statusText, { 
+                      color: order.status === 'DELIVERED' ? '#388E3C' : 
+                             order.status === 'CANCELLED' ? '#D32F2F' : '#F57C00' 
+                    }]}>
+                      {order.status}
+                    </ThemedText>
+                  </View>
+                </View>
+                
+                <View style={styles.divider} />
+                
+                <View style={styles.orderDetails}>
+                  <ThemedText style={styles.customerName}>{order.customer?.name || 'Guest'}</ThemedText>
+                  <ThemedText style={styles.restaurantName}>{order.merchant?.name || 'Access Denied'}</ThemedText>
+                </View>
+                
+                <View style={styles.orderFooter}>
+                  <ThemedText style={styles.orderTotal}>₱{order.totalAmount?.toLocaleString()}</ThemedText>
+                  <IconSymbol size={16} name="chevron.right" color="#CCC" />
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
+        </ScrollView>
+      )}
     </ThemedView>
   );
 }

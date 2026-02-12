@@ -13,7 +13,12 @@ export class AuthController {
   @ApiOperation({ summary: 'Register a new user' })
   @ApiResponse({ status: 201, description: 'User successfully registered' })
   register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto);
+    console.log(`[AuthController] Registering user: ${dto.email || dto.phone}`);
+    const start = Date.now();
+    return this.authService.register(dto).then(res => {
+        console.log(`[AuthController] Registration took ${Date.now() - start}ms`);
+        return res;
+    });
   }
 
   @Post('login')

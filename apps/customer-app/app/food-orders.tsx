@@ -1,66 +1,74 @@
-import { StyleSheet, View, TouchableOpacity, ScrollView, Image } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { StyleSheet, View, TouchableOpacity, ScrollView, Image, ActivityIndicator, RefreshControl, Alert } from 'react-native';
+import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
+import { getMyOrders } from '@/api/services';
 
 export default function FoodOrdersScreen() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'Active' | 'Past'>('Active');
+  const [orders, setOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const activeOrders = [
-    {
-       id: 'ORD-1024',
-       restaurant: 'Jollibee - Surigao',
-       status: 'Preparing',
-       items: '1x Chickenjoy Bucket, 2x Jolly Spaghetti',
-       total: 650,
-       date: 'Today, 10:30 AM',
-       icon: 'food'
-    }
-  ];
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
 
-  const pastOrders = [
-    {
-       id: 'ORD-998',
-       restaurant: 'McDonalds - Rizal St.',
-       status: 'Delivered',
-       items: '2x Big Mac Meal, 1x McFlurry',
-       total: 480,
-       date: 'Jan 24, 12:15 PM',
-       icon: 'food'
-    },
-    {
-       id: 'ORD-856',
-       restaurant: 'Chowking',
-       status: 'Canceled',
-       items: '1x Chao Fan, 1x Siomai',
-       total: 120,
-       date: 'Jan 20, 6:45 PM',
-       icon: 'food'
-    }
-  ];
+  const loadData = async (isRefreshing = false) => {
+      // Only show full loader if we have no data and not refreshing
+      if (orders.length === 0 && !isRefreshing) {
+        setLoading(true);
+      }
+      
+      try {
+          const data = await getMyOrders();
+          if (Array.isArray(data)) {
+              setOrders(data);
+          }
+      } catch (e) {
+          console.error(e);
+      } finally {
+          setLoading(false);
+      }
+  };
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadData(true);
+    setRefreshing(false);
+  }, []);
+
+  const activeOrders = orders.filter(o => !['DELIVERED', 'COMPLETED', 'CANCELED'].includes(o.status));
+  const pastOrders = orders.filter(o => ['DELIVERED', 'COMPLETED', 'CANCELED'].includes(o.status));
 
   const renderOrderCard = (order: any, isPast: boolean) => (
-    <TouchableOpacity key={order.id} style={styles.card} onPress={() => {}}>
+    <TouchableOpacity 
+        key={order.id} 
+        style={styles.card} 
+        onPress={() => router.push({ pathname: '/order-tracking', params: { id: order.id } })}
+    >
         <View style={styles.cardHeader}>
             <View style={styles.restaurantRow}>
                 <View style={styles.iconBox}>
-                    <IconSymbol size={20} name={order.icon} color="#C2185B" />
+                    <IconSymbol size={20} name="food" color="#f78734" />
                 </View>
                 <View>
-                    <ThemedText style={styles.restaurantName}>{order.restaurant}</ThemedText>
-                    <ThemedText style={styles.dateText}>{order.date}</ThemedText>
+                    <ThemedText style={styles.restaurantName}>{order.merchant?.name || 'Unknown Store'}</ThemedText>
+                    <ThemedText style={styles.dateText}>{new Date(order.createdAt).toLocaleDateString()} • {new Date(order.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</ThemedText>
                 </View>
             </View>
             <View style={[styles.statusBadge, 
-                order.status === 'Delivered' ? styles.statusSuccess : 
-                order.status === 'Canceled' ? styles.statusError : styles.statusInfo
+                order.status === 'DELIVERED' ? styles.statusSuccess : 
+                order.status === 'CANCELED' ? styles.statusError : styles.statusInfo
             ]}>
                 <ThemedText style={[styles.statusText,
-                     order.status === 'Delivered' ? styles.statusTextSuccess : 
-                     order.status === 'Canceled' ? styles.statusTextError : styles.statusTextInfo
+                     order.status === 'DELIVERED' ? styles.statusTextSuccess : 
+                     order.status === 'CANCELED' ? styles.statusTextError : styles.statusTextInfo
                 ]}>{order.status}</ThemedText>
             </View>
         </View>
@@ -68,18 +76,24 @@ export default function FoodOrdersScreen() {
         <View style={styles.divider} />
         
         <ThemedText style={styles.itemsText} numberOfLines={2}>
-            {order.items}
+            {order.items?.map((i: any) => `${i.quantity}x ${i.menuItem?.name || i.name}`).join(', ')}
         </ThemedText>
 
         <View style={styles.cardFooter}>
             <ThemedText style={styles.totalText}>Total: ₱{order.total}</ThemedText>
-            {isPast && order.status === 'Delivered' && (
-                <TouchableOpacity style={styles.reorderBtn}>
-                    <ThemedText style={styles.reorderText}>Reorder</ThemedText>
+            {isPast && order.status === 'DELIVERED' && (
+                <TouchableOpacity 
+                    style={styles.reorderBtn}
+                    onPress={() => router.push(`/restaurant/${order.merchantId}`)}
+                >
+                    <ThemedText style={styles.reorderText}>Visit Store</ThemedText>
                 </TouchableOpacity>
             )}
             {!isPast && (
-                 <TouchableOpacity style={styles.trackBtn} onPress={() => router.push('/order-tracking')}>
+                 <TouchableOpacity 
+                    style={styles.trackBtn} 
+                    onPress={() => router.push({ pathname: '/order-tracking', params: { id: order.id } })}
+                 >
                     <ThemedText style={styles.trackText}>Track Order</ThemedText>
                 </TouchableOpacity>
             )}
@@ -116,20 +130,36 @@ export default function FoodOrdersScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.listContent}>
-         {activeTab === 'Active' ? (
-            activeOrders.length > 0 ? (
-                activeOrders.map(order => renderOrderCard(order, false))
-            ) : (
-                <View style={styles.emptyState}>
-                    <IconSymbol size={48} name="food" color="#DDD" />
-                    <ThemedText style={styles.emptyText}>No active orders</ThemedText>
-                </View>
-            )
-         ) : (
-            pastOrders.map(order => renderOrderCard(order, true))
-         )}
-      </ScrollView>
+      {loading && !refreshing && orders.length === 0 ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+              <ActivityIndicator size="large" color="#f78734" />
+          </View>
+      ) : (
+          <ScrollView 
+            contentContainerStyle={styles.listContent}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          >
+             {activeTab === 'Active' ? (
+                activeOrders.length > 0 ? (
+                    activeOrders.map(order => renderOrderCard(order, false))
+                ) : (
+                    <View style={styles.emptyState}>
+                        <IconSymbol size={48} name="food" color="#DDD" />
+                        <ThemedText style={styles.emptyText}>No active orders</ThemedText>
+                    </View>
+                )
+             ) : (
+                pastOrders.length > 0 ? (
+                    pastOrders.map(order => renderOrderCard(order, true))
+                ) : (
+                    <View style={styles.emptyState}>
+                        <IconSymbol size={48} name="food" color="#DDD" />
+                        <ThemedText style={styles.emptyText}>No past orders</ThemedText>
+                    </View>
+                )
+             )}
+          </ScrollView>
+      )}
 
     </ThemedView>
   );
@@ -156,7 +186,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   activeTab: {
-    backgroundColor: '#C2185B',
+    backgroundColor: '#5c6cc9',
   },
   tabText: {
     fontSize: 14,
@@ -199,7 +229,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 8,
-    backgroundColor: '#FCE4EC',
+    backgroundColor: '#FFF3E0',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
@@ -252,15 +282,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#C2185B',
+    borderColor: '#f78734',
   },
   reorderText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#C2185B',
+    color: '#f78734',
   },
   trackBtn: {
-    backgroundColor: '#C2185B',
+    backgroundColor: '#f78734',
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 8,

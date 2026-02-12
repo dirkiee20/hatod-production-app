@@ -1,24 +1,105 @@
-import { StyleSheet, ScrollView, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React from 'react';
+import React, { useState, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { getMerchantOrders } from '@/api/services';
+import { Order, OrderStatus } from '@/api/types';
+
+import { useSocket } from '@/context/SocketContext';
+import { Alert } from 'react-native';
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
-  const stats = [
-    { label: 'Today\'s Sales', value: '₱12,450', icon: 'dashboard', color: '#C2185B' },
-    { label: 'Active Orders', value: '8', icon: 'orders', color: '#1976D2' },
-    { label: 'Total Revenue', value: '₱85,200', icon: 'chevron.right', color: '#388E3C' },
-  ];
+  const { socket } = useSocket();
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState([
+    { label: 'Today\'s Sales', value: '₱0', icon: 'dashboard', color: '#f78734' },
+    { label: 'Active Orders', value: '0', icon: 'orders', color: '#1976D2' },
+    { label: 'Total Revenue', value: '₱0', icon: 'chevron.right', color: '#388E3C' },
+  ]);
+  const [recentOrder, setRecentOrder] = useState<Order | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+        loadData();
+    }, [])
+  );
+
+  // Socket Listener for Real-time Updates
+  React.useEffect(() => {
+    if (!socket) return;
+
+    const handleNewOrder = (data: any) => {
+        console.log('New order received via socket:', data);
+        Alert.alert('New Order!', `Order #${data.orderNumber} just arrived.`);
+        loadData(); // Refresh dashboard
+    };
+
+    const handleOrderUpdate = (data: any) => {
+        console.log('Order updated via socket:', data);
+        loadData(); // Refresh dashboard
+    };
+
+    socket.on('order:created', handleNewOrder);
+    socket.on('order:updated', handleOrderUpdate);
+
+    return () => {
+        socket.off('order:created', handleNewOrder);
+        socket.off('order:updated', handleOrderUpdate);
+    };
+  }, [socket]);
+
+  const loadData = async () => {
+    setLoading(true);
+    const orders = await getMerchantOrders();
+    
+    // Calculate Stats
+    const today = new Date().toISOString().split('T')[0];
+    
+    // 1. Today's Sales (Completed/Active orders made today)
+    const todaysOrders = orders.filter(o => 
+        o.createdAt.startsWith(today) && 
+        o.status !== OrderStatus.CANCELLED
+    );
+    const todaysSales = todaysOrders.reduce((sum, o) => sum + o.total, 0);
+
+    // 2. Active Orders
+    const activeOrders = orders.filter(o => 
+        [OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.READY_FOR_PICKUP].includes(o.status)
+    );
+
+    // 3. Total Revenue (All non-cancelled)
+    const totalRevenue = orders
+        .filter(o => o.status !== OrderStatus.CANCELLED)
+        .reduce((sum, o) => sum + o.total, 0);
+
+    setStats([
+        { label: 'Today\'s Sales', value: `₱${todaysSales.toLocaleString()}`, icon: 'dashboard', color: '#f78734' },
+        { label: 'Active Orders', value: `${activeOrders.length}`, icon: 'orders', color: '#1976D2' },
+        { label: 'Total Revenue', value: `₱${totalRevenue.toLocaleString()}`, icon: 'chevron.right', color: '#388E3C' },
+    ]);
+
+    // Recent Order
+    if (orders.length > 0) {
+        // Sort by date desc
+        const sorted = [...orders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setRecentOrder(sorted[0]);
+    } else {
+        setRecentOrder(null);
+    }
+    
+    setLoading(false);
+  };
 
   return (
     <ThemedView style={styles.container}>
       <ThemedView style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <View>
           <ThemedText style={styles.welcomeText}>Welcome back,</ThemedText>
-          <ThemedText style={styles.merchantName}>The Burger Mansion</ThemedText>
+          <ThemedText style={styles.merchantName}>Merchant Dashboard</ThemedText>
         </View>
         <TouchableOpacity style={styles.notifBtn}>
            <IconSymbol size={24} name="paperplane.fill" color="#333" />
@@ -33,7 +114,7 @@ export default function DashboardScreen() {
                 <ThemedView style={[styles.statIconBox, { backgroundColor: stat.color + '15' }]}>
                    <IconSymbol size={22} name={stat.icon as any} color={stat.color} />
                 </ThemedView>
-                <ThemedText style={styles.statValue}>{stat.value}</ThemedText>
+                <ThemedText style={styles.statValue}>{loading ? '...' : stat.value}</ThemedText>
                 <ThemedText style={styles.statLabel}>{stat.label}</ThemedText>
              </ThemedView>
            ))}
@@ -54,16 +135,24 @@ export default function DashboardScreen() {
            <TouchableOpacity><ThemedText style={styles.seeAllText}>See all</ThemedText></TouchableOpacity>
         </ThemedView>
         
-        <ThemedView style={styles.recentItem}>
-           <ThemedView style={styles.recentIcon}>
-              <IconSymbol size={18} name="orders" color="#C2185B" />
-           </ThemedView>
-           <ThemedView style={styles.recentInfo}>
-              <ThemedText style={styles.recentTitle}>New Order Received</ThemedText>
-              <ThemedText style={styles.recentSub}>Order #1234 • 2 mins ago</ThemedText>
-           </ThemedView>
-           <ThemedText style={styles.recentValue}>₱350</ThemedText>
-        </ThemedView>
+        {loading ? (
+            <ActivityIndicator color="#C2185B" />
+        ) : recentOrder ? (
+            <ThemedView style={styles.recentItem}>
+            <ThemedView style={styles.recentIcon}>
+                <IconSymbol size={18} name="orders" color="#C2185B" />
+            </ThemedView>
+            <ThemedView style={styles.recentInfo}>
+                <ThemedText style={styles.recentTitle}>Order #{recentOrder.orderNumber}</ThemedText>
+                <ThemedText style={styles.recentSub} numberOfLines={1}>
+                    {recentOrder.status} • {new Date(recentOrder.createdAt).toLocaleTimeString()}
+                </ThemedText>
+            </ThemedView>
+            <ThemedText style={styles.recentValue}>₱{recentOrder.total}</ThemedText>
+            </ThemedView>
+        ) : (
+            <ThemedText style={{ color: '#999', fontStyle: 'italic' }}>No recent orders</ThemedText>
+        )}
       </ScrollView>
     </ThemedView>
   );
