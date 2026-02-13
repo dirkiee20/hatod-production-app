@@ -21,7 +21,7 @@ export default function MenuDetailsScreen() {
 
   const fetchItem = async () => {
       try {
-          const res = await authenticatedFetch(`/menu/public/items/${id}`);
+          const res = await authenticatedFetch(`/menu/items/${id}`);
           if (res.ok) {
               const data = await res.json();
               

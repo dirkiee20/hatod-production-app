@@ -49,6 +49,15 @@ export class MenuController {
     return this.menuService.getMenuItems(req.user.userId);
   }
 
+  @Get('items/:id')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.MERCHANT)
+  @ApiOperation({ summary: 'Get menu item by ID (Merchant)' })
+  getMenuItemMerchant(@Param('id') id: string) {
+      return this.menuService.getMenuItemById(id, false);
+  }
+
   @Get('merchant/:merchantId/items')
   @ApiOperation({ summary: 'Get menu items by merchant ID (Public)' })
   getMenuItemsByMerchant(@Param('merchantId') merchantId: string) {
