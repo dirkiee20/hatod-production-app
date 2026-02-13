@@ -33,6 +33,10 @@ export class CreateMenuItemDto {
 
   @ApiProperty({ required: false })
   @IsOptional()
+  options?: any;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
   @IsNumber()
   preparationTime?: number;
 }

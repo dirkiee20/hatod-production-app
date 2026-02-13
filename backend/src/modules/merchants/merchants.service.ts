@@ -13,7 +13,7 @@ export class MerchantsService {
       },
       include: {
         categories: {
-          include: { menuItems: true },
+          include: { menuItems: { where: { isAvailable: true, isApproved: true } } },
         },
       },
     });
@@ -35,7 +35,7 @@ export class MerchantsService {
       where: { id },
       include: {
         categories: {
-          include: { menuItems: { where: { isAvailable: true } } },
+          include: { menuItems: { where: { isAvailable: true, isApproved: true } } },
         },
       },
     });
@@ -143,6 +143,46 @@ export class MerchantsService {
     return this.prisma.merchant.update({
       where: { id },
       data: { isApproved: false },
+    });
+  }
+
+  async adjustMenuPrices(merchantId: string, percentage: number) {
+    const items = await this.prisma.menuItem.findMany({
+      where: { merchantId },
+    });
+
+    const factor = 1 + percentage / 100;
+
+    for (const item of items) {
+      const newPrice = Math.round(item.price * factor * 100) / 100;
+      
+      let newOptions = item.options;
+      if (newOptions && Array.isArray(newOptions)) {
+         newOptions = newOptions.map((group: any) => ({
+             ...group,
+             options: group.options.map((opt: any) => ({
+                 ...opt,
+                 price: opt.price ? (Math.round(parseFloat(opt.price) * factor * 100) / 100).toString() : '0'
+             }))
+         }));
+      }
+
+      await this.prisma.menuItem.update({
+        where: { id: item.id },
+        data: {
+          price: newPrice,
+          options: newOptions ?? undefined,
+        }
+      });
+    }
+
+    return { success: true, count: items.length };
+  }
+
+  async approveMenuItem(id: string) {
+    return this.prisma.menuItem.update({
+      where: { id },
+      data: { isApproved: true },
     });
   }
 }

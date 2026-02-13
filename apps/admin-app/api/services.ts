@@ -39,6 +39,19 @@ export const suspendMerchant = async (id: string): Promise<boolean> => {
     }
 }
 
+
+export const approveMenuItem = async (id: string): Promise<boolean> => {
+    try {
+        const response = await authenticatedFetch(`/merchants/menu-items/${id}/approve`, {
+            method: 'PATCH'
+        });
+        return response.ok;
+    } catch (error) {
+        console.error('Error approving menu item:', error);
+        return false;
+    }
+}
+
 export const getMerchantById = async (id: string): Promise<Merchant | null> => {
   try {
     const response = await authenticatedFetch(`/merchants/${id}`);

@@ -83,3 +83,18 @@ export const assignRider = async (orderId: string, riderId: string): Promise<boo
         throw e; 
     }
 };
+
+export const getCurrentUser = async () => {
+  try {
+    const response = await authenticatedFetch('/users/me');
+    if (!response.ok) {
+        // If 401, it means token expired or invalid
+        if (response.status === 401) return null;
+        throw new Error('Failed to fetch user profile');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching user profile:', error);
+    return null;
+  }
+};

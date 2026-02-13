@@ -103,15 +103,20 @@ export class MenuService {
   }
 
   // Admin or Public usage
-  async getMenuItemsByMerchantId(merchantId: string) {
+  async getMenuItemsByMerchantId(merchantId: string, publicOnly = false) {
+    const where: any = { merchantId };
+    if (publicOnly) {
+       where.isApproved = true;
+       where.isAvailable = true;
+    }
     return this.prisma.menuItem.findMany({
-      where: { merchantId },
+      where,
       include: { category: true },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async getMenuItemById(id: string) {
+  async getMenuItemById(id: string, publicOnly = false) {
     const item = await this.prisma.menuItem.findUnique({
       where: { id },
       include: { category: true, merchant: true },
@@ -119,6 +124,12 @@ export class MenuService {
     if (!item) {
       throw new NotFoundException('Menu item not found');
     }
+    
+    if (publicOnly && (!item.isApproved || !item.isAvailable)) {
+        // If public requested but not approved/available, treat as not found
+         throw new NotFoundException('Menu item not found');
+    }
+    
     return item;
   }
 

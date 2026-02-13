@@ -25,13 +25,12 @@ export default function MenuDetailsScreen() {
           if (res.ok) {
               const data = await res.json();
               
-              // Parse description and variants
-              const { description, options } = parseVariants(data.description || '');
+              // const { description, options } = parseVariants(data.description || '');
               
               setItem({
                   ...data,
-                  description,
-                  options,
+                  description: data.description || '',
+                  options: data.options || parseVariants(data.description || '').options,
                   available: data.isAvailable
               });
           } else {
@@ -175,17 +174,17 @@ export default function MenuDetailsScreen() {
             <ThemedView key={idx} style={styles.optionSection}>
               <ThemedView style={styles.optionHeader}>
                 <ThemedView>
-                  <ThemedText style={styles.optionTitle}>{option.title}</ThemedText>
-                  <ThemedText style={styles.optionSubtitle}>{option.required ? 'Required' : 'Optional'}</ThemedText>
+                  <ThemedText style={styles.optionTitle}>{option.name || option.title}</ThemedText>
+                  <ThemedText style={styles.optionSubtitle}>{option.isRequired || option.required ? 'Required' : 'Optional'}</ThemedText>
                 </ThemedView>
-                {option.required && (
+                {(option.isRequired || option.required) && (
                   <ThemedView style={styles.requiredBadge}>
                     <ThemedText style={styles.requiredText}>1 Required</ThemedText>
                   </ThemedView>
                 )}
               </ThemedView>
 
-              {option.items.map((choice: any, cIdx: number) => (
+              {(option.options || option.items).map((choice: any, cIdx: number) => (
                 <View 
                   key={cIdx} 
                   style={styles.choiceRow}
@@ -193,10 +192,10 @@ export default function MenuDetailsScreen() {
                   <ThemedView style={styles.choiceMain}>
                     <ThemedView style={[
                       styles.selector, 
-                      option.type === 'radio' ? styles.radio : styles.checkbox
+                      option.type === 'radio' || (option.isRequired || option.required) ? styles.radio : styles.checkbox
                     ]}>
                     </ThemedView>
-                    <ThemedText style={styles.choiceName}>{choice.name}</ThemedText>
+                    <ThemedText style={styles.choiceName}>{choice.label || choice.name}</ThemedText>
                   </ThemedView>
                   {choice.price > 0 && (
                     <ThemedText style={styles.choicePrice}>+₱{choice.price}</ThemedText>

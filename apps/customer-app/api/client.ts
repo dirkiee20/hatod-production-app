@@ -6,24 +6,32 @@ import Constants from 'expo-constants';
 // Intelligent API URL resolution
 const getApiUrl = () => {
     // 1. If explicit env var is set, use it
+    /*
     if (process.env.EXPO_PUBLIC_API_URL) {
         return process.env.EXPO_PUBLIC_API_URL;
     }
+    */
 
     // 2. If running on Android during development, try to use the packager IP
+    /*
     if (Platform.OS === 'android' && __DEV__) {
+        // Use 10.0.2.2 for Android Emulator standard loopback
+        if (!Constants.isDevice) {
+            return 'http://10.0.2.2:3000';
+        }
+
         const hostUri = Constants.expoConfig?.hostUri;
         if (hostUri) {
              const ip = hostUri.split(':')[0];
              // Assuming backend runs on port 3000 on the same machine
              return `http://${ip}:3000`;
         }
-        // Fallback for emulator if no hostUri
         return 'http://10.0.2.2:3000';
     }
+    */
 
-    // 3. Default fallback
-    return 'http://localhost:3000';
+    // 3. Default fallback (Production / iOS simulator / Web)
+    return 'https://hatod-production-app-production.up.railway.app/api';
 };
 
 const API_URL = getApiUrl();

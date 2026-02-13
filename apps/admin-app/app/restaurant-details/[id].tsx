@@ -14,6 +14,7 @@ export default function RestaurantDetailsScreen() {
   const insets = useSafeAreaInsets();
   const [priceAdjustment, setPriceAdjustment] = useState('0');
   const [itemAdjustments, setItemAdjustments] = useState<Record<string, string>>({});
+  const [isUpdating, setIsUpdating] = useState(false);
 
   // State for fetched data
   const [restaurant, setRestaurant] = useState<any>(null);
@@ -121,10 +122,31 @@ export default function RestaurantDetailsScreen() {
       );
   }
 
-  const applyPriceAdjustment = () => {
-    const percentage = parseFloat(priceAdjustment) || 0;
-    // This would update prices in the backend
-    console.log(`Applying ${percentage}% price adjustment to all menu items`);
+  const applyPriceAdjustment = async () => {
+    const percentage = parseFloat(priceAdjustment);
+    if (isNaN(percentage) || percentage === 0) {
+        alert('Please enter a valid percentage');
+        return;
+    }
+
+    try {
+        const { authenticatedFetch } = await import('../../api/client');
+        const res = await authenticatedFetch(`/merchants/${id}/adjust-prices`, {
+            method: 'POST',
+            body: JSON.stringify({ percentage })
+        });
+
+        if (res.ok) {
+            alert('Prices updated successfully');
+            setPriceAdjustment('0');
+            fetchDetails(); // Refresh
+        } else {
+            alert('Failed to update prices');
+        }
+    } catch (e) {
+        console.error(e);
+        alert('An error occurred');
+    }
   };
 
   return (
@@ -226,7 +248,12 @@ export default function RestaurantDetailsScreen() {
             </View>
 
             {restaurant.menu.map((item: any) => (
-              <View key={item.id} style={styles.menuItemContainer}>
+              <View key={item.id} style={[styles.menuItemContainer, !item.isApproved && styles.pendingItemContainer]}>
+                {!item.isApproved && (
+                    <View style={styles.pendingBadge}>
+                        <ThemedText style={styles.pendingBadgeText}>Pending Approval</ThemedText>
+                    </View>
+                )}
                 <TouchableOpacity 
                   style={styles.menuItem}
                   onPress={() => router.push(`/menu-item-details/${item.id}`)}
@@ -333,7 +360,26 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#EEE',
+  },
+  pendingItemContainer: {
+    borderColor: '#FF9800',
+    borderWidth: 1,
+    backgroundColor: '#FFF8E1',
+  },
+  pendingBadge: {
+    backgroundColor: '#FF9800',
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    borderBottomLeftRadius: 8,
+    zIndex: 1,
+  },
+  pendingBadgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '700',
   },
   headerRow: {
     flexDirection: 'row',

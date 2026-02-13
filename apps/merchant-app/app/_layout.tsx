@@ -15,6 +15,7 @@ import { SocketProvider } from '@/context/SocketContext';
 
 import { useEffect, useState } from 'react';
 import { getAuthToken } from '@/api/client';
+import { getCurrentUser } from '@/api/services';
 import { useRouter, useSegments } from 'expo-router';
 
 export default function RootLayout() {
@@ -33,13 +34,25 @@ export default function RootLayout() {
       // simplified check: if strictly in login or signup, don't redirect if no token.
       
       const inAuthGroup = segments[0] === 'login' || segments[0] === 'signup';
+      const inPending = segments[0] === 'pending-approval';
 
       if (!token && !inAuthGroup) {
         // Redirect to login if not authenticated and not already in auth screen
         router.replace('/login');
-      } else if (token && inAuthGroup) {
-        // Redirect to tabs if authenticated and trying to access auth screen
-        router.replace('/(tabs)');
+      } else if (token) {
+        // Check approval status
+        const user = await getCurrentUser();
+        
+        if (!user) {
+             // Token invalid
+             if (!inAuthGroup) router.replace('/login');
+        } else if (user.merchant && !user.merchant.isApproved) {
+             // Not approved
+             if (!inPending) router.replace('/pending-approval');
+        } else {
+             // Approved
+             if (inAuthGroup || inPending) router.replace('/(tabs)');
+        }
       }
       setIsReady(true);
     };
@@ -60,6 +73,7 @@ export default function RootLayout() {
               <Stack.Screen name="login" options={{ headerShown: false }} />
               <Stack.Screen name="signup" options={{ headerShown: false }} />
               <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+              <Stack.Screen name="pending-approval" options={{ headerShown: false }} />
             </Stack>
             <StatusBar style="auto" />
           </ThemeProvider>

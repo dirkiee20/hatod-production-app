@@ -3,6 +3,7 @@ import { StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator, Imag
 import { useRouter, Link } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { login } from '@/api/client';
+import { getCurrentUser } from '@/api/services';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
 export default function LoginScreen() {
@@ -21,8 +22,15 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await login(phone, password);
-      // Navigate to tabs upon success
-      router.replace('/(tabs)');
+      await login(phone, password);
+      
+      const user = await getCurrentUser();
+      
+      if (user && user.merchant && !user.merchant.isApproved) {
+          router.replace('/pending-approval');
+      } else {
+          router.replace('/(tabs)');
+      }
     } catch (error) {
       Alert.alert('Login Failed', 'Invalid phone number or password.');
     } finally {

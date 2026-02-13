@@ -13,7 +13,7 @@ export default function RestaurantsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [restaurants, setRestaurants] = useState<Merchant[]>([]);
-  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'pending'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'pending'>('pending');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -57,10 +57,7 @@ export default function RestaurantsScreen() {
   return (
     <ThemedView style={styles.container}>
       <View style={[styles.headerRow, { marginTop: insets.top + 16 }]}>
-        <ThemedText style={styles.screenTitle}>Restaurants</ThemedText>
-        <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/add-restaurant')}>
-          <ThemedText style={styles.addBtnText}>+ Add New</ThemedText>
-        </TouchableOpacity>
+        <ThemedText style={styles.screenTitle}>Partnerships</ThemedText>
       </View>
 
       <View style={styles.statsRow}>
@@ -74,7 +71,7 @@ export default function RestaurantsScreen() {
         </TouchableOpacity>
         <TouchableOpacity style={[styles.statCard, activeTab === 'pending' && styles.activeStatCard]} onPress={() => setActiveTab('pending')}>
           <ThemedText style={[styles.statValue, activeTab === 'pending' && styles.activeStatText]}>{restaurants.filter(r => !r.isApproved).length}</ThemedText>
-          <ThemedText style={[styles.statLabel, activeTab === 'pending' && styles.activeStatText]}>Pending</ThemedText>
+          <ThemedText style={[styles.statLabel, activeTab === 'pending' && styles.activeStatText]}>New Requests</ThemedText>
         </TouchableOpacity>
       </View>
 
@@ -167,17 +164,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#333',
   },
-  addBtn: {
-    backgroundColor: '#C2185B',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  addBtnText: {
-    color: '#FFF',
-    fontSize: 12,
-    fontWeight: '800',
-  },
+
   statsRow: {
     flexDirection: 'row',
     paddingHorizontal: 16,

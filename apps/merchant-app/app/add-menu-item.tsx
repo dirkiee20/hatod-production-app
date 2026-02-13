@@ -36,11 +36,11 @@ export default function AddMenuItemScreen() {
           const res = await authenticatedFetch(`/menu/public/items/${id}`);
           if (res.ok) {
               const data = await res.json();
-              const { description, variants: parsedVariants } = parseVariants(data.description || '');
+              // const { description, variants: parsedVariants } = parseVariants(data.description || '');
               
               setFormData({
                   name: data.name,
-                  description: description,
+                  description: data.description || '',
                   price: data.price.toString(),
                   category: data.category?.name || 'Main Course',
                   available: data.isAvailable
@@ -52,8 +52,14 @@ export default function AddMenuItemScreen() {
                   if (data.image.startsWith('http')) setImage(data.image);
                   else setImage(`${baseUrl}${data.image}`);
               }
-
-              setVariants(parsedVariants);
+              
+              if (data.options) {
+                  setVariants(data.options);
+              } else if (data.description) {
+                   // Fallback for legacy items: parse description
+                   const { variants: parsedVariants } = parseVariants(data.description);
+                   setVariants(parsedVariants);
+              }
           }
       } catch (e) {
           console.error("Failed to fetch item for edit", e);
@@ -157,15 +163,10 @@ export default function AddMenuItemScreen() {
              }
         }
 
+        // Deprecated: No longer appending to description
+        // const variantText = variants.map(...)
+        
         let finalDescription = formData.description;
-        if (variants.length > 0) {
-            const variantText = variants.map(g => {
-                const options = g.options.filter((o: any) => o.label).map((o: any) => `${o.label} (+$${o.price || 0})`).join(', ');
-                const reqText = g.isRequired ? 'Required' : 'Optional';
-                return `[${g.name} (${reqText}): ${options}]`;
-            }).join('\n');
-            finalDescription += '\n\n' + variantText; // Append variants to description
-        }
 
         const body = {
             name: formData.name,
@@ -174,6 +175,7 @@ export default function AddMenuItemScreen() {
             categoryId: categoryId,
             isAvailable: formData.available,
             image: imageUrl,
+            options: variants, // Send structured options
         };
 
         const url = editId ? `/menu/items/${editId}` : '/menu/items';

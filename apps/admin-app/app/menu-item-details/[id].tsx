@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { authenticatedFetch, resolveImageUrl } from '../../api/client';
+import { approveMenuItem } from '../../api/services';
 
 export default function MenuItemDetailsScreen() {
   const { id } = useLocalSearchParams();
@@ -28,26 +29,38 @@ export default function MenuItemDetailsScreen() {
 
   const fetchItem = async () => {
       try {
-          const res = await authenticatedFetch(`/menu/public/items/${id}`);
+          // Use admin endpoint to see unapproved items
+          const res = await authenticatedFetch(`/menu/admin/items/${id}`);
           if (res.ok) {
               const data = await res.json();
               const { description, options } = parseVariants(data.description || '');
               setItem({
                   ...data,
-                  description,
-                  variants: options, // Keep for fallback
+                  description, // Use parsed description (without variant strings)
+                  options: data.options || options, // Prefer structured options
                   stats: {
                       totalSold: data.totalOrders || 0,
-                      revenue: (data.totalOrders || 0) * data.price,
                       rating: 0,
+                      revenue: (data.totalOrders || 0) * data.price,
                   }
               });
-              setVariants(options);
+              // setOriginalPrice(data.price.toString()); // This variable is not defined in the original code
               setPrice(data.price.toString());
-              setAvailable(data.isAvailable);
+              
+              const opts = data.options || options || [];
+              // setOriginalOptions(JSON.parse(JSON.stringify(opts))); // This variable is not defined in the original code
+              
+              // Only set form state if not already editing?
+              // Actually we should reset form state to fetched item
+              // setName(data.name); // This variable is not defined in the original code
+              // setDescription(description); // This variable is not defined in the original code
+              // setPrice is already set
+              setVariants(JSON.parse(JSON.stringify(opts))); // Changed setOptions to setVariants to match existing state
+              setAvailable(data.isAvailable); // Changed setIsAvailable to setAvailable to match existing state
+              // setImage(data.image); // This variable is not defined in the original code
           }
-      } catch (e) {
-          console.error(e);
+      } catch (error) {
+          console.error('Error fetching item:', error);
       } finally {
           setLoading(false);
       }
@@ -146,6 +159,20 @@ export default function MenuItemDetailsScreen() {
         ),
       }} />
   );
+
+  const handleApprove = async () => {
+      try {
+          const success = await approveMenuItem(id as string);
+          if (success) {
+              alert('Item approved!');
+              fetchItem();
+          } else {
+              alert('Failed to approve');
+          }
+      } catch (e) {
+          console.error(e);
+      }
+  };
 
   if (loading) {
       return (
@@ -291,14 +318,26 @@ export default function MenuItemDetailsScreen() {
         </ThemedView>
       </ScrollView>
 
-      {isEditing && (
+
+
+      {(isEditing || (item && !item.isApproved)) && (
         <ThemedView style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-           <TouchableOpacity style={styles.deleteBtn}>
-              <ThemedText style={styles.deleteBtnText}>Delete Item</ThemedText>
-           </TouchableOpacity>
-           <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-              <ThemedText style={styles.saveBtnText}>Save Changes</ThemedText>
-           </TouchableOpacity>
+           {!item.isApproved && (
+               <TouchableOpacity style={[styles.deleteBtn, { backgroundColor: '#E8F5E9', flex: 2, marginRight: 10 }]} onPress={handleApprove}>
+                  <ThemedText style={{ color: '#388E3C', fontWeight: '800' }}>Approve Item</ThemedText>
+               </TouchableOpacity>
+           )}
+           
+           {isEditing && (
+               <>
+                <TouchableOpacity style={styles.deleteBtn}>
+                    <ThemedText style={styles.deleteBtnText}>Delete</ThemedText>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+                    <ThemedText style={styles.saveBtnText}>Save</ThemedText>
+                </TouchableOpacity>
+               </>
+           )}
         </ThemedView>
       )}
     </ThemedView>

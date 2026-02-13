@@ -33,6 +33,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
   const refreshProfile = useCallback(async () => {
     try {
+      const token = await import('@/api/client').then(m => m.getAuthToken());
+      if (!token) {
+          setLoading(false);
+          return;
+      }
       setLoading(true);
       const profile = await fetchProfile();
       if (profile) {

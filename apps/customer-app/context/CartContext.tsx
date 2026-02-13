@@ -41,6 +41,7 @@ interface CartContextType {
   deliveryFee: number;
   deliveryAddress: DeliveryAddress | null;
   setDeliveryAddress: (address: DeliveryAddress | null) => void;
+  refreshCart: () => Promise<void>;
 }
 
 import { getCart, addToCartItem, updateCartItem, removeCartItem, clearCartItems, getDeliveryFeeEstimate, getMerchantById } from '@/api/services';
@@ -54,6 +55,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [deliveryFee, setDeliveryFee] = useState(50); // Default fee
 
   const refreshCart = async () => {
+    const token = await import('@/api/client').then(m => m.getAuthToken());
+    if (!token) {
+        setItems([]);
+        return;
+    }
     const cartData = await getCart();
     if (cartData && cartData.items) {
       // Map backend structure to frontend structure
@@ -176,7 +182,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
-    <CartContext.Provider value={{ items, addToCart, removeFromCart, updateQuantity, clearCart, cartTotal, itemCount, deliveryFee, deliveryAddress, setDeliveryAddress }}>
+    <CartContext.Provider value={{ items, addToCart, removeFromCart, updateQuantity, clearCart, cartTotal, itemCount, deliveryFee, deliveryAddress, setDeliveryAddress, refreshCart }}>
       {children}
     </CartContext.Provider>
   );

@@ -5,6 +5,10 @@ import { CreateCategoryDto } from './dto/create-category.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '@prisma/client';
+import { RolesGuard } from '../auth/guards/roles.guard';
+
 @ApiTags('menu')
 @Controller('menu')
 export class MenuController {
@@ -46,15 +50,24 @@ export class MenuController {
   }
 
   @Get('merchant/:merchantId/items')
-  @ApiOperation({ summary: 'Get menu items by merchant ID (Public/Admin)' })
+  @ApiOperation({ summary: 'Get menu items by merchant ID (Public)' })
   getMenuItemsByMerchant(@Param('merchantId') merchantId: string) {
-    return this.menuService.getMenuItemsByMerchantId(merchantId);
+    return this.menuService.getMenuItemsByMerchantId(merchantId, true);
   }
 
   @Get('public/items/:id')
   @ApiOperation({ summary: 'Get menu item by ID (Public)' })
   getMenuItemPublic(@Param('id') id: string) {
-    return this.menuService.getMenuItemById(id);
+    return this.menuService.getMenuItemById(id, true);
+  }
+
+  @Get('admin/items/:id')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Get menu item by ID (Admin)' })
+  getMenuItemAdmin(@Param('id') id: string) {
+      return this.menuService.getMenuItemById(id, false);
   }
 
   @Delete('items/:id')

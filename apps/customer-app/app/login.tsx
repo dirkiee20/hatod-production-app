@@ -6,8 +6,13 @@ import { ThemedView } from '@/components/themed-view';
 import { login } from '@/api/client';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
+import { useUser } from '@/context/UserContext';
+import { useCart } from '@/context/CartContext';
+
 export default function LoginScreen() {
   const router = useRouter();
+  const { refreshProfile } = useUser();
+  const { refreshCart } = useCart();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -22,6 +27,8 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await login(phone, password);
+      // Refresh user context and cart context before navigation
+      await Promise.all([refreshProfile(), refreshCart()]);
       router.replace('/(tabs)');
     } catch (error: any) {
       Alert.alert('Login Failed', error.message || 'Please check your credentials and try again');

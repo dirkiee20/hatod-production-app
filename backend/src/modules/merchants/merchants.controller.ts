@@ -98,4 +98,20 @@ export class MerchantsController {
   suspend(@Param('id') id: string) {
     return this.merchantsService.suspendMerchant(id);
   }
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Post(':id/adjust-prices')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Adjust all menu prices by percentage (Admin only)' })
+  adjustPrices(@Param('id') id: string, @Body('percentage') percentage: number) {
+    return this.merchantsService.adjustMenuPrices(id, percentage);
+  }
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Patch('menu-items/:id/approve')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Approve a menu item (Admin only)' })
+  approveMenuItem(@Param('id') id: string) {
+    return this.merchantsService.approveMenuItem(id);
+  }
 }

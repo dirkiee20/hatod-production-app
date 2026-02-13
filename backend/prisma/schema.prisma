@@ -233,7 +233,9 @@ model MenuItem {
   price       Float
   image       String?
   isAvailable Boolean  @default(true)
+  isApproved  Boolean  @default(false)
   preparationTime Int   @default(15) // in minutes
+  options     Json?    // Variant definitions (Group/Name/Price)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
