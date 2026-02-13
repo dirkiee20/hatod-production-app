@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsBoolean, IsOptional, IsNotEmpty } from 'class-validator';
+import { IsString, IsNumber, IsBoolean, IsOptional, IsNotEmpty, IsArray, Allow } from 'class-validator';
 
 export class CreateMenuItemDto {
   @IsString()
@@ -27,4 +27,9 @@ export class CreateMenuItemDto {
   @IsNumber()
   @IsOptional()
   preparationTime?: number;
+
+  @IsArray()
+  @IsOptional()
+  @Allow()
+  options?: any;
 }
