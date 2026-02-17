@@ -5,7 +5,7 @@ import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import api from '@/services/api';
+import { getRiderOrders } from '@/api/rider-service';
 
 export default function OrdersScreen() {
   const insets = useSafeAreaInsets();
@@ -17,15 +17,24 @@ export default function OrdersScreen() {
   const fetchOrders = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/orders');
+      console.log('[RiderApp Orders] Starting fetchOrders...');
       
+      const data = await getRiderOrders();
+      console.log('[RiderApp Orders] Orders fetched successfully:', data ? data.length : 'null');
+      
+      if (!Array.isArray(data)) {
+        console.warn('[RiderApp Orders] Data is not an array:', data);
+        setOrders([]);
+        return;
+      }
+
       // Sort by date desc
-      const sorted = response.data.sort((a: any, b: any) => 
+      const sorted = data.sort((a: any, b: any) => 
         new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
       );
       setOrders(sorted);
     } catch (error) {
-      console.error('Error fetching orders:', error);
+      console.error('[RiderApp Orders] Error fetching orders:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);

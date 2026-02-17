@@ -17,6 +17,10 @@ const MAPPING = {
   'chat.bubble': 'chat-bubble',
   'receipt': 'receipt',
   'fees': 'attach-money',
+  'phone': 'phone',
+  'lock.fill': 'lock',
+  'checkmark': 'check',
+  'person.fill': 'person',
 } as const;
 
 type IconSymbolName = keyof typeof MAPPING;

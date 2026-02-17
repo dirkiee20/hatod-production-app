@@ -1,164 +1,305 @@
 import React, { useState } from 'react';
-import { StyleSheet, TextInput, TouchableOpacity, View, Alert, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
+import { StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Image, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { useRouter, Link } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import api from '@/services/api';
+import { login } from '@/api/client';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 
 export default function LoginScreen() {
   const router = useRouter();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
 
   const handleLogin = async () => {
+    // Clear previous errors
+    setPasswordError('');
+
     if (!phone || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      if (!password) {
+        setPasswordError('Password is required');
+      }
       return;
     }
 
-    setIsLoading(true);
+    setLoading(true);
     try {
-      const response = await api.post('/auth/login', {
-        phone,
-        password,
-      });
-
-      const { access_token } = response.data;
-
-      if (access_token) {
-        await SecureStore.setItemAsync('authToken', access_token);
-        router.replace('/(tabs)');
-      } else {
-        throw new Error('No token received');
-      }
+      await login(phone, password);
+      router.replace('/(tabs)');
     } catch (error: any) {
-      console.error('Login error:', error);
-      const message = error.response?.data?.message || error.message || 'Login failed';
-      Alert.alert('Login Failed', message);
+      setPasswordError('Invalid password. Please try again.');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   return (
-    <ThemedView style={styles.container}>
-      <View style={styles.content}>
-        <ThemedText style={styles.title}>Hatod Rider</ThemedText>
-        <ThemedText style={styles.subtitle}>Partner App</ThemedText>
-
-        <View style={styles.form}>
-          <View style={styles.inputContainer}>
-            <ThemedText style={styles.label}>Mobile Number</ThemedText>
-            <TextInput
-              style={styles.input}
-              placeholder="+639123456789"
-              placeholderTextColor="#999"
-              value={phone}
-              onChangeText={setPhone}
-              autoCapitalize="none"
-              keyboardType="phone-pad"
-            />
+    <View style={styles.container}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent} bounces={false}>
+          
+          <View style={styles.header}>
+            <View style={styles.logoContainer}>
+               <Image 
+                 source={require('@/assets/images/hatod-logo.png')} // Reusing default logo for now
+                 style={styles.logoImage} 
+                 resizeMode="contain"
+               />
+            </View>
+            <ThemedText style={styles.title}>RIDER LOGIN</ThemedText>
+            <ThemedText style={styles.subtitle}>Partner App</ThemedText>
           </View>
 
-          <View style={styles.inputContainer}>
-            <ThemedText style={styles.label}>Password</ThemedText>
-            <TextInput
-              style={styles.input}
-              placeholder="••••••••"
-              placeholderTextColor="#999"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
+          <View style={styles.formContainer}>
+            
+            <View style={styles.inputContainer}>
+              <View style={styles.iconContainer}>
+                 <IconSymbol size={20} name="phone" color="#C2185B" />
+              </View>
+              <TextInput
+                style={styles.input}
+                placeholder="0912 345 6789"
+                placeholderTextColor="rgba(255,255,255,0.7)"
+                value={phone}
+                onChangeText={setPhone}
+                keyboardType="phone-pad"
+                autoCapitalize="none"
+                maxLength={11}
+              />
+            </View>
+
+            <View>
+              <View style={styles.inputContainer}>
+                <View style={styles.iconContainer}>
+                   <IconSymbol size={20} name="lock.fill" color="#C2185B" />
+                </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Password"
+                  placeholderTextColor="rgba(255,255,255,0.7)"
+                  value={password}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    setPasswordError('');
+                  }}
+                  secureTextEntry
+                />
+              </View>
+              {passwordError ? (
+                <ThemedText style={styles.errorText}>{passwordError}</ThemedText>
+              ) : null}
+            </View>
+
+            <View style={styles.optionsRow}>
+                <TouchableOpacity style={styles.rememberRow} onPress={() => setRememberMe(!rememberMe)}>
+                    <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+                        {rememberMe && <IconSymbol name="checkmark" size={12} color="#C2185B" />}
+                    </View>
+                    <ThemedText style={styles.optionText}>Remember me</ThemedText>
+                </TouchableOpacity>
+                <TouchableOpacity>
+                   <ThemedText style={[styles.optionText, { textDecorationLine: 'underline' }]}>Forget password?</ThemedText>
+                </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.loginButton, loading && styles.loginButtonDisabled]}
+              onPress={handleLogin}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#C2185B" />
+              ) : (
+                <ThemedText style={styles.loginButtonText}>Login</ThemedText>
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.footer}>
+              <ThemedText style={styles.footerText}>New Partner?</ThemedText>
+              <Link href="/(auth)/signup" asChild>
+                <TouchableOpacity style={styles.signupButton}>
+                    <ThemedText style={styles.signupButtonText}>Apply Now</ThemedText>
+                </TouchableOpacity>
+              </Link>
+            </View>
+
+            <View style={styles.termsContainer}>
+              <ThemedText style={styles.termsText}>
+                By continuing, you agree to our Terms of Service and Privacy Policy
+              </ThemedText>
+            </View>
+
           </View>
-
-          <TouchableOpacity 
-            style={[styles.loginBtn, isLoading && styles.disabledBtn]} 
-            onPress={handleLogin}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#FFF" />
-            ) : (
-              <ThemedText style={styles.loginBtnText}>Sign In</ThemedText>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={() => router.push('/(auth)/signup')} style={{ marginTop: 20, alignItems: 'center' }}>
-               <ThemedText style={{ color: '#666', fontWeight: '600' }}>New Rider? Create Account</ThemedText>
-           </TouchableOpacity>
-        </View>
-      </View>
-    </ThemedView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#C2185B',
+    backgroundColor: '#C2185B', // Rider App Pink
   },
-  content: {
-    flex: 1,
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: 'center',
-    padding: 24,
+    padding: 30,
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  logoContainer: {
+    width: 200,
+    height: 200,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: -20,
+  },
+  logoImage: {
+    width: '100%',
+    height: '100%',
   },
   title: {
     fontSize: 32,
-    fontWeight: '900',
+    fontWeight: '800',
     color: '#FFF',
-    textAlign: 'center',
+    letterSpacing: 2,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 5,
+    marginTop: 10,
   },
   subtitle: {
     fontSize: 16,
     color: 'rgba(255,255,255,0.8)',
-    textAlign: 'center',
-    marginBottom: 48,
+    marginTop: 5,
   },
-  form: {
-    backgroundColor: '#FFF',
-    borderRadius: 20,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
+  formContainer: {
+    width: '100%',
   },
   inputContainer: {
-    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFF',
+    borderRadius: 30,
+    paddingHorizontal: 5,
+    paddingVertical: 5,
+    marginBottom: 20,
+    backgroundColor: 'transparent',
+    height: 60,
   },
-  label: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#666',
-    marginBottom: 6,
-    textTransform: 'uppercase',
+  iconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#FFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
   },
   input: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 12,
-    padding: 16,
+    flex: 1,
     fontSize: 16,
-    color: '#333',
-    borderWidth: 1,
-    borderColor: '#EEE',
+    color: '#FFF',
+    height: '100%',
+    paddingRight: 20,
   },
-  loginBtn: {
-    backgroundColor: '#C2185B',
-    borderRadius: 12,
-    padding: 16,
+  optionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 8,
+    marginBottom: 30,
+    paddingHorizontal: 10,
   },
-  disabledBtn: {
+  rememberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderWidth: 1.5,
+    borderColor: '#FFF',
+    borderRadius: 4,
+    marginRight: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  checkboxChecked: {
+    backgroundColor: '#FFF',
+  },
+  optionText: {
+    color: '#FFF',
+    fontSize: 14,
+  },
+  loginButton: {
+    backgroundColor: '#FFF',
+    borderRadius: 30,
+    height: 55,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 40,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  loginButtonDisabled: {
     opacity: 0.7,
   },
-  loginBtnText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '800',
+  loginButtonText: {
+    color: '#C2185B',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
+  footer: {
+    alignItems: 'center',
+  },
+  footerText: {
+    color: '#FFF',
+    fontSize: 14,
+    marginBottom: 10,
+    opacity: 0.9,
+  },
+  signupButton: {
+    borderWidth: 1,
+    borderColor: '#FFF',
+    borderRadius: 25,
+    paddingVertical: 10,
+    paddingHorizontal: 30,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  signupButtonText: {
+    color: '#FFF',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  termsContainer: {
+    marginTop: 40,
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  termsText: {
+    color: '#FFF',
+    fontSize: 12,
+    textAlign: 'center',
+    opacity: 0.8,
+  },
+  errorText: {
+    color: '#ffcccc',
+    fontSize: 12,
+    marginTop: -15,
+    marginBottom: 10,
+    marginLeft: 20,
+  }
 });

@@ -27,20 +27,36 @@ export default function AddAddressScreen() {
   // Initial location text
   useEffect(() => {
     (async () => {
+      console.log('[AddAddress] Requesting location permissions...');
       let { status } = await Location.requestForegroundPermissionsAsync();
+      console.log('[AddAddress] Location permission status:', status);
+      
       if (status === 'granted') {
+          console.log('[AddAddress] Getting current position...');
           let location = await Location.getCurrentPositionAsync({});
           const newCoords = [location.coords.longitude, location.coords.latitude];
+          console.log('[AddAddress] Current location:', newCoords);
           // We let Mapbox Camera follow user, but we fetch address immediately
           fetchAddress(newCoords[0], newCoords[1]);
+      } else {
+          console.log('[AddAddress] Location permission denied');
       }
     })();
   }, []);
 
   const fetchAddress = async (lng: number, lat: number) => {
-      const address = await reverseGeocode(lat, lng);
-      if (address) {
-          setStreet(address);
+      console.log('[AddAddress] fetchAddress called with:', { lng, lat });
+      try {
+          const address = await reverseGeocode(lat, lng);
+          console.log('[AddAddress] Reverse geocode result:', address);
+          if (address) {
+              setStreet(address);
+              console.log('[AddAddress] Address set successfully');
+          } else {
+              console.log('[AddAddress] No address returned from reverseGeocode');
+          }
+      } catch (error) {
+          console.error('[AddAddress] Error in fetchAddress:', error);
       }
   };
 

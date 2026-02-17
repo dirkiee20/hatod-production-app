@@ -13,7 +13,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#5c6cc9",
+        "backgroundColor": "#C2185B",
         "foregroundImage": "./assets/images/hatod-logo.png"
       },
       "edgeToEdgeEnabled": true,
@@ -39,7 +39,7 @@
           "image": "./assets/images/hatod-logo.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#5c6cc9",
+          "backgroundColor": "#C2185B",
           "dark": {
             "backgroundColor": "#000000"
           }

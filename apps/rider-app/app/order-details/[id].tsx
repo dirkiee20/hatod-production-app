@@ -5,7 +5,7 @@ import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import React, { useState, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import api from '@/services/api';
+import { getOrderDetails, updateOrderStatus, claimOrder } from '@/api/rider-service';
 import Mapbox from '@rnmapbox/maps';
 import { useLocationTracker } from '@/hooks/useLocationTracker';
 import { getRoute } from '@/services/map';
@@ -77,8 +77,8 @@ export default function OrderDetailsScreen() {
   const fetchOrderDetails = async () => {
     try {
       setLoading(true);
-      const response = await api.get(`/orders/${id}`);
-      setOrder(response.data);
+      const data = await getOrderDetails(Array.isArray(id) ? id[0] : id);
+      setOrder(data);
     } catch (error) {
       console.error('Error fetching order details:', error);
     } finally {
@@ -89,11 +89,12 @@ export default function OrderDetailsScreen() {
   const handleStatusUpdate = async (status: string) => {
     try {
       setLoading(true);
+      const orderId = Array.isArray(id) ? id[0] : id;
       if (status === 'CLAIM') {
-          await api.patch(`/orders/${id}/claim`);
+          await claimOrder(orderId);
           Alert.alert('Success', 'Order accepted! Please proceed to the merchant.');
       } else {
-          await api.patch(`/orders/${id}/status`, { status });
+          await updateOrderStatus(orderId, status);
       }
       
       await fetchOrderDetails();
@@ -103,7 +104,7 @@ export default function OrderDetailsScreen() {
       }
     } catch (error: any) {
        console.error(error);
-       const msg = error.response?.data?.message || 'Failed to update status';
+       const msg = error.message || 'Failed to update status';
        Alert.alert('Error', msg);
        setLoading(false);
     }

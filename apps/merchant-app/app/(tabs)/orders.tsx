@@ -84,6 +84,17 @@ export default function OrdersScreen() {
 
 
 
+  const [processingOrders, setProcessingOrders] = useState<Set<string>>(new Set());
+
+  const toggleProcessing = (orderId: string, isProcessing: boolean) => {
+      setProcessingOrders(prev => {
+          const next = new Set(prev);
+          if (isProcessing) next.add(orderId);
+          else next.delete(orderId);
+          return next;
+      });
+  };
+
   const handleAction = async (order: Order) => {
     let nextStatus: OrderStatus | null = null;
     let actionName = '';
@@ -99,15 +110,23 @@ export default function OrdersScreen() {
         actionName = 'Mark Ready';
     }
 
-    if (nextStatus) {
-        const success = await updateOrderStatus(order.id, nextStatus);
-        if (success) {
-            fetchOrders();
-        } else {
-            Alert.alert("Error", `Failed to ${actionName.toLowerCase()} order.`);
+    toggleProcessing(order.id, true);
+    try {
+        if (nextStatus) {
+            const success = await updateOrderStatus(order.id, nextStatus);
+            if (success) {
+                fetchOrders();
+            } else {
+                Alert.alert("Error", `Failed to ${actionName.toLowerCase()} order.`);
+            }
+        } else if (order.status === OrderStatus.READY_FOR_PICKUP && !order.riderId) {
+            await openAssignModal(order);
         }
-    } else if (order.status === OrderStatus.READY_FOR_PICKUP && !order.riderId) {
-        openAssignModal(order);
+    } catch (error) {
+        console.error('Action failed:', error);
+        Alert.alert('Error', 'An unexpected error occurred');
+    } finally {
+        toggleProcessing(order.id, false);
     }
   };
 
@@ -196,6 +215,8 @@ export default function OrdersScreen() {
         ) : (
             filteredOrders.map((order) => {
              const actionText = getActionButtonText(order.status, !!order.riderId);
+             const isProcessing = processingOrders.has(order.id);
+             
              return (
               <TouchableOpacity 
                 key={order.id} 
@@ -228,10 +249,15 @@ export default function OrdersScreen() {
                      
                      {actionText && (
                         <TouchableOpacity 
-                            style={styles.actionBtn}
+                            style={[styles.actionBtn, isProcessing && { opacity: 0.8 }]}
                             onPress={() => handleAction(order)}
+                            disabled={isProcessing}
                         >
-                            <ThemedText style={styles.actionBtnText}>{actionText}</ThemedText>
+                            {isProcessing ? (
+                                <ActivityIndicator size="small" color="#FFF" />
+                            ) : (
+                                <ThemedText style={styles.actionBtnText}>{actionText}</ThemedText>
+                            )}
                         </TouchableOpacity>
                      )}
                    </View>

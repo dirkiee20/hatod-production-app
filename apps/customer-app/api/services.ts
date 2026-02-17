@@ -233,22 +233,46 @@ export const getRoute = async (start: [number, number], end: [number, number]): 
 // Mapbox API
 export const reverseGeocode = async (latitude: number, longitude: number): Promise<string | null> => {
   try {
-    const token = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
-    if (!token) return null;
-
-    const response = await fetch(
-      `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=${token}`
-    );
+    console.log('[reverseGeocode] Starting reverse geocode for:', { latitude, longitude });
     
-    if (!response.ok) return null;
+    const token = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
+    console.log('[reverseGeocode] Mapbox token exists:', !!token);
+    console.log('[reverseGeocode] Mapbox token value:', token);
+    
+    if (!token) {
+      console.error('[reverseGeocode] No Mapbox access token found!');
+      return null;
+    }
+
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=${token}`;
+    console.log('[reverseGeocode] Request URL:', url);
+    
+    console.log('[reverseGeocode] Fetching from Mapbox API...');
+    const response = await fetch(url);
+    
+    console.log('[reverseGeocode] Response status:', response.status);
+    console.log('[reverseGeocode] Response ok:', response.ok);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[reverseGeocode] API error response:', errorText);
+      return null;
+    }
     
     const data = await response.json();
+    console.log('[reverseGeocode] API response data:', JSON.stringify(data, null, 2));
+    
     if (data.features && data.features.length > 0) {
-      return data.features[0].place_name;
+      const placeName = data.features[0].place_name;
+      console.log('[reverseGeocode] Address found:', placeName);
+      return placeName;
     }
+    
+    console.log('[reverseGeocode] No features found in response');
     return null;
   } catch (error) {
-    console.error('Error reverse geocoding:', error);
+    console.error('[reverseGeocode] Exception caught:', error);
+    console.error('[reverseGeocode] Error details:', JSON.stringify(error, null, 2));
     return null;
   }
 };

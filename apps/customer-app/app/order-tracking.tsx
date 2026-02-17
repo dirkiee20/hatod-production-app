@@ -61,18 +61,29 @@ export default function OrderTrackingScreen() {
   }, [id]);
 
   useEffect(() => {
-    if (!socket) return;
+    if (!socket) {
+        console.log('[OrderTracking] No socket instance available');
+        return;
+    }
+
+    console.log('[OrderTracking] Setting up socket listeners. Socket ID:', socket.id);
 
     const handleOrderUpdate = (updatedOrder: any) => {
+        console.log('[OrderTracking] Received order:updated event:', updatedOrder.status, updatedOrder.id);
+        const currentId = Array.isArray(id) ? id[0] : id;
+        
         setOrder((currentOrder: any) => {
-            if (currentOrder && currentOrder.id === updatedOrder.id) {
-                return updatedOrder;
+            // Match against current order or URL param
+            if ((currentOrder && currentOrder.id === updatedOrder.id) || (updatedOrder.id === currentId)) {
+                console.log('[OrderTracking] Updating order state');
+                return { ...currentOrder, ...updatedOrder };
             }
             return currentOrder;
         });
     };
 
     const handleRiderLocation = (data: { riderId: string, location: { latitude: number, longitude: number } }) => {
+         console.log('[OrderTracking] Received rider:location', data);
          setOrder((currentOrder: any) => {
              if (currentOrder && currentOrder.rider && currentOrder.rider.id === data.riderId) {
                  return {
@@ -92,10 +103,11 @@ export default function OrderTrackingScreen() {
     socket.on('rider:location', handleRiderLocation);
 
     return () => {
+      console.log('[OrderTracking] Cleaning up socket listeners');
       socket.off('order:updated', handleOrderUpdate);
       socket.off('rider:location', handleRiderLocation);
     };
-  }, [socket]);
+  }, [socket, id]);
 
   useEffect(() => {
     if (!order || !order.rider) return;

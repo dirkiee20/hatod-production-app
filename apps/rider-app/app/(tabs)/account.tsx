@@ -5,8 +5,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import React, { useState, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
-import api from '@/services/api';
+import { getMe, logout as logoutApi } from '@/api/client';
 
 export default function AccountScreen() {
   const insets = useSafeAreaInsets();
@@ -19,19 +18,17 @@ export default function AccountScreen() {
 
   const fetchProfile = async () => {
     try {
-      const response = await api.get('/users/me');
-      setUser(response.data);
+      const data = await getMe();
+      console.log('[RiderApp Account] Profile data:', data);
+      setUser(data);
     } catch (error) {
-      console.error('Error fetching profile:', error);
+      console.error('[RiderApp Account] Error fetching profile:', error);
     }
   };
 
   const handleLogout = async () => {
     try {
-      // Optional: Call logout endpoint if exists
-      // await api.post('/auth/logout');
-      
-      await SecureStore.deleteItemAsync('authToken');
+      await logoutApi();
       router.replace('/(auth)/login');
     } catch (error) {
       Alert.alert('Error', 'Failed to log out');

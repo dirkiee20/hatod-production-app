@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator, Image, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Image, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useRouter, Link } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -17,10 +17,16 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
 
   const handleLogin = async () => {
+    // Clear previous errors
+    setPasswordError('');
+
     if (!phone || !password) {
-      Alert.alert('Error', 'Please enter both phone number and password');
+      if (!password) {
+        setPasswordError('Password is required');
+      }
       return;
     }
 
@@ -31,7 +37,7 @@ export default function LoginScreen() {
       await Promise.all([refreshProfile(), refreshCart()]);
       router.replace('/(tabs)');
     } catch (error: any) {
-      Alert.alert('Login Failed', error.message || 'Please check your credentials and try again');
+      setPasswordError('Invalid password. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -74,18 +80,26 @@ export default function LoginScreen() {
               />
             </View>
 
-            <View style={styles.inputContainer}>
-              <View style={styles.iconContainer}>
-                 <IconSymbol size={20} name="lock.fill" color="#f78734" />
+            <View>
+              <View style={styles.inputContainer}>
+                <View style={styles.iconContainer}>
+                   <IconSymbol size={20} name="lock.fill" color="#f78734" />
+                </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Password"
+                  placeholderTextColor="rgba(255,255,255,0.7)"
+                  value={password}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    setPasswordError('');
+                  }}
+                  secureTextEntry
+                />
               </View>
-              <TextInput
-                style={styles.input}
-                placeholder="Password"
-                placeholderTextColor="rgba(255,255,255,0.7)"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-              />
+              {passwordError ? (
+                <ThemedText style={styles.errorText}>{passwordError}</ThemedText>
+              ) : null}
             </View>
 
             <View style={styles.optionsRow}>
@@ -282,5 +296,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     opacity: 0.8,
+  },
+  errorText: {
+    color: '#ffcccc',
+    fontSize: 12,
+    marginTop: -15,
+    marginBottom: 10,
+    marginLeft: 20,
   }
 });

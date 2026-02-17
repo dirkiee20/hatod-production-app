@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator, Image, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Image, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useRouter, Link } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { register } from '@/api/client'; // Assuming register function exists or I'll need to create it
@@ -13,15 +13,26 @@ export default function SignupScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
 
   const handleSignup = async () => {
+    // Clear previous errors
+    setPasswordError('');
+    setConfirmPasswordError('');
+
     if (!firstName || !lastName || !phone || !password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields');
+      if (!password) {
+        setPasswordError('Password is required');
+      }
+      if (!confirmPassword) {
+        setConfirmPasswordError('Please confirm your password');
+      }
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      setConfirmPasswordError('Passwords do not match');
       return;
     }
 
@@ -34,10 +45,9 @@ export default function SignupScreen() {
       // I should probably add an Email field to be safe, or generate one.
       // I'll add an Email field to the form.
       await register({ firstName, lastName, phone, password, email: `${phone}@hatod.com` }); 
-      Alert.alert('Success', 'Account created! Please login.');
       router.replace('/login');
     } catch (error: any) {
-      Alert.alert('Signup Failed', error.message || 'Please try again');
+      // Handle error silently or show inline error if needed in the future
     } finally {
       setLoading(false);
     }
@@ -105,32 +115,48 @@ export default function SignupScreen() {
               />
             </View>
 
-            <View style={styles.inputContainer}>
-              <View style={styles.iconContainer}>
-                 <IconSymbol size={20} name="lock.fill" color="#f78734" />
+            <View>
+              <View style={styles.inputContainer}>
+                <View style={styles.iconContainer}>
+                   <IconSymbol size={20} name="lock.fill" color="#f78734" />
+                </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Password"
+                  placeholderTextColor="rgba(255,255,255,0.7)"
+                  value={password}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    setPasswordError('');
+                  }}
+                  secureTextEntry
+                />
               </View>
-              <TextInput
-                style={styles.input}
-                placeholder="Password"
-                placeholderTextColor="rgba(255,255,255,0.7)"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-              />
+              {passwordError ? (
+                <ThemedText style={styles.errorText}>{passwordError}</ThemedText>
+              ) : null}
             </View>
             
-            <View style={styles.inputContainer}>
-              <View style={styles.iconContainer}>
-                 <IconSymbol size={20} name="lock.fill" color="#f78734" />
+            <View>
+              <View style={styles.inputContainer}>
+                <View style={styles.iconContainer}>
+                   <IconSymbol size={20} name="lock.fill" color="#f78734" />
+                </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Confirm Password"
+                  placeholderTextColor="rgba(255,255,255,0.7)"
+                  value={confirmPassword}
+                  onChangeText={(text) => {
+                    setConfirmPassword(text);
+                    setConfirmPasswordError('');
+                  }}
+                  secureTextEntry
+                />
               </View>
-              <TextInput
-                style={styles.input}
-                placeholder="Confirm Password"
-                placeholderTextColor="rgba(255,255,255,0.7)"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                secureTextEntry
-              />
+              {confirmPasswordError ? (
+                <ThemedText style={styles.errorText}>{confirmPasswordError}</ThemedText>
+              ) : null}
             </View>
 
             <TouchableOpacity 
@@ -277,5 +303,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     textAlign: 'center',
     opacity: 0.8,
+  },
+  errorText: {
+    color: '#ffcccc',
+    fontSize: 12,
+    marginTop: -10,
+    marginBottom: 5,
+    marginLeft: 20,
   }
 });

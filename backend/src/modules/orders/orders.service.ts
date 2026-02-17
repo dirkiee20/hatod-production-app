@@ -210,6 +210,8 @@ export class OrdersService {
         customer: { include: { user: true } },
         merchant: { include: { user: true } },
         rider: { include: { user: true } },
+        address: true,
+        items: { include: { menuItem: true } },
       },
     });
 
@@ -254,6 +256,8 @@ export class OrdersService {
         customer: { include: { user: true } },
         merchant: { include: { user: true } },
         rider: { include: { user: true } },
+        address: true,
+        items: { include: { menuItem: true } },
       },
     });
 
@@ -263,7 +267,45 @@ export class OrdersService {
   }
 
   async assignRider(id: string, riderId: string) {
-    // ... existing implementation ...
+    const order = await this.prisma.order.findUnique({
+      where: { id },
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    const rider = await this.prisma.rider.findUnique({
+      where: { id: riderId },
+      include: { user: true }
+    });
+
+    if (!rider) {
+      throw new NotFoundException('Rider not found');
+    }
+
+    const updatedOrder = await this.prisma.order.update({
+      where: { id },
+      data: {
+        riderId: riderId,
+        // Optionally update status if needed, e.g. to READY_FOR_PICKUP or similar if not already
+      },
+      include: {
+        customer: { include: { user: true } },
+        merchant: { include: { user: true } },
+        rider: { include: { user: true } },
+        address: true,
+        items: { include: { menuItem: true } },
+      },
+    });
+
+    // Notify rider via Socket
+    this.socketGateway.emitOrderUpdated(updatedOrder);
+    
+    // Specifically notify the assigned rider
+    this.socketGateway.emitToUser(rider.userId, 'order:assigned', updatedOrder);
+
+    return updatedOrder;
   }
 
   // Rider claims an order (self-assignment)
@@ -307,6 +349,8 @@ export class OrdersService {
           customer: { include: { user: true } },
           merchant: { include: { user: true } },
           rider: { include: { user: true } },
+          address: true,
+          items: { include: { menuItem: true } },
         },
       });
 

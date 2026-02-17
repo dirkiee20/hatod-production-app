@@ -8,7 +8,7 @@ import Mapbox from '@rnmapbox/maps';
 import 'react-native-reanimated';
 
 // Initialize Mapbox access token early in app lifecycle
-Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN || '');
+Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN || '');
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();

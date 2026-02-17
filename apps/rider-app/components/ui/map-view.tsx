@@ -3,13 +3,17 @@ import { StyleSheet, View, ViewProps } from 'react-native';
 import Mapbox from '@rnmapbox/maps';
 
 // Set the access token
-Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN || '');
+const token = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
+console.log('[RiderApp MapView] Token from env:', token ? `${token.substring(0, 10)}...` : 'undefined');
+Mapbox.setAccessToken(token || '');
 
 interface MapViewProps extends ViewProps {
   showUserLocation?: boolean;
 }
 
 export function MapView({ style, showUserLocation = true, ...props }: MapViewProps) {
+  console.log('[RiderApp MapView] Rendering MapView component');
+  
   return (
     <View style={[styles.container, style]} {...props}>
       <Mapbox.MapView style={styles.map}>
