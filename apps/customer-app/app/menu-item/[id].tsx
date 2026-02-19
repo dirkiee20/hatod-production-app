@@ -8,8 +8,7 @@ import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { getMenuItemById } from '@/api/services';
 import { resolveImageUrl } from '@/api/client';
-import { MenuItem } from '@/api/types';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCart } from '@/context/CartContext';
 
@@ -63,7 +62,10 @@ export default function ItemDetailScreen() {
     });
   };
 
-  const calculateTotal = () => {
+  // ── Reactive total ──────────────────────────────────────────────────────────
+  // useMemo recomputes the moment radioSelections, checkboxSelections, quantity,
+  // or item changes — so the button price always reflects the current selections.
+  const total = useMemo(() => {
     const groups = normaliseGroups(Array.isArray(item?.options) ? item.options : []);
     let extra = 0;
     groups.forEach((g, gi) => {
@@ -77,7 +79,7 @@ export default function ItemDetailScreen() {
       }
     });
     return Math.round(((item?.price ?? 0) + extra) * quantity * 100) / 100;
-  };
+  }, [radioSelections, checkboxSelections, quantity, item]);
 
   const handleAddToCart = () => {
     if (!item) return;
@@ -105,7 +107,7 @@ export default function ItemDetailScreen() {
       quantity,
       image: item.image,
       options: selectedOptions,
-      totalPrice: calculateTotal(),
+      totalPrice: total,
     });
     router.back();
   };
@@ -129,7 +131,6 @@ export default function ItemDetailScreen() {
   }
 
   const groups = normaliseGroups(Array.isArray(item.options) ? item.options : []);
-  const total = calculateTotal();
 
   return (
     <ThemedView style={styles.container}>
