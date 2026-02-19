@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { getAuthToken, login as apiLogin, logout as apiLogout } from '../api/client';
+import { getAuthToken, login as apiLogin, logout as apiLogout, registerLogoutCallback } from '../api/client';
 import { useRouter, useSegments } from 'expo-router';
 
 interface AuthContextType {
@@ -33,6 +33,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setIsLoading(false);
     };
     checkAuth();
+  }, []);
+
+  useEffect(() => {
+    // Register callback to handle 401s from client.ts
+    registerLogoutCallback(() => {
+      setToken(null);
+    });
   }, []);
 
   const login = async (email: string, pass: string) => {

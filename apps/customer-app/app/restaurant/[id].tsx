@@ -11,6 +11,22 @@ import { Merchant, MenuItem } from '@/api/types';
 import { isMerchantOpen } from '@/utils/time';
 import { useCart } from '@/context/CartContext';
 
+const PLACEHOLDER_BANNER = 'https://placehold.co/800x400/f0f0f0/aaaaaa?text=No+Image';
+const PLACEHOLDER_LOGO = 'https://placehold.co/150x150/f0f0f0/aaaaaa?text=?';
+const PLACEHOLDER_ITEM = 'https://placehold.co/150x150/f0f0f0/aaaaaa?text=Food';
+
+function FallbackImage({ uri, style, placeholder }: { uri?: string; style: any; placeholder: string }) {
+  const [src, setSrc] = useState<string>(uri || placeholder);
+  useEffect(() => { setSrc(uri || placeholder); }, [uri]);
+  return (
+    <Image
+      source={{ uri: src }}
+      style={style}
+      onError={() => setSrc(placeholder)}
+    />
+  );
+}
+
 export default function RestaurantDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
@@ -166,9 +182,10 @@ export default function RestaurantDetailScreen() {
         scrollEventThrottle={16}
       >
         <ThemedView style={styles.bannerContainer}>
-          <Image 
-            source={{ uri: resolveImageUrl(merchant.coverImage) || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800' }} 
-            style={styles.bannerImage} 
+        <FallbackImage
+            uri={resolveImageUrl(merchant.coverImage)}
+            style={styles.bannerImage}
+            placeholder={PLACEHOLDER_BANNER}
           />
           {!isStoreOpen && (
             <ThemedView style={styles.closedBanner}>
@@ -178,9 +195,10 @@ export default function RestaurantDetailScreen() {
           )}
           <ThemedView style={styles.identityRow}>
             <ThemedView style={styles.logoBox}>
-              <Image 
-                source={{ uri: resolveImageUrl(merchant.logo) || 'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=100' }} 
-                style={styles.restaurantLogo} 
+              <FallbackImage
+                uri={resolveImageUrl(merchant.logo)}
+                style={styles.restaurantLogo}
+                placeholder={PLACEHOLDER_LOGO}
               />
             </ThemedView>
             <ThemedText style={styles.restaurantNameBeside}>{merchant.name}</ThemedText>
@@ -263,9 +281,10 @@ export default function RestaurantDetailScreen() {
                       )}
                     </ThemedView>
                     <ThemedView style={styles.itemImageWrapper}>
-                      <Image 
-                        source={{ uri: resolveImageUrl(item.image || item.imageUrl) || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400' }} 
-                        style={styles.itemImg} 
+                      <FallbackImage
+                        uri={resolveImageUrl(item.image || item.imageUrl)}
+                        style={styles.itemImg}
+                        placeholder={PLACEHOLDER_ITEM}
                       />
                       {item.isAvailable && isStoreOpen && (
                         <TouchableOpacity style={styles.addBtn} onPress={() => handleQuickAdd(item)}>

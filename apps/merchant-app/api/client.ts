@@ -42,40 +42,18 @@ console.log('Merchant App API URL:', API_URL);
 
 export const resolveImageUrl = (url: string | null | undefined): string | undefined => {
   if (!url) return undefined;
-  let finalUrl = url;
 
-  // Handle relative paths
-  if (!finalUrl.startsWith('http')) {
-      const baseUrl = API_BASE.replace(/\/api\/?$/, '');
-      if (finalUrl.startsWith('/')) {
-          finalUrl = `${baseUrl}${finalUrl}`;
-      } else {
-          finalUrl = `${baseUrl}/${finalUrl}`;
-      }
+  // Cloudinary and other absolute https:// URLs — return as-is
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
   }
 
-  // Fix: Backend serves static files at /uploads, but API might be at /api
-  // If URL was constructed with API_BASE containing /api, strip it for uploads
-  if (finalUrl.includes('/api/uploads/')) {
-    finalUrl = finalUrl.replace(/\/api\/uploads\//, '/uploads/');
+  // Handle legacy relative paths (e.g. /uploads/filename.jpg stored in old records)
+  const baseUrl = API_BASE.replace(/\/api\/?$/, '');
+  if (url.startsWith('/')) {
+    return `${baseUrl}${url}`;
   }
-
-  // Fix: Android Emulator cannot access 'localhost'
-  // Also fix old IP addresses stored in DB
-  if (Platform.OS === 'android') {
-      // Extract host from API_BASE
-      const match = API_URL.match(/http:\/\/([^:]+):/);
-      const currentHost = match ? match[1] : '10.0.2.2';
-      
-      finalUrl = finalUrl
-        .replace('localhost', currentHost)
-        .replace('127.0.0.1', currentHost)
-        // Regex to catch old 10.x.x.x IPs if they differ from currentHost
-       .replace(/http:\/\/10\.[0-9]+\.[0-9]+\.[0-9]+:/, `http://${currentHost}:`);
-  }
-  
-  // console.log(`[Image] Original: ${url} -> Final: ${finalUrl}`);
-  return finalUrl;
+  return `${baseUrl}/${url}`;
 };
 
 import AsyncStorage from '@react-native-async-storage/async-storage';

@@ -133,8 +133,8 @@ export default function AddMenuItemScreen() {
 
                 if (uploadResponse.ok) {
                     const uploadResult = await uploadResponse.json();
-                    const baseUrl = API_BASE.replace(/\/api\/?$/, '');
-                    imageUrl = `${baseUrl}${uploadResult.url}`; 
+                    // Cloudinary returns a full https:// URL, use it directly
+                    imageUrl = uploadResult.url;
                 } else {
                     console.error('Upload failed:', await uploadResponse.text());
                 }

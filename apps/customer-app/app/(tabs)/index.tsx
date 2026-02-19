@@ -1,12 +1,28 @@
 import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Image, useWindowDimensions, View, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { getMerchants } from '@/api/services';
 import { Merchant } from '@/api/types';
 import { resolveImageUrl } from '@/api/client';
+
+const PLACEHOLDER_BANNER = 'https://placehold.co/400x225/f0f0f0/aaaaaa?text=No+Image';
+const PLACEHOLDER_LOGO = 'https://placehold.co/150x150/f0f0f0/aaaaaa?text=?';
+
+// Wrapper that falls back to placeholder on error
+function MerchantImage({ uri, style, placeholder }: { uri?: string; style: any; placeholder: string }) {
+  const [src, setSrc] = useState<string>(uri || placeholder);
+  useEffect(() => { setSrc(uri || placeholder); }, [uri]);
+  return (
+    <Image
+      source={{ uri: src }}
+      style={style}
+      onError={() => setSrc(placeholder)}
+    />
+  );
+}
 import { isMerchantOpen } from '@/utils/time';
 
 export default function FoodScreen() {
@@ -59,9 +75,10 @@ export default function FoodScreen() {
       onPress={() => router.push(`/restaurant/${merchant.id}`)}
     >
       <ThemedView style={[styles.imageContainer, { height: cardHeight }]}>
-        <Image 
-          source={{ uri: resolveImageUrl(merchant.coverImage) || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400' }} 
-          style={styles.restaurantImage} 
+        <MerchantImage
+          uri={resolveImageUrl(merchant.coverImage)}
+          style={styles.restaurantImage}
+          placeholder={PLACEHOLDER_BANNER}
         />
         <ThemedView style={styles.heartIcon}>
           <IconSymbol size={14} name="heart" color="#000" />
