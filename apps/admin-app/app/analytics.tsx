@@ -134,7 +134,7 @@ export default function AnalyticsScreen() {
       {/* Header */}
       <ThemedView style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <IconSymbol size={20} name={'chevron.left' as any} color="#FFF" />
+          <IconSymbol size={20} name="chevron.left" color="#FFF" />
         </TouchableOpacity>
         <ThemedText style={styles.headerTitle}>Business Analytics</ThemedText>
       </ThemedView>
@@ -211,7 +211,7 @@ export default function AnalyticsScreen() {
               </View>
               <View style={[styles.feesBanner, { flex: 1, backgroundColor: '#E8F5E9', borderColor: '#C8E6C9' }]}>
                 <View style={[styles.feesIcon, { backgroundColor: '#FFF' }]}>
-                  <IconSymbol size={18} name={'chart.bar.fill' as any} color="#2E7D32" />
+                  <IconSymbol size={18} name="chart.bar.fill" color="#2E7D32" />
                 </View>
                 <View style={{ flex: 1 }}>
                   <ThemedText style={styles.feesLabel}>Markup Collected</ThemedText>

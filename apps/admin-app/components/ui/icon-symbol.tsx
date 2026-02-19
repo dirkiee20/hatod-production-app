@@ -16,6 +16,7 @@ const MAPPING = {
   'paperplane.fill': 'send',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
+  'chevron.left': 'chevron-left',
   'dashboard': 'dashboard',
   'orders': 'receipt',
   'users': 'people',
@@ -25,6 +26,7 @@ const MAPPING = {
   'manage': 'manage-accounts',
   'person': 'person',
   'person.fill': 'person',
+  'person.2.fill': 'group',
   'location.fill': 'location-on',
   'trash.fill': 'delete',
   'bell.fill': 'notifications',
@@ -34,6 +36,10 @@ const MAPPING = {
   'questionmark.circle': 'help',
   'typhoon.fill': 'storm',
   'checkmark': 'check',
+  'chart.bar.fill': 'bar-chart',
+  'storefront': 'storefront',
+  'bicycle': 'directions-bike',
+  'bag.fill': 'shopping-bag',
 } as const;
 
 type IconSymbolName = keyof typeof MAPPING;
