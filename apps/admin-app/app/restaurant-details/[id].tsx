@@ -12,9 +12,11 @@ export default function RestaurantDetailsScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [priceAdjustment, setPriceAdjustment] = useState('0');
+  const [priceAdjustment, setPriceAdjustment] = useState('');
   const [itemAdjustments, setItemAdjustments] = useState<Record<string, string>>({});
   const [isUpdating, setIsUpdating] = useState(false);
+  const [appliedGlobal, setAppliedGlobal] = useState(false);
+  const [appliedItems, setAppliedItems] = useState<Record<string, boolean>>({});
 
   // State for fetched data
   const [restaurant, setRestaurant] = useState<any>(null);
@@ -122,30 +124,114 @@ export default function RestaurantDetailsScreen() {
       );
   }
 
+  /**
+   * Scale a single item's price and all its variant option prices by a percentage.
+   * ALWAYS applies the percentage to the ORIGINAL (pre-admin-adjustment) price so that
+   * repeated adjustments don't compound — e.g. two +10% calls still yield exactly +10%.
+   * Choice prices are also scaled from their original values (stored in the item-level originalPrice context).
+   * Returns true if the PATCH succeeded.
+   */
+  const adjustItemPrice = async (item: any, percentage: number) => {
+    const { authenticatedFetch } = await import('../../api/client');
+    const multiplier = 1 + percentage / 100;
+
+    // Use the merchant's original price as the base (never the already-adjusted price)
+    const basePrice: number = item.originalPrice ?? item.price;
+    const newPrice = Math.round(basePrice * multiplier * 100) / 100;
+
+    // Scale every variant option choice price.
+    // We don't store originalPrice inside choices (avoids polluting options JSON).
+    // Instead we rely on item.originalPrice being set — if present, choices have already
+    // been adjusted before, so we need to reverse-engineer the original choice price
+    // by dividing by the ratio of (current item price / original item price).
+    const priceRatio = item.originalPrice != null && item.price !== 0
+      ? item.price / item.originalPrice  // how much we previously scaled up/down
+      : 1;
+
+    const newOptions = (item.options ?? []).map((group: any) => {
+      const choices = group.options ?? group.items ?? [];
+      const scaledChoices = choices.map((choice: any) => {
+        const currentChoicePrice = parseFloat(String(choice.price ?? 0));
+        // Un-apply the previous ratio to get the original choice price, then apply new multiplier
+        const baseChoicePrice = priceRatio !== 1
+          ? Math.round((currentChoicePrice / priceRatio) * 100) / 100
+          : currentChoicePrice;
+        const newChoicePrice = Math.round(baseChoicePrice * multiplier * 100) / 100;
+        return { ...choice, price: newChoicePrice };
+      });
+
+      return {
+        ...group,
+        // Write back under whichever key the group uses
+        ...(group.options !== undefined ? { options: scaledChoices } : {}),
+        ...(group.items !== undefined ? { items: scaledChoices } : {}),
+      };
+    });
+
+    const res = await authenticatedFetch(`/menu/items/${item.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        price: newPrice,
+        options: newOptions,
+        // Tell the backend the baseline — stored as originalPrice only on first admin adjustment
+        originalPrice: item.originalPrice ?? item.price,
+      }),
+    });
+    return res.ok;
+  };
+
   const applyPriceAdjustment = async () => {
     const percentage = parseFloat(priceAdjustment);
     if (isNaN(percentage) || percentage === 0) {
-        alert('Please enter a valid percentage');
+        alert('Please enter a valid non-zero percentage');
         return;
     }
 
+    setIsUpdating(true);
     try {
-        const { authenticatedFetch } = await import('../../api/client');
-        const res = await authenticatedFetch(`/merchants/${id}/adjust-prices`, {
-            method: 'POST',
-            body: JSON.stringify({ percentage })
-        });
-
-        if (res.ok) {
-            alert('Prices updated successfully');
-            setPriceAdjustment('0');
-            fetchDetails(); // Refresh
+        const results = await Promise.all(
+            restaurant.menu.map((item: any) => adjustItemPrice(item, percentage))
+        );
+        const allOk = results.every(Boolean);
+        setPriceAdjustment('');
+        if (allOk) {
+            setAppliedGlobal(true);
+            setTimeout(() => setAppliedGlobal(false), 2500);
+            fetchDetails(); // originalPrice is now persisted in DB — no snapshot needed
         } else {
-            alert('Failed to update prices');
+            alert('Some items failed to update. Please try again.');
         }
     } catch (e) {
         console.error(e);
-        alert('An error occurred');
+        alert('An error occurred while updating prices');
+    } finally {
+        setIsUpdating(false);
+    }
+  };
+
+  const applyItemAdjustment = async (itemId: string) => {
+    const pct = parseFloat(itemAdjustments[itemId] || '');
+    if (isNaN(pct) || pct === 0) {
+        alert('Please enter a valid non-zero percentage');
+        return;
+    }
+
+    const item = restaurant.menu.find((m: any) => m.id === itemId);
+    if (!item) return;
+
+    try {
+        const ok = await adjustItemPrice(item, pct);
+        if (ok) {
+            setAppliedItems(prev => ({ ...prev, [itemId]: true }));
+            setTimeout(() => setAppliedItems(prev => ({ ...prev, [itemId]: false })), 2500);
+            setItemAdjustments(prev => ({ ...prev, [itemId]: '' }));
+            fetchDetails();
+        } else {
+            alert('Failed to update item price');
+        }
+    } catch (e) {
+        console.error(e);
+        alert('Error updating item price');
     }
   };
 
@@ -154,59 +240,65 @@ export default function RestaurantDetailsScreen() {
       {screenOptions}
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Banner Image */}
+        {/* Banner */}
         <Image source={{ uri: resolveImageUrl(restaurant.banner) }} style={styles.bannerImage} />
-        
-        {/* Logo overlapping banner */}
-        <View style={styles.logoContainer}>
-          <Image source={{ uri: resolveImageUrl(restaurant.logo) }} style={styles.logoImage} />
-        </View>
 
-        <ThemedView style={styles.content}>
-          {/* Restaurant Info */}
-          <ThemedView style={styles.infoCard}>
-            <View style={styles.headerRow}>
-              <View style={{ flex: 1 }}>
-                <ThemedText style={styles.restaurantName}>{restaurant.name}</ThemedText>
-                <ThemedText style={styles.restaurantCategory}>{restaurant.category}</ThemedText>
-              </View>
-              <Switch 
-                value={restaurant.status === 'Active'} 
+        {/* Profile row — logo uses negative marginTop to straddle banner bottom */}
+        <View style={styles.profileRow}>
+          <Image source={{ uri: resolveImageUrl(restaurant.logo) }} style={styles.logoImage} />
+          <View style={styles.nameBlock}>
+            <View style={styles.nameSwitchRow}>
+              <ThemedText style={styles.restaurantName} numberOfLines={2}>{restaurant.name}</ThemedText>
+              <Switch
+                value={restaurant.status === 'Active'}
                 trackColor={{ false: '#DDD', true: '#F48FB1' }}
                 thumbColor={restaurant.status === 'Active' ? '#C2185B' : '#FFF'}
               />
             </View>
+            {restaurant.category ? (
+              <ThemedText style={styles.restaurantCategory}>{restaurant.category}</ThemedText>
+            ) : null}
+          </View>
+        </View>
 
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <IconSymbol size={16} name="dashboard" color="#F57C00" />
-                <ThemedText style={styles.statText}>{restaurant.rating} ★</ThemedText>
-              </View>
-              <View style={styles.statItem}>
-                <IconSymbol size={16} name="orders" color="#1976D2" />
-                <ThemedText style={styles.statText}>{restaurant.totalOrders} orders</ThemedText>
-              </View>
-              <View style={styles.statItem}>
-                <IconSymbol size={16} name="fees" color="#388E3C" />
-                <ThemedText style={styles.statText}>₱{restaurant.revenue.toLocaleString()}</ThemedText>
-              </View>
+        <ThemedView style={styles.content}>
+          {/* Stats */}
+          <View style={styles.statsRow}>
+            <View style={styles.statChip}>
+              <IconSymbol size={14} name="dashboard" color="#F57C00" />
+              <ThemedText style={styles.statText}>{restaurant.rating ?? 'N/A'} ★</ThemedText>
             </View>
+            <View style={styles.statChip}>
+              <IconSymbol size={14} name="orders" color="#1976D2" />
+              <ThemedText style={styles.statText}>{restaurant.totalOrders ?? 0} orders</ThemedText>
+            </View>
+            <View style={styles.statChip}>
+              <IconSymbol size={14} name="fees" color="#388E3C" />
+              <ThemedText style={styles.statText}>₱{(restaurant.revenue ?? 0).toLocaleString()}</ThemedText>
+            </View>
+          </View>
 
-            <View style={styles.divider} />
-
-            <View style={styles.detailRow}>
-              <IconSymbol size={16} name="map" color="#888" />
-              <ThemedText style={styles.detailText}>{restaurant.address}</ThemedText>
-            </View>
-            <View style={styles.detailRow}>
-              <IconSymbol size={16} name="dashboard" color="#888" />
-              <ThemedText style={styles.detailText}>{restaurant.phone}</ThemedText>
-            </View>
-            <View style={styles.detailRow}>
-              <IconSymbol size={16} name="dashboard" color="#888" />
-              <ThemedText style={styles.detailText}>{restaurant.email}</ThemedText>
-            </View>
-          </ThemedView>
+          {/* Contact details */}
+          <View style={styles.detailsBlock}>
+            {restaurant.address ? (
+              <View style={styles.detailRow}>
+                <IconSymbol size={15} name="map" color="#C2185B" />
+                <ThemedText style={styles.detailText}>{restaurant.address}</ThemedText>
+              </View>
+            ) : null}
+            {restaurant.phone ? (
+              <View style={styles.detailRow}>
+                <IconSymbol size={15} name="person.fill" color="#C2185B" />
+                <ThemedText style={styles.detailText}>{restaurant.phone}</ThemedText>
+              </View>
+            ) : null}
+            {restaurant.email ? (
+              <View style={styles.detailRow}>
+                <IconSymbol size={15} name="message.fill" color="#C2185B" />
+                <ThemedText style={styles.detailText}>{restaurant.email}</ThemedText>
+              </View>
+            ) : null}
+          </View>
 
           {/* Price Adjustment Section */}
           <ThemedView style={styles.priceAdjustmentCard}>
@@ -228,8 +320,13 @@ export default function RestaurantDetailsScreen() {
                 <ThemedText style={styles.percentageSymbol}>%</ThemedText>
               </View>
               
-              <TouchableOpacity style={styles.applyButton} onPress={applyPriceAdjustment}>
-                <ThemedText style={styles.applyButtonText}>Apply to All</ThemedText>
+              <TouchableOpacity
+                style={[styles.applyButton, appliedGlobal && styles.appliedButton]}
+                onPress={applyPriceAdjustment}
+              >
+                <ThemedText style={[styles.applyButtonText, appliedGlobal && styles.appliedButtonText]}>
+                  {appliedGlobal ? 'Applied ✓' : 'Apply to All'}
+                </ThemedText>
               </TouchableOpacity>
             </View>
 
@@ -264,10 +361,11 @@ export default function RestaurantDetailsScreen() {
                     <ThemedText style={styles.menuItemName}>{item.name}</ThemedText>
                     <ThemedText style={styles.menuItemCategory}>{item.category}</ThemedText>
                     <View style={styles.priceRow}>
-                      {item.basePrice !== item.currentPrice && (
-                        <ThemedText style={styles.basePriceStrike}>₱{item.basePrice}</ThemedText>
+                      {/* originalPrice is persisted in DB — shows permanently until merchant resets */}
+                      {item.originalPrice != null && item.originalPrice !== item.price && (
+                        <ThemedText style={styles.basePriceStrike}>₱{item.originalPrice}</ThemedText>
                       )}
-                      <ThemedText style={styles.currentPrice}>₱{item.currentPrice}</ThemedText>
+                      <ThemedText style={styles.currentPrice}>₱{item.price ?? item.currentPrice}</ThemedText>
                     </View>
                   </View>
                   
@@ -286,7 +384,7 @@ export default function RestaurantDetailsScreen() {
                   <View style={styles.itemInputContainer}>
                     <TextInput 
                       style={styles.itemPercentageInput}
-                      value={itemAdjustments[item.id] || '0'}
+                      value={itemAdjustments[item.id] || ''}
                       onChangeText={(text) => setItemAdjustments({...itemAdjustments, [item.id]: text})}
                       keyboardType="numeric"
                       placeholder="0"
@@ -295,10 +393,12 @@ export default function RestaurantDetailsScreen() {
                     <ThemedText style={styles.itemPercentageSymbol}>%</ThemedText>
                   </View>
                   <TouchableOpacity 
-                    style={styles.itemApplyBtn}
-                    onPress={() => console.log(`Apply ${itemAdjustments[item.id] || 0}% to ${item.name}`)}
+                    style={[styles.itemApplyBtn, appliedItems[item.id] && styles.itemAppliedBtn]}
+                    onPress={() => applyItemAdjustment(item.id)}
                   >
-                    <ThemedText style={styles.itemApplyText}>Apply</ThemedText>
+                    <ThemedText style={[styles.itemApplyText, appliedItems[item.id] && styles.itemAppliedText]}>
+                      {appliedItems[item.id] ? 'Applied ✓' : 'Apply'}
+                    </ThemedText>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -327,6 +427,9 @@ export default function RestaurantDetailsScreen() {
   );
 }
 
+const LOGO_SIZE = 80;
+const LOGO_HALF = LOGO_SIZE / 2; // 40 — how much sticks up into the banner
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -334,33 +437,99 @@ const styles = StyleSheet.create({
   },
   bannerImage: {
     width: '100%',
-    height: 200,
+    height: 180,
   },
-  logoContainer: {
-    position: 'absolute',
-    top: 140,
-    left: 20,
-    zIndex: 10,
+  // Flex row: logo (pulled up) + name block side-by-side
+  profileRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    backgroundColor: '#FFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+    gap: 12,
   },
+  // Negative marginTop pulls the logo up by half its height, straddling the banner edge
   logoImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 4,
+    marginTop: -LOGO_HALF,
+    width: LOGO_SIZE,
+    height: LOGO_SIZE,
+    borderRadius: LOGO_SIZE / 2,
+    borderWidth: 3,
     borderColor: '#FFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 6,
+    flexShrink: 0,
+  },
+  nameBlock: {
+    flex: 1,
+    paddingTop: 10,
+  },
+  nameSwitchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  restaurantName: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '900',
+    color: '#222',
+    lineHeight: 21,
+  },
+  restaurantCategory: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#C2185B',
+    marginTop: 3,
   },
   content: {
-    paddingTop: 70,
     padding: 16,
+    paddingTop: 14,
     backgroundColor: 'transparent',
   },
-  infoCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 16,
-    padding: 16,
+  // Stats chips row
+  statsRow: {
+    flexDirection: 'row',
+    gap: 8,
     marginBottom: 12,
-    borderWidth: 1,
+    flexWrap: 'wrap',
   },
+  statChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F5F5F5',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  statText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#444',
+  },
+  // Contact details block
+  detailsBlock: {
+    marginBottom: 16,
+    gap: 8,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  detailText: {
+    fontSize: 13,
+    color: '#555',
+    flex: 1,
+  },
+  // Kept for menu items
   pendingItemContainer: {
     borderColor: '#FF9800',
     borderWidth: 1,
@@ -381,56 +550,10 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
   },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-    backgroundColor: 'transparent',
-  },
-  restaurantName: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#333',
-  },
-  restaurantCategory: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#C2185B',
-    marginTop: 4,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 12,
-    backgroundColor: 'transparent',
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  statText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#666',
-  },
   divider: {
     height: 1,
     backgroundColor: '#F0F0F0',
     marginVertical: 12,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-    backgroundColor: 'transparent',
-  },
-  detailText: {
-    fontSize: 13,
-    color: '#666',
-    marginLeft: 10,
-    flex: 1,
   },
   priceAdjustmentCard: {
     backgroundColor: '#FFF9FB',
@@ -486,10 +609,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  appliedButton: {
+    backgroundColor: '#E8F5E9',
+  },
   applyButtonText: {
     color: '#FFF',
     fontSize: 14,
     fontWeight: '800',
+  },
+  appliedButtonText: {
+    color: '#388E3C',
   },
   adjustmentNote: {
     fontSize: 11,
@@ -549,9 +678,10 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   basePriceStrike: {
-    fontSize: 12,
-    color: '#999',
+    fontSize: 13,
+    color: '#AAAAAA',
     textDecorationLine: 'line-through',
+    fontWeight: '600',
   },
   currentPrice: {
     fontSize: 14,
@@ -614,10 +744,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  itemAppliedBtn: {
+    backgroundColor: '#E8F5E9',
+  },
   itemApplyText: {
     color: '#FFF',
     fontSize: 12,
     fontWeight: '800',
+  },
+  itemAppliedText: {
+    color: '#388E3C',
   },
   footer: {
     position: 'absolute',

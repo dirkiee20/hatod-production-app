@@ -22,8 +22,18 @@ const MAPPING = {
   'restaurants': 'restaurant',
   'fees': 'attach-money',
   'map': 'map',
+  'manage': 'manage-accounts',
+  'person': 'person',
+  'person.fill': 'person',
   'location.fill': 'location-on',
   'trash.fill': 'delete',
+  'bell.fill': 'notifications',
+  'lock.fill': 'lock',
+  'message.fill': 'chat',
+  'doc.text': 'description',
+  'questionmark.circle': 'help',
+  'typhoon.fill': 'storm',
+  'checkmark': 'check',
 } as const;
 
 type IconSymbolName = keyof typeof MAPPING;

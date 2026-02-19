@@ -5,341 +5,285 @@ import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import React, { useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
 import { authenticatedFetch, resolveImageUrl } from '../../api/client';
-import { approveMenuItem } from '../../api/services';
+import { approveMenuItem, disapproveMenuItem } from '../../api/services';
 
 export default function MenuItemDetailsScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  
-  // State for editable fields
+
   const [isEditing, setIsEditing] = useState(false);
   const [price, setPrice] = useState('0');
   const [available, setAvailable] = useState(true);
-
   const [item, setItem] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [variants, setVariants] = useState<any[]>([]);
+  const [options, setOptions] = useState<any[]>([]);
 
   React.useEffect(() => {
     if (id) fetchItem();
   }, [id]);
 
+  /**
+   * Fallback: parse options embedded in description string.
+   * Format: [Title (Required/Optional): ChoiceName (+$price), ...]
+   */
+  const parseVariantsFromDescription = (fullDesc: string): any[] => {
+    const variantRegex = /\[(.*?)\s\((.*?)\):\s(.*?)\]/g;
+    const parsed: any[] = [];
+    let match;
+    while ((match = variantRegex.exec(fullDesc)) !== null) {
+      const title = match[1];
+      const reqText = match[2];
+      const itemsStr = match[3];
+      const isRequired = reqText.toLowerCase() === 'required';
+      const items = itemsStr.split(', ').map((s: string) => {
+        const m = s.match(/(.*?)\s\(\+\$(\d+(?:\.\d+)?)\)/);
+        if (m) return { name: m[1], label: m[1], price: parseFloat(m[2]) };
+        return { name: s, label: s, price: 0 };
+      });
+      parsed.push({
+        title, name: title,
+        required: isRequired, isRequired,
+        type: isRequired ? 'radio' : 'checkbox',
+        items, options: items,
+      });
+    }
+    return parsed;
+  };
+
   const fetchItem = async () => {
-      try {
-          // Use admin endpoint to see unapproved items
-          const res = await authenticatedFetch(`/menu/admin/items/${id}`);
-          if (res.ok) {
-              const data = await res.json();
-              const { description, options } = parseVariants(data.description || '');
-              setItem({
-                  ...data,
-                  description, // Use parsed description (without variant strings)
-                  options: data.options || options, // Prefer structured options
-                  stats: {
-                      totalSold: data.totalOrders || 0,
-                      rating: 0,
-                      revenue: (data.totalOrders || 0) * data.price,
-                  }
-              });
-              // setOriginalPrice(data.price.toString()); // This variable is not defined in the original code
-              setPrice(data.price.toString());
-              
-              const opts = data.options || options || [];
-              // setOriginalOptions(JSON.parse(JSON.stringify(opts))); // This variable is not defined in the original code
-              
-              // Only set form state if not already editing?
-              // Actually we should reset form state to fetched item
-              // setName(data.name); // This variable is not defined in the original code
-              // setDescription(description); // This variable is not defined in the original code
-              // setPrice is already set
-              setVariants(JSON.parse(JSON.stringify(opts))); // Changed setOptions to setVariants to match existing state
-              setAvailable(data.isAvailable); // Changed setIsAvailable to setAvailable to match existing state
-              // setImage(data.image); // This variable is not defined in the original code
-          }
-      } catch (error) {
-          console.error('Error fetching item:', error);
-      } finally {
-          setLoading(false);
+    try {
+      const res = await authenticatedFetch(`/menu/admin/items/${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        // Prefer structured JSON options from DB; fall back to description parsing
+        const resolvedOptions: any[] =
+          Array.isArray(data.options) && data.options.length > 0
+            ? data.options
+            : parseVariantsFromDescription(data.description || '');
+        setItem({ ...data, description: data.description || '', available: data.isAvailable });
+        setPrice(data.price.toString());
+        setAvailable(data.isAvailable);
+        setOptions(resolvedOptions);
       }
-  };
-
-  const parseVariants = (fullDesc: string) => {
-      const variantRegex = /\[(.*?)\s\((.*?)\):\s(.*?)\]/g;
-      const options = [];
-      let cleanDescription = fullDesc.replace(variantRegex, '').trim();
-
-      let match;
-      while ((match = variantRegex.exec(fullDesc)) !== null) {
-          const title = match[1];
-          const reqText = match[2];
-          const itemsStr = match[3];
-
-          const items = itemsStr.split(', ').map(s => {
-              const itemMatch = s.match(/(.*?)\s\(\+\$(\d+(?:\.\d+)?)\)/);
-              if (itemMatch) {
-                  return { name: itemMatch[1], price: itemMatch[2] }; // Keep as string for editing
-              }
-              return { name: s, price: '0' };
-          });
-
-          options.push({ title, items });
-      }
-
-      return { description: cleanDescription, options };
-  };
-
-  const constructDescription = (desc: string, vars: any[]) => {
-      let finalDesc = desc;
-      if (vars.length > 0) {
-          const variantText = vars.map(g => {
-              const options = g.items.map((o: any) => `${o.name} (+$${o.price || 0})`).join(', ');
-              // Assuming 'Optional' as default/hardcoded for now as logic to extract 'Required' was loose in parsing
-              // Actually parseVariants captured reqText but didn't save it in simple 'options' structure. 
-              // To match request "make edit work", I should persist 'Required'/'Optional' status too.
-              // I'll assume 'Optional' effectively unless I update parseVariants to store it.
-              // Let's check parseVariants above: `options.push({ title, items })` - lost reqText!
-              // I should fix parseVariants to store reqText or isRequired status.
-              // I'll assume Optional for this iteration or try to preserve it if I can fix parseVariants.
-              // I'll stick to 'Optional' for simplicity unless I fix parseVariants now.
-              return `[${g.title} (Optional): ${options}]`;
-          }).join('\n');
-          finalDesc += '\n\n' + variantText;
-      }
-      return finalDesc;
+    } catch (error) {
+      console.error('Error fetching item:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSave = async () => {
-       const finalDescription = constructDescription(item.description, variants);
-       const body = {
-           price: parseFloat(price),
-           isAvailable: available,
-           description: finalDescription
-           // We are not updating image or name here to keep it simple as per request 'variants' focus, 
-           // but technically we could if we added inputs for them. 
-       };
-
-       try {
-           const res = await authenticatedFetch(`/menu/items/${id}`, {
-               method: 'PATCH',
-               body: JSON.stringify(body)
-           });
-
-           if (res.ok) {
-               alert('Item updated successfully');
-               setIsEditing(false);
-               fetchItem(); // Refresh
-           } else {
-               console.error(await res.text());
-               alert('Failed to update item');
-           }
-       } catch (e) {
-           console.error(e);
-           alert('Error updating item');
-       }
+    try {
+      const res = await authenticatedFetch(`/menu/items/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ price: parseFloat(price), isAvailable: available, options }),
+      });
+      if (res.ok) {
+        alert('Item updated successfully');
+        setIsEditing(false);
+        fetchItem();
+      } else {
+        console.error(await res.text());
+        alert('Failed to update item');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error updating item');
+    }
   };
-
-  // Render Stack.Screen config immediately to prevent default filename title
-  const screenOptions = (
-      <Stack.Screen options={{ 
-        headerShown: true, 
-        title: 'Item Details',
-        headerTitleStyle: { fontWeight: '900', fontSize: 16 },
-        headerLeft: () => (
-          <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 10 }}>
-            <IconSymbol size={20} name="chevron.right" color="#000" style={{ transform: [{ rotate: '180deg' }] }} />
-          </TouchableOpacity>
-        ),
-        headerRight: () => (
-          <TouchableOpacity onPress={() => setIsEditing(!isEditing)} style={{ marginRight: 10 }}>
-            <ThemedText style={styles.editBtnText}>{isEditing ? 'Cancel' : 'Edit'}</ThemedText>
-          </TouchableOpacity>
-        ),
-      }} />
-  );
 
   const handleApprove = async () => {
-      try {
-          const success = await approveMenuItem(id as string);
-          if (success) {
-              alert('Item approved!');
-              fetchItem();
-          } else {
-              alert('Failed to approve');
-          }
-      } catch (e) {
-          console.error(e);
-      }
+    try {
+      const success = await approveMenuItem(id as string);
+      if (success) { alert('Item approved!'); fetchItem(); }
+      else alert('Failed to approve');
+    } catch (e) { console.error(e); }
   };
 
-  if (loading) {
-      return (
-          <ThemedView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-              {screenOptions}
-              <ThemedText>Loading...</ThemedText>
-          </ThemedView>
-      );
-  }
+  const handleDisapprove = async () => {
+    try {
+      const success = await disapproveMenuItem(id as string);
+      if (success) { alert('Item disapproved.'); fetchItem(); }
+      else alert('Failed to disapprove');
+    } catch (e) { console.error(e); }
+  };
 
-  if (!item) {
-      return (
-          <ThemedView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-              {screenOptions}
-              <ThemedText>Item not found</ThemedText>
-          </ThemedView>
-      );
-  }
+  const screenOptions = (
+    <Stack.Screen options={{
+      headerShown: true,
+      title: 'Item Details',
+      headerTitleStyle: { fontWeight: '900', fontSize: 16 },
+      headerLeft: () => (
+        <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 10 }}>
+          <IconSymbol size={20} name="chevron.right" color="#000" style={{ transform: [{ rotate: '180deg' }] }} />
+        </TouchableOpacity>
+      ),
+      headerRight: () => (
+        <TouchableOpacity onPress={() => setIsEditing(!isEditing)} style={{ marginRight: 10 }}>
+          <ThemedText style={styles.editBtnText}>{isEditing ? 'Cancel' : 'Edit'}</ThemedText>
+        </TouchableOpacity>
+      ),
+    }} />
+  );
+
+  if (loading) return (
+    <ThemedView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+      {screenOptions}
+      <ThemedText>Loading...</ThemedText>
+    </ThemedView>
+  );
+
+  if (!item) return (
+    <ThemedView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+      {screenOptions}
+      <ThemedText>Item not found</ThemedText>
+    </ThemedView>
+  );
 
   return (
     <ThemedView style={styles.container}>
       {screenOptions}
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
         <Image source={{ uri: resolveImageUrl(item.image) }} style={styles.heroImage} />
-        
+
         <ThemedView style={styles.content}>
-          
-          {/* Header Info */}
-          <View style={styles.headerSection}>
+          {/* Name + Price */}
+          <ThemedView style={styles.headerRow}>
             <ThemedText style={styles.itemName}>{item.name}</ThemedText>
-            <ThemedText style={styles.restaurantName}>by {item.merchant?.name || 'Restaurant'}</ThemedText>
-            
-            <View style={styles.badgeRow}>
-              <View style={styles.categoryBadge}>
-                <ThemedText style={styles.categoryText}>{item.category?.name || 'Uncategorized'}</ThemedText>
-              </View>
-              <View style={[styles.statusBadge, { backgroundColor: available ? '#E8F5E9' : '#FFEBEE' }]}>
-                <ThemedText style={[styles.statusText, { color: available ? '#388E3C' : '#D32F2F' }]}>
-                  {available ? 'Available' : 'Unavailable'}
-                </ThemedText>
-              </View>
-            </View>
-          </View>
+            {isEditing ? (
+              <TextInput
+                style={styles.priceInput}
+                value={price}
+                onChangeText={setPrice}
+                keyboardType="numeric"
+              />
+            ) : (
+              <ThemedText style={styles.itemPrice}>₱{item.price}</ThemedText>
+            )}
+          </ThemedView>
+
+          {/* Category + Availability */}
+          <ThemedView style={styles.categoryRow}>
+            <ThemedText style={styles.itemCategory}>{item.category?.name || 'Uncategorized'}</ThemedText>
+            <ThemedView style={styles.availabilityToggle}>
+              <ThemedText style={styles.availabilityLabel}>Available</ThemedText>
+              <Switch
+                value={available}
+                onValueChange={isEditing ? setAvailable : undefined}
+                disabled={!isEditing}
+                trackColor={{ false: '#DDD', true: '#F48FB1' }}
+                thumbColor={available ? '#C2185B' : '#FFF'}
+              />
+            </ThemedView>
+          </ThemedView>
+
+          <ThemedText style={styles.itemDescription}>{item.description}</ThemedText>
 
           {/* Stats Bar */}
           <View style={styles.statsContainer}>
             <View style={styles.statItem}>
-              <ThemedText style={styles.statValue}>{item.stats?.totalSold || 0}</ThemedText>
+              <ThemedText style={styles.statValue}>{item.totalOrders || 0}</ThemedText>
               <ThemedText style={styles.statLabel}>Sold</ThemedText>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <ThemedText style={styles.statValue}>{item.stats?.rating || 0} ★</ThemedText>
-              <ThemedText style={styles.statLabel}>Rating</ThemedText>
+              <ThemedText style={styles.statValue}>₱{((item.totalOrders || 0) * item.price).toLocaleString()}</ThemedText>
+              <ThemedText style={styles.statLabel}>Revenue</ThemedText>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <ThemedText style={styles.statValue}>₱{(item.stats?.revenue || 0).toLocaleString()}</ThemedText>
-              <ThemedText style={styles.statLabel}>Revenue</ThemedText>
+              <ThemedText style={styles.statValue}>{item.isApproved ? '✓' : '⏳'}</ThemedText>
+              <ThemedText style={styles.statLabel}>{item.isApproved ? 'Approved' : 'Pending'}</ThemedText>
             </View>
           </View>
 
-          {/* Price & Availability Control */}
-          <ThemedView style={styles.controlCard}>
-            <ThemedText style={styles.sectionTitle}>Price & Status</ThemedText>
-            
-            <View style={styles.controlRow}>
-              <View style={styles.inputGroup}>
-                <ThemedText style={styles.inputLabel}>Base Price (₱)</ThemedText>
-                {isEditing ? (
-                  <TextInput 
-                    style={styles.priceInput}
-                    value={price}
-                    onChangeText={setPrice}
-                    keyboardType="numeric"
-                  />
-                ) : (
-                  <ThemedText style={styles.priceDisplay}>₱{item.price}</ThemedText>
-                )}
-              </View>
+          {/* Options — same rendering as merchant app */}
+          {options.map((option: any, idx: number) => {
+            const groupTitle = option.name || option.title || 'Options';
+            const choices: any[] = option.options || option.items || [];
+            const isRequired = option.isRequired || option.required;
 
-              <View style={styles.switchGroup}>
-                <ThemedText style={styles.inputLabel}>Availability</ThemedText>
-                <Switch 
-                  value={available}
-                  onValueChange={isEditing ? setAvailable : undefined}
-                  disabled={!isEditing}
-                  trackColor={{ false: '#DDD', true: '#F48FB1' }}
-                  thumbColor={available ? '#C2185B' : '#FFF'}
-                />
-              </View>
-            </View>
-          </ThemedView>
+            return (
+              <ThemedView key={idx} style={styles.optionSection}>
+                <ThemedView style={styles.optionHeader}>
+                  <ThemedView>
+                    <ThemedText style={styles.optionTitle}>{groupTitle}</ThemedText>
+                    <ThemedText style={styles.optionSubtitle}>{isRequired ? 'Required' : 'Optional'}</ThemedText>
+                  </ThemedView>
+                  {isRequired && (
+                    <ThemedView style={styles.requiredBadge}>
+                      <ThemedText style={styles.requiredText}>1 Required</ThemedText>
+                    </ThemedView>
+                  )}
+                </ThemedView>
 
-          <ThemedText style={styles.description}>{item.description}</ThemedText>
+                {choices.map((choice: any, cIdx: number) => {
+                  const choiceName = choice.label || choice.name || '';
+                  const choicePrice = typeof choice.price === 'number'
+                    ? choice.price
+                    : parseFloat(choice.price ?? '0');
 
-          {/* Dynamic Variants Sections */}
-          {variants && variants.map((group: any, idx: number) => (
-             <ThemedView key={idx} style={styles.section}>
-                <ThemedText style={styles.sectionTitle}>{group.title}</ThemedText>
-                {group.items.map((opt: any, oIdx: number) => (
-                  <View key={oIdx} style={styles.optionRow}>
-                    {isEditing ? (
-                       <View style={{flexDirection: 'row', flex: 1, gap: 10, alignItems: 'center'}}>
-                           <TextInput 
-                               style={[styles.optionName, {borderBottomWidth:1, borderColor:'#ddd', flex:2, padding:0}]}
-                               value={opt.name}
-                               onChangeText={(text) => {
-                                   const newVariants = [...variants];
-                                   newVariants[idx].items[oIdx].name = text;
-                                   setVariants(newVariants);
-                               }}
-                           />
-                           <View style={{flexDirection:'row', alignItems:'center', flex:1, justifyContent: 'flex-end'}}>
-                               <ThemedText style={{marginRight: 4}}>+</ThemedText>
-                               <TextInput 
-                                   style={[styles.optionPrice, {borderBottomWidth:1, borderColor:'#ddd', minWidth:40, textAlign: 'right', padding:0}]}
-                                   value={opt.price.toString()}
-                                   keyboardType="numeric"
-                                   onChangeText={(text) => {
-                                       const newVariants = [...variants];
-                                       newVariants[idx].items[oIdx].price = text;
-                                       setVariants(newVariants);
-                                   }}
-                               />
-                           </View>
-                       </View>
-                    ) : (
-                        <>
-                            <ThemedText style={styles.optionName}>{opt.name}</ThemedText>
-                            <ThemedText style={styles.optionPrice}>
-                              {parseFloat(opt.price) === 0 ? 'Base Price' : `+₱${opt.price}`}
-                            </ThemedText>
-                        </>
-                    )}
-                  </View>
-                ))}
-             </ThemedView>
-          ))}
+                  return (
+                    <View key={cIdx} style={styles.choiceRow}>
+                      <View style={styles.choiceMain}>
+                        <View style={[
+                          styles.selector,
+                          option.type === 'radio' || isRequired ? styles.radio : styles.checkbox,
+                        ]} />
+                        {isEditing ? (
+                          <TextInput
+                            style={[styles.choiceName, { borderBottomWidth: 1, borderColor: '#DDD', flex: 1 }]}
+                            value={choiceName}
+                            onChangeText={(text) => {
+                              const newOpts = [...options];
+                              const arr = newOpts[idx].options || newOpts[idx].items || [];
+                              arr[cIdx] = { ...arr[cIdx], name: text, label: text };
+                              setOptions(newOpts);
+                            }}
+                          />
+                        ) : (
+                          <ThemedText style={styles.choiceName}>{choiceName}</ThemedText>
+                        )}
+                      </View>
+                      {choicePrice > 0 && (
+                        <ThemedText style={styles.choicePrice}>+₱{choicePrice}</ThemedText>
+                      )}
+                    </View>
+                  );
+                })}
+              </ThemedView>
+            );
+          })}
 
-          <View style={{ height: 100 }} />
+          <View style={{ height: 140 }} />
         </ThemedView>
       </ScrollView>
 
-
-
-      {(isEditing || (item && !item.isApproved)) && (
-        <ThemedView style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-           {!item.isApproved && (
-               <TouchableOpacity style={[styles.deleteBtn, { backgroundColor: '#E8F5E9', flex: 2, marginRight: 10 }]} onPress={handleApprove}>
-                  <ThemedText style={{ color: '#388E3C', fontWeight: '800' }}>Approve Item</ThemedText>
-               </TouchableOpacity>
-           )}
-           
-           {isEditing && (
-               <>
-                <TouchableOpacity style={styles.deleteBtn}>
-                    <ThemedText style={styles.deleteBtnText}>Delete</ThemedText>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-                    <ThemedText style={styles.saveBtnText}>Save</ThemedText>
-                </TouchableOpacity>
-               </>
-           )}
-        </ThemedView>
-      )}
+      {/* Footer — always visible: approve/disapprove toggle + edit actions */}
+      <ThemedView style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+        {item.isApproved ? (
+          <TouchableOpacity style={styles.disapproveBtn} onPress={handleDisapprove}>
+            <ThemedText style={styles.disapproveBtnText}>Disapprove Item</ThemedText>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={styles.approveBtn} onPress={handleApprove}>
+            <ThemedText style={styles.approveBtnText}>Approve Item</ThemedText>
+          </TouchableOpacity>
+        )}
+        {isEditing && (
+          <>
+            <TouchableOpacity style={styles.deleteBtn}>
+              <ThemedText style={styles.deleteBtnText}>Delete</ThemedText>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+              <ThemedText style={styles.saveBtnText}>Save</ThemedText>
+            </TouchableOpacity>
+          </>
+        )}
+      </ThemedView>
     </ThemedView>
   );
 }
@@ -347,71 +291,89 @@ export default function MenuItemDetailsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: '#FFF',
   },
   heroImage: {
     width: '100%',
     height: 250,
   },
   content: {
-    padding: 16,
+    padding: 20,
     marginTop: -20,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: '#FFF',
   },
   editBtnText: {
     color: '#C2185B',
     fontWeight: '700',
     fontSize: 14,
   },
-  headerSection: {
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    backgroundColor: 'transparent',
+    marginBottom: 8,
   },
   itemName: {
     fontSize: 22,
     fontWeight: '900',
     color: '#333',
-    textAlign: 'center',
+    flex: 1,
   },
-  restaurantName: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
-    fontWeight: '600',
+  itemPrice: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#333',
+    marginLeft: 15,
   },
-  badgeRow: {
+  priceInput: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#C2185B',
+    borderBottomWidth: 1,
+    borderColor: '#DDD',
+    paddingVertical: 4,
+    minWidth: 80,
+    textAlign: 'right',
+  },
+  categoryRow: {
     flexDirection: 'row',
-    marginTop: 12,
-    gap: 8,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    backgroundColor: 'transparent',
   },
-  categoryBadge: {
-    backgroundColor: '#E3F2FD',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  categoryText: {
-    fontSize: 12,
-    color: '#1976D2',
-    fontWeight: '700',
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  statusText: {
+  itemCategory: {
     fontSize: 12,
     fontWeight: '700',
+    color: '#C2185B',
+    textTransform: 'uppercase',
+  },
+  availabilityToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  availabilityLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+    marginRight: 8,
+  },
+  itemDescription: {
+    fontSize: 14,
+    color: '#777',
+    lineHeight: 20,
+    marginBottom: 20,
   },
   statsContainer: {
     flexDirection: 'row',
-    backgroundColor: '#FFF',
+    backgroundColor: '#FAFAFA',
     borderRadius: 16,
     padding: 16,
-    marginBottom: 20,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: '#EEE',
   },
@@ -420,7 +382,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statValue: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '900',
     color: '#333',
   },
@@ -433,81 +395,79 @@ const styles = StyleSheet.create({
     width: 1,
     backgroundColor: '#EEE',
   },
-  controlCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#EEE',
+  // Options — same layout as merchant app
+  optionSection: {
+    marginTop: 24,
+    backgroundColor: 'transparent',
   },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#333',
-    marginBottom: 12,
-  },
-  controlRow: {
+  optionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  inputGroup: {
-    flex: 1,
-  },
-  inputLabel: {
-    fontSize: 12,
-    color: '#888',
-    marginBottom: 6,
-    fontWeight: '600',
-  },
-  priceInput: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#C2185B',
+    backgroundColor: '#FAFAFA',
+    padding: 12,
+    marginHorizontal: -20,
+    borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: '#DDD',
-    paddingVertical: 4,
-    width: 100,
+    borderColor: '#F0F0F0',
   },
-  priceDisplay: {
-    fontSize: 20,
+  optionTitle: {
+    fontSize: 16,
     fontWeight: '800',
     color: '#333',
   },
-  switchGroup: {
-    alignItems: 'flex-end',
+  optionSubtitle: {
+    fontSize: 11,
+    color: '#888',
+    marginTop: 2,
   },
-  description: {
-    fontSize: 14,
+  requiredBadge: {
+    backgroundColor: '#E0E0E0',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  requiredText: {
+    fontSize: 10,
+    fontWeight: '800',
     color: '#666',
-    lineHeight: 22,
-    marginBottom: 24,
   },
-  section: {
-    backgroundColor: '#FFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#EEE',
-  },
-  optionRow: {
+  choiceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 10,
+    alignItems: 'center',
+    paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#F5F5F5',
   },
-  optionName: {
+  choiceMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  selector: {
+    width: 20,
+    height: 20,
+    borderWidth: 2,
+    borderColor: '#DDD',
+    marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  radio: {
+    borderRadius: 10,
+  },
+  checkbox: {
+    borderRadius: 4,
+  },
+  choiceName: {
     fontSize: 14,
-    color: '#333',
+    color: '#444',
     fontWeight: '600',
   },
-  optionPrice: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '600',
+  choicePrice: {
+    fontSize: 13,
+    color: '#888',
   },
   footer: {
     position: 'absolute',
@@ -520,6 +480,32 @@ const styles = StyleSheet.create({
     borderTopColor: '#EEE',
     flexDirection: 'row',
     gap: 12,
+  },
+  approveBtn: {
+    flex: 2,
+    height: 50,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#E8F5E9',
+  },
+  approveBtnText: {
+    color: '#388E3C',
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  disapproveBtn: {
+    flex: 2,
+    height: 50,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFEBEE',
+  },
+  disapproveBtnText: {
+    color: '#D32F2F',
+    fontWeight: '800',
+    fontSize: 14,
   },
   deleteBtn: {
     flex: 1,

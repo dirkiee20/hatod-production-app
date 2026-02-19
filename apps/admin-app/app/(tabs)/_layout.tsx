@@ -33,44 +33,41 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Dashboard',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="dashboard" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={26} name="dashboard" color={color} />,
         }}
       />
       <Tabs.Screen
         name="orders"
         options={{
           title: 'Orders',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="orders" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={26} name="orders" color={color} />,
         }}
       />
       <Tabs.Screen
-        name="users"
+        name="manage"
         options={{
-          title: 'Users',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="users" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="restaurants"
-        options={{
-          title: 'Restaurants',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="restaurants" color={color} />,
+          title: 'Manage',
+          tabBarIcon: ({ color }) => <IconSymbol size={26} name="manage" color={color} />,
         }}
       />
       <Tabs.Screen
         name="map"
         options={{
           title: 'Map',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="map" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={26} name="map" color={color} />,
         }}
       />
       <Tabs.Screen
-        name="fees"
+        name="account"
         options={{
-          title: 'Fees',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="fees" color={color} />,
+          title: 'Account',
+          tabBarIcon: ({ color }) => <IconSymbol size={26} name="person.fill" color={color} />,
         }}
       />
+      {/* Hidden — content merged into Manage and Account tabs */}
+      <Tabs.Screen name="users" options={{ href: null }} />
+      <Tabs.Screen name="restaurants" options={{ href: null }} />
+      <Tabs.Screen name="fees" options={{ href: null }} />
     </Tabs>
   );
 }

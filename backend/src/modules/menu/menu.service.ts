@@ -159,11 +159,39 @@ export class MenuService {
         if (item.merchantId !== merchant.id) throw new ForbiddenException('Not your item');
     }
 
+    // Determine what to store as originalPrice:
+    // Admin path:
+    //   - If the DTO already carries originalPrice, use it (frontend computed it correctly)
+    //   - Otherwise auto-snapshot: only on the very first adjustment (when db value is null)
+    // Merchant path:
+    //   - They're resetting their own price, so clear originalPrice
+    let resolvedOriginalPrice: number | null | undefined = undefined; // undefined = don't touch the field
+
+    if (dto.price !== undefined) {
+        if (user.role === 'ADMIN') {
+            if (dto.originalPrice !== undefined) {
+                // Frontend explicitly told us what the baseline is — trust it
+                resolvedOriginalPrice = dto.originalPrice;
+            } else if (item.originalPrice === null || item.originalPrice === undefined) {
+                // First-ever admin adjustment — snapshot the current DB price
+                resolvedOriginalPrice = item.price;
+            }
+            // else: originalPrice already set in DB, and DTO didn't send one → leave it alone
+        } else {
+            // Merchant edited price — they own the new baseline
+            resolvedOriginalPrice = null;
+        }
+    }
+
+    // Strip originalPrice out of dto so we don't double-apply it
+    const { originalPrice: _ignored, ...restDto } = dto as any;
+
     return this.prisma.menuItem.update({
         where: { id },
         data: {
-            ...dto,
-            price: dto.price ? Number(dto.price) : undefined
+            ...restDto,
+            price: dto.price !== undefined ? Number(dto.price) : undefined,
+            ...(resolvedOriginalPrice !== undefined ? { originalPrice: resolvedOriginalPrice } : {}),
         }
     });
   }

@@ -65,7 +65,11 @@ export default function OrderDetailsScreen() {
         {/* Status Card */}
         <View style={styles.statusCard}>
           <View style={styles.statusHeader}>
-            <ThemedText style={styles.orderId}>{order.id}</ThemedText>
+            <View style={styles.orderIdBlock}>
+              <ThemedText style={styles.orderId} numberOfLines={1}>
+                #{typeof order.id === 'string' ? order.id.slice(0, 8).toUpperCase() : order.id}
+              </ThemedText>
+            </View>
             <View style={[styles.statusBadge, { backgroundColor: '#FFF3E0' }]}>
               <ThemedText style={[styles.statusText, { color: '#F57C00' }]}>{order.status}</ThemedText>
             </View>
@@ -227,13 +231,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 4,
+    gap: 8,
+  },
+  orderIdBlock: {
+    flex: 1,
+    minWidth: 0,
   },
   orderId: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '900',
     color: '#333',
   },
   statusBadge: {
+    flexShrink: 0,
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 8,

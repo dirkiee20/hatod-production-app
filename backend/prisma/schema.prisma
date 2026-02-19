@@ -231,6 +231,7 @@ model MenuItem {
   name        String
   description String?
   price       Float
+  originalPrice Float? // Merchant's original price before any admin adjustment; null = never adjusted
   image       String?
   isAvailable Boolean  @default(true)
   isApproved  Boolean  @default(false)

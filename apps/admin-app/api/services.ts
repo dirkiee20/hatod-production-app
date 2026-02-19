@@ -52,6 +52,20 @@ export const approveMenuItem = async (id: string): Promise<boolean> => {
     }
 }
 
+export const disapproveMenuItem = async (id: string): Promise<boolean> => {
+    try {
+        // The PATCH /menu/items/:id endpoint accepts isApproved in the body
+        const response = await authenticatedFetch(`/menu/items/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ isApproved: false }),
+        });
+        return response.ok;
+    } catch (error) {
+        console.error('Error disapproving menu item:', error);
+        return false;
+    }
+}
+
 export const getMerchantById = async (id: string): Promise<Merchant | null> => {
   try {
     const response = await authenticatedFetch(`/merchants/${id}`);
@@ -77,9 +91,12 @@ export const getAllOrders = async (): Promise<Order[]> => {
     const data = await response.json();
     return data.map((order: any) => ({
         ...order,
+        totalAmount: order.total ?? order.totalAmount ?? 0,
         customer: order.customer ? { 
             ...order.customer, 
-            name: `${order.customer.firstName} ${order.customer.lastName}` 
+            name: order.customer.firstName && order.customer.lastName
+                ? `${order.customer.firstName} ${order.customer.lastName}`
+                : order.customer.name || 'Guest'
         } : null
     }));
   } catch (error) {

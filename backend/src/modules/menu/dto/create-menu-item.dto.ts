@@ -12,6 +12,10 @@ export class CreateMenuItemDto {
   @IsNumber()
   price: number;
 
+  @IsOptional()
+  @Allow()
+  originalPrice?: number | null;
+
   @IsString()
   @IsOptional()
   image?: string;
@@ -23,6 +27,10 @@ export class CreateMenuItemDto {
   @IsBoolean()
   @IsOptional()
   isAvailable?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isApproved?: boolean;
 
   @IsNumber()
   @IsOptional()

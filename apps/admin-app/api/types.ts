@@ -65,6 +65,7 @@ export interface MenuCategory {
 
 export interface Order {
   id: string;
+  orderNumber?: string;
   customerId: string;
   merchantId: string;
   riderId?: string;

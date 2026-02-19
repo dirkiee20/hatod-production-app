@@ -91,10 +91,12 @@ export default function OrdersScreen() {
                 onPress={() => router.push(`/order-details/${order.id}`)}
               >
                 <View style={styles.orderHeader}>
-                  <View>
-                    <ThemedText style={styles.orderId}>#{order.id.slice(0, 8)}...</ThemedText>
+                  <View style={styles.orderIdBlock}>
+                    <ThemedText style={styles.orderId} numberOfLines={1}>
+                      #{order.orderNumber || order.id.slice(0, 6).toUpperCase()}
+                    </ThemedText>
                     <ThemedText style={styles.orderTime}>
-                      {new Date(order.createdAt).toLocaleDateString()} {new Date(order.createdAt).toLocaleTimeString()}
+                      {new Date(order.createdAt).toLocaleDateString()} {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </ThemedText>
                   </View>
                   <View style={[styles.statusBadge, { 
@@ -190,6 +192,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 12,
+    gap: 8,
+  },
+  orderIdBlock: {
+    flex: 1,
+    minWidth: 0,
   },
   orderId: {
     fontSize: 14,
