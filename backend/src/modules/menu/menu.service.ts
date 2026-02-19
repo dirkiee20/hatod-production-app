@@ -80,6 +80,7 @@ export class MenuService {
         isAvailable: dto.isAvailable ?? true,
         preparationTime: dto.preparationTime,
         merchantId: merchant.id,
+        options: dto.options ?? undefined, // ← was missing!
       },
     });
   }
