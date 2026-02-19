@@ -478,5 +478,92 @@ export class OrdersService {
       topItems,
     };
   }
+
+  async getAdminAnalytics(range: 'week' | 'month' | 'year') {
+    const now = new Date();
+    let startDate: Date;
+    if (range === 'week') {
+      startDate = new Date(now);
+      startDate.setDate(now.getDate() - 6);
+    } else if (range === 'month') {
+      startDate = new Date(now);
+      startDate.setDate(now.getDate() - 29);
+    } else {
+      startDate = new Date(now);
+      startDate.setFullYear(now.getFullYear() - 1);
+    }
+    startDate.setHours(0, 0, 0, 0);
+
+    const [orders, merchantCount, riderCount, customerCount] = await Promise.all([
+      this.prisma.order.findMany({
+        where: { createdAt: { gte: startDate } },
+        select: { id: true, status: true, subtotal: true, deliveryFee: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.merchant.count({ where: { isApproved: true } }),
+      this.prisma.rider.count(),
+      this.prisma.customer.count(),
+    ]);
+
+    const delivered = orders.filter(o => o.status === OrderStatus.DELIVERED);
+    const cancelled = orders.filter(o => o.status === OrderStatus.CANCELLED);
+
+    const totalRevenue = delivered.reduce((s, o) => s + o.subtotal, 0);
+    const totalDeliveryFees = delivered.reduce((s, o) => s + o.deliveryFee, 0);
+    const totalOrders = orders.length;
+    const cancelRate = totalOrders > 0 ? (cancelled.length / totalOrders) * 100 : 0;
+    const avgOrderValue = delivered.length > 0 ? totalRevenue / delivered.length : 0;
+
+    // Revenue chart
+    const chartData: { label: string; value: number }[] = [];
+    if (range === 'week') {
+      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(now.getDate() - i);
+        const rev = delivered
+          .filter(o => {
+            const od = new Date(o.createdAt);
+            return od.getDate() === d.getDate() && od.getMonth() === d.getMonth();
+          })
+          .reduce((s, o) => s + o.subtotal, 0);
+        chartData.push({ label: days[d.getDay()], value: rev });
+      }
+    } else if (range === 'month') {
+      for (let i = 29; i >= 0; i -= 5) {
+        const d = new Date(now);
+        d.setDate(now.getDate() - i);
+        const label = `${d.getMonth() + 1}/${d.getDate()}`;
+        const ws = new Date(d); ws.setDate(d.getDate() - 4);
+        const rev = delivered
+          .filter(o => { const od = new Date(o.createdAt); return od >= ws && od <= d; })
+          .reduce((s, o) => s + o.subtotal, 0);
+        chartData.push({ label, value: rev });
+      }
+    } else {
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(now); d.setMonth(now.getMonth() - i);
+        const rev = delivered
+          .filter(o => { const od = new Date(o.createdAt); return od.getMonth() === d.getMonth() && od.getFullYear() === d.getFullYear(); })
+          .reduce((s, o) => s + o.subtotal, 0);
+        chartData.push({ label: months[d.getMonth()], value: rev });
+      }
+    }
+
+    return {
+      totalRevenue,
+      totalDeliveryFees,
+      totalOrders,
+      deliveredOrders: delivered.length,
+      cancelledOrders: cancelled.length,
+      cancelRate,
+      avgOrderValue,
+      merchantCount,
+      riderCount,
+      customerCount,
+      chartData,
+    };
+  }
 }
 

@@ -21,6 +21,14 @@ export class OrdersController {
     return this.ordersService.findAllAdmin();
   }
 
+  @Get('admin/analytics')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Get platform-wide analytics (Admin only)' })
+  getAdminAnalytics(@Query('range') range: string) {
+    const validRange = ['week', 'month', 'year'].includes(range) ? range as 'week' | 'month' | 'year' : 'week';
+    return this.ordersService.getAdminAnalytics(validRange);
+  }
+
   @Get('merchant/analytics')
   @Roles(UserRole.MERCHANT)
   @ApiOperation({ summary: 'Get analytics for the merchant dashboard' })
