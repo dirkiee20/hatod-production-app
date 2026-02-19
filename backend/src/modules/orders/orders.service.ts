@@ -497,7 +497,15 @@ export class OrdersService {
     const [orders, merchantCount, riderCount, customerCount] = await Promise.all([
       this.prisma.order.findMany({
         where: { createdAt: { gte: startDate } },
-        select: { id: true, status: true, subtotal: true, deliveryFee: true, createdAt: true },
+        select: {
+          id: true, status: true, subtotal: true, deliveryFee: true, createdAt: true,
+          items: {
+            select: {
+              price: true, quantity: true,
+              menuItem: { select: { originalPrice: true } },
+            },
+          },
+        },
         orderBy: { createdAt: 'asc' },
       }),
       this.prisma.merchant.count({ where: { isApproved: true } }),
@@ -513,6 +521,18 @@ export class OrdersService {
     const totalOrders = orders.length;
     const cancelRate = totalOrders > 0 ? (cancelled.length / totalOrders) * 100 : 0;
     const avgOrderValue = delivered.length > 0 ? totalRevenue / delivered.length : 0;
+
+    // Markup = sum of (orderItem.price - menuItem.originalPrice) * qty
+    // Only counted where originalPrice is set (i.e. admin adjusted the price)
+    const totalMarkup = delivered.reduce((sum, order) => {
+      return sum + order.items.reduce((s, item) => {
+        const origPrice = item.menuItem?.originalPrice;
+        if (origPrice != null && item.price > origPrice) {
+          return s + (item.price - origPrice) * item.quantity;
+        }
+        return s;
+      }, 0);
+    }, 0);
 
     // Revenue chart
     const chartData: { label: string; value: number }[] = [];
@@ -554,6 +574,7 @@ export class OrdersService {
     return {
       totalRevenue,
       totalDeliveryFees,
+      totalMarkup,
       totalOrders,
       deliveredOrders: delivered.length,
       cancelledOrders: cancelled.length,

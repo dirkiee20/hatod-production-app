@@ -19,6 +19,7 @@ type Range = 'week' | 'month' | 'year';
 interface Analytics {
   totalRevenue: number;
   totalDeliveryFees: number;
+  totalMarkup: number;
   totalOrders: number;
   deliveredOrders: number;
   cancelledOrders: number;
@@ -34,33 +35,37 @@ function BarChart({ data }: { data: { label: string; value: number }[] }) {
   const max = Math.max(...data.map(d => d.value), 1);
   return (
     <View style={chartStyles.container}>
+      {/* bars row — fixed height, no overflow */}
       <View style={chartStyles.bars}>
-        {data.map((d, i) => {
-          const pct = d.value / max;
-          return (
-            <View key={i} style={chartStyles.barCol}>
-              <View style={chartStyles.barTrack}>
-                <View style={[chartStyles.barFill, { height: `${Math.max(pct * 100, 3)}%` }]} />
-              </View>
-              <ThemedText style={chartStyles.barLabel}>{d.label}</ThemedText>
+        {data.map((d, i) => (
+          <View key={i} style={chartStyles.barCol}>
+            <View style={chartStyles.barTrack}>
+              <View style={[chartStyles.barFill, { height: `${Math.max(d.value / max * 100, 3)}%` }]} />
             </View>
-          );
-        })}
+          </View>
+        ))}
+      </View>
+      {/* labels row — separate, below bars */}
+      <View style={chartStyles.labels}>
+        {data.map((d, i) => (
+          <ThemedText key={i} style={chartStyles.barLabel}>{d.label}</ThemedText>
+        ))}
       </View>
     </View>
   );
 }
 
 const chartStyles = StyleSheet.create({
-  container: { height: CHART_H + 24, paddingTop: 8 },
+  container: { paddingTop: 4 },
   bars: { flexDirection: 'row', alignItems: 'flex-end', height: CHART_H, gap: 4, paddingHorizontal: 2 },
-  barCol: { flex: 1, alignItems: 'center', height: CHART_H + 18 },
+  barCol: { flex: 1, height: '100%' },          // exactly fills bars row, no overflow
   barTrack: {
     flex: 1, width: '100%', backgroundColor: '#F5F5F5',
     borderRadius: 5, justifyContent: 'flex-end', overflow: 'hidden',
   },
   barFill: { width: '100%', backgroundColor: ACCENT, borderRadius: 5 },
-  barLabel: { fontSize: 9, color: '#AAA', marginTop: 4, textAlign: 'center' },
+  labels: { flexDirection: 'row', marginTop: 4, paddingHorizontal: 2 },
+  barLabel: { flex: 1, fontSize: 9, color: '#AAA', textAlign: 'center' },
 });
 
 function KpiCard({ label, value, sub, icon }: { label: string; value: string; sub?: string; icon: any }) {
@@ -129,7 +134,7 @@ export default function AnalyticsScreen() {
       {/* Header */}
       <ThemedView style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <IconSymbol size={20} name="chevron.left" color="#FFF" />
+          <IconSymbol size={20} name={'chevron.left' as any} color="#FFF" />
         </TouchableOpacity>
         <ThemedText style={styles.headerTitle}>Business Analytics</ThemedText>
       </ThemedView>
@@ -163,11 +168,11 @@ export default function AnalyticsScreen() {
           <>
             {/* Revenue Chart */}
             <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <ThemedText style={styles.cardTitle}>Revenue</ThemedText>
-                <ThemedText style={styles.bigNum}>{fmt(analytics.totalRevenue)}</ThemedText>
+              <ThemedText style={styles.cardTitle}>Revenue</ThemedText>
+              <ThemedText style={styles.bigNum}>{fmt(analytics.totalRevenue)}</ThemedText>
+              <View style={{ marginTop: 12 }}>
+                <BarChart data={analytics.chartData} />
               </View>
-              <BarChart data={analytics.chartData} />
               <View style={styles.statRow}>
                 <View style={styles.statCell}>
                   <ThemedText style={styles.statVal}>{analytics.deliveredOrders}</ThemedText>
@@ -193,14 +198,25 @@ export default function AnalyticsScreen() {
               </View>
             </View>
 
-            {/* Delivery Fees */}
-            <View style={styles.feesBanner}>
-              <View style={styles.feesIcon}>
-                <IconSymbol size={20} name="fees" color={ACCENT} />
+            {/* Delivery Fees + Markup Row */}
+            <View style={styles.bannersRow}>
+              <View style={[styles.feesBanner, { flex: 1 }]}>
+                <View style={styles.feesIcon}>
+                  <IconSymbol size={18} name="fees" color={ACCENT} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <ThemedText style={styles.feesLabel}>Delivery Fees</ThemedText>
+                  <ThemedText style={styles.feesVal}>{fmt(analytics.totalDeliveryFees)}</ThemedText>
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <ThemedText style={styles.feesLabel}>Delivery Fees Collected</ThemedText>
-                <ThemedText style={styles.feesVal}>{fmt(analytics.totalDeliveryFees)}</ThemedText>
+              <View style={[styles.feesBanner, { flex: 1, backgroundColor: '#E8F5E9', borderColor: '#C8E6C9' }]}>
+                <View style={[styles.feesIcon, { backgroundColor: '#FFF' }]}>
+                  <IconSymbol size={18} name={'chart.bar.fill' as any} color="#2E7D32" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <ThemedText style={styles.feesLabel}>Markup Collected</ThemedText>
+                  <ThemedText style={[styles.feesVal, { color: '#2E7D32' }]}>{fmt(analytics.totalMarkup)}</ThemedText>
+                </View>
               </View>
             </View>
 
@@ -258,9 +274,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF', borderRadius: 16,
     borderWidth: 1, borderColor: '#EEE', padding: 16, marginBottom: 12,
   },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  cardTitle: { fontSize: 14, fontWeight: '800', color: '#444' },
-  bigNum: { fontSize: 22, fontWeight: '900', color: ACCENT },
+  cardTitle: { fontSize: 13, fontWeight: '700', color: '#888', marginBottom: 2 },
+  bigNum: { fontSize: 26, fontWeight: '900', color: ACCENT },
 
   statRow: {
     flexDirection: 'row', marginTop: 12,
@@ -271,11 +286,11 @@ const styles = StyleSheet.create({
   statLbl: { fontSize: 9, color: '#AAA', marginTop: 2 },
   divider: { width: 1, backgroundColor: '#EEE', marginHorizontal: 4 },
 
+  bannersRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   feesBanner: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: ACCENT_LIGHT, borderRadius: 14,
-    padding: 14, marginBottom: 20,
-    borderWidth: 1, borderColor: '#F8BBD0', gap: 12,
+    padding: 12, borderWidth: 1, borderColor: '#F8BBD0', gap: 10,
   },
   feesIcon: {
     width: 40, height: 40, borderRadius: 10,
