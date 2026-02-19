@@ -1,4 +1,4 @@
-import { StyleSheet, ScrollView, TouchableOpacity, View, Image, Switch, ActivityIndicator } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, View, Image, ActivityIndicator } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
@@ -59,22 +59,17 @@ export default function MenuScreen() {
                     style={styles.itemImg} 
                 />
                 <ThemedView style={styles.itemInfo}>
-                <ThemedText style={styles.itemName}>{item.name}</ThemedText>
-                <ThemedText style={styles.itemPrice}>₱{item.price}</ThemedText>
-                <ThemedView style={styles.statusRow}>
-                    <ThemedText style={[styles.statusLabel, { color: item.isAvailable ? '#388E3C' : '#D32F2F' }]}>
-                        {item.isAvailable ? 'Available' : 'Out of Stock'}
+                  <ThemedText style={styles.itemName}>{item.name}</ThemedText>
+                  <ThemedText style={styles.itemPrice}>₱{item.price}</ThemedText>
+                  <View style={styles.availabilityBadge}>
+                    <View style={[styles.availabilityDot, { backgroundColor: item.isAvailable ? '#4CAF50' : '#D32F2F' }]} />
+                    <ThemedText style={[styles.availabilityText, { color: item.isAvailable ? '#388E3C' : '#D32F2F' }]}>
+                      {item.isAvailable ? 'Available' : 'Out of Stock'}
                     </ThemedText>
-                    <Switch 
-                        value={item.isAvailable} 
-                        trackColor={{ false: '#DDD', true: '#F48FB1' }}
-                        thumbColor={item.isAvailable ? '#f78734' : '#FFF'}
-                        disabled={true} // Disable pending implementation
-                    />
-                </ThemedView>
+                  </View>
                 </ThemedView>
                 <View style={styles.editIcon}>
-                <IconSymbol size={18} name="chevron.right" color="#DDD" />
+                  <IconSymbol size={18} name="chevron.right" color="#DDD" />
                 </View>
             </TouchableOpacity>
             ))
@@ -165,16 +160,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 2,
   },
-  statusRow: {
+  availabilityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 8,
-    backgroundColor: 'transparent',
+    marginTop: 6,
   },
-  statusLabel: {
+  availabilityDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    marginRight: 5,
+  },
+  availabilityText: {
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   editIcon: {
     padding: 5,

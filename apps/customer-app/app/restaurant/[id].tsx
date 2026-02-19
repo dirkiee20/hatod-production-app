@@ -264,11 +264,14 @@ export default function RestaurantDetailScreen() {
               <ThemedView key={sIndex} style={styles.menuGroup}>
                 <ThemedText style={styles.groupTitle}>{categoryName}</ThemedText>
                 {menuByCategory[categoryName]?.map((item) => (
-                  <TouchableOpacity 
+                   <TouchableOpacity 
                     key={item.id} 
-                    style={[styles.menuItem, !isStoreOpen && { opacity: 0.6 }]}
-                    onPress={() => isStoreOpen && router.push(`/menu-item/${item.id}`)}
-                    activeOpacity={isStoreOpen ? 0.7 : 1}
+                    style={[styles.menuItem, (!isStoreOpen || !item.isAvailable) && styles.menuItemDimmed]}
+                    onPress={() => {
+                      if (!isStoreOpen || !item.isAvailable) return;
+                      router.push(`/menu-item/${item.id}`);
+                    }}
+                    activeOpacity={isStoreOpen && item.isAvailable ? 0.7 : 1}
                   >
                     <ThemedView style={styles.itemInfo}>
                       <ThemedText style={styles.itemName}>{item.name}</ThemedText>
@@ -276,9 +279,6 @@ export default function RestaurantDetailScreen() {
                         <ThemedText style={styles.itemDesc} numberOfLines={2}>{item.description}</ThemedText>
                       )}
                       <ThemedText style={styles.itemPrice}>₱{item.price.toFixed(2)}</ThemedText>
-                      {!item.isAvailable && (
-                        <ThemedText style={styles.unavailableText}>Currently unavailable</ThemedText>
-                      )}
                     </ThemedView>
                     <ThemedView style={styles.itemImageWrapper}>
                       <FallbackImage
@@ -286,6 +286,13 @@ export default function RestaurantDetailScreen() {
                         style={styles.itemImg}
                         placeholder={PLACEHOLDER_ITEM}
                       />
+                      {/* Out of Stock overlay on image */}
+                      {!item.isAvailable && (
+                        <View style={styles.outOfStockOverlay}>
+                          <ThemedText style={styles.outOfStockText}>Out of{`\n`}Stock</ThemedText>
+                        </View>
+                      )}
+                      {/* Add button — only when available and store is open */}
                       {item.isAvailable && isStoreOpen && (
                         <TouchableOpacity style={styles.addBtn} onPress={() => handleQuickAdd(item)}>
                           <IconSymbol size={22} name="add" color="#C2185B" />
@@ -590,11 +597,26 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginTop: 6,
   },
-  unavailableText: {
+  menuItemDimmed: {
+    opacity: 0.5,
+  },
+  outOfStockOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  outOfStockText: {
+    color: '#FFF',
     fontSize: 11,
-    color: '#FF6B6B',
-    marginTop: 4,
-    fontStyle: 'italic',
+    fontWeight: '900',
+    textAlign: 'center',
+    letterSpacing: 0.5,
   },
   itemImageWrapper: {
     width: 90,

@@ -108,7 +108,7 @@ export class MenuService {
     const where: any = { merchantId };
     if (publicOnly) {
        where.isApproved = true;
-       where.isAvailable = true;
+       // Do NOT filter isAvailable — show all approved items, mark out-of-stock in the UI
     }
     return this.prisma.menuItem.findMany({
       where,

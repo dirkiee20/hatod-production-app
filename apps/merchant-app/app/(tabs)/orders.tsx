@@ -98,35 +98,60 @@ export default function OrdersScreen() {
   const handleAction = async (order: Order) => {
     let nextStatus: OrderStatus | null = null;
     let actionName = '';
+    let confirmTitle = '';
+    let confirmMessage = '';
+    let needsConfirm = false;
 
     if (order.status === OrderStatus.PENDING) {
         nextStatus = OrderStatus.CONFIRMED;
         actionName = 'Confirm';
+        confirmTitle = 'Confirm Order';
+        confirmMessage = `Confirm order #${order.orderNumber || order.id.slice(0,8)}? The customer will be notified.`;
+        needsConfirm = true;
     } else if (order.status === OrderStatus.CONFIRMED) {
         nextStatus = OrderStatus.PREPARING;
         actionName = 'Start Preparing';
+        // No confirmation needed for routine action
     } else if (order.status === OrderStatus.PREPARING) {
         nextStatus = OrderStatus.READY_FOR_PICKUP;
         actionName = 'Mark Ready';
+        confirmTitle = 'Mark as Ready?';
+        confirmMessage = `Mark order #${order.orderNumber || order.id.slice(0,8)} as ready for pickup?`;
+        needsConfirm = true;
     }
 
-    toggleProcessing(order.id, true);
-    try {
-        if (nextStatus) {
-            const success = await updateOrderStatus(order.id, nextStatus);
-            if (success) {
-                fetchOrders();
-            } else {
-                Alert.alert("Error", `Failed to ${actionName.toLowerCase()} order.`);
-            }
-        } else if (order.status === OrderStatus.READY_FOR_PICKUP && !order.riderId) {
-            await openAssignModal(order);
-        }
-    } catch (error) {
-        console.error('Action failed:', error);
-        Alert.alert('Error', 'An unexpected error occurred');
-    } finally {
-        toggleProcessing(order.id, false);
+    const executeAction = async () => {
+      toggleProcessing(order.id, true);
+      try {
+          if (nextStatus) {
+              const success = await updateOrderStatus(order.id, nextStatus);
+              if (success) {
+                  fetchOrders();
+              } else {
+                  Alert.alert('Error', `Failed to ${actionName.toLowerCase()} order.`);
+              }
+          } else if (order.status === OrderStatus.READY_FOR_PICKUP && !order.riderId) {
+              await openAssignModal(order);
+          }
+      } catch (error) {
+          console.error('Action failed:', error);
+          Alert.alert('Error', 'An unexpected error occurred');
+      } finally {
+          toggleProcessing(order.id, false);
+      }
+    };
+
+    if (needsConfirm) {
+      Alert.alert(
+        confirmTitle,
+        confirmMessage,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: actionName, style: 'default', onPress: executeAction },
+        ]
+      );
+    } else {
+      await executeAction();
     }
   };
 

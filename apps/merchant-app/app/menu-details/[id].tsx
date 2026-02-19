@@ -81,14 +81,23 @@ export default function MenuDetailsScreen() {
       setItem((prev: any) => ({ ...prev, available: val }));
       
       try {
-          await authenticatedFetch(`/menu/items/${id}`, {
+          const res = await authenticatedFetch(`/menu/items/${id}`, {
               method: 'PATCH',
               body: JSON.stringify({ isAvailable: val })
           });
+
+          if (!res.ok) {
+              const errText = await res.text();
+              console.error('Failed to update availability:', errText);
+              // Revert optimistic update
+              setItem((prev: any) => ({ ...prev, available: !val }));
+              Alert.alert('Error', 'Failed to update availability. Please try again.');
+          }
       } catch (e) {
           console.error(e);
-          // Revert on error
+          // Revert on network error
           setItem((prev: any) => ({ ...prev, available: !val }));
+          Alert.alert('Error', 'Network error. Please try again.');
       }
   };
 
@@ -117,6 +126,7 @@ export default function MenuDetailsScreen() {
   if (loading) {
       return (
           <ThemedView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+              <Stack.Screen options={{ headerShown: false }} />
               <ActivityIndicator size="large" color="#C2185B" />
           </ThemedView>
       );
@@ -125,6 +135,7 @@ export default function MenuDetailsScreen() {
   if (!item) {
       return (
           <ThemedView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+              <Stack.Screen options={{ headerShown: false }} />
               <ThemedText>Item not found</ThemedText>
           </ThemedView>
       );

@@ -1,4 +1,4 @@
-import { StyleSheet, ScrollView, TouchableOpacity, View, TextInput, Image, Switch } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, View, TextInput, Image, Switch, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { ThemedText } from '@/components/themed-text';
@@ -227,7 +227,12 @@ export default function AddMenuItemScreen() {
         ),
       }} />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         {/* Image Upload Placeholder */}
         <TouchableOpacity style={styles.imageUploadBox} onPress={pickImage}>
           {image ? (
@@ -456,21 +461,22 @@ export default function AddMenuItemScreen() {
            ))}
         </ThemedView>
 
-        <View style={{ height: 100 }} />
-      </ScrollView>
+        <View style={{ height: 20 }} />
+        </ScrollView>
 
-      {/* Footer Action */}
-      <ThemedView style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-         <TouchableOpacity 
-            style={[styles.saveBtn, isSubmitting && { opacity: 0.7 }]} 
-            onPress={handleSave}
-            disabled={isSubmitting}
-         >
-            <ThemedText style={styles.saveBtnText}>
-                {isSubmitting ? 'Saving...' : (editId ? 'Update Item' : 'Save and Add to Menu')}
-            </ThemedText>
-         </TouchableOpacity>
-      </ThemedView>
+        {/* Footer Action */}
+        <ThemedView style={[styles.footer, { paddingBottom: insets.bottom + 8 }]}>
+           <TouchableOpacity 
+              style={[styles.saveBtn, isSubmitting && { opacity: 0.7 }]} 
+              onPress={handleSave}
+              disabled={isSubmitting}
+           >
+              <ThemedText style={styles.saveBtnText}>
+                  {isSubmitting ? 'Saving...' : (editId ? 'Update Item' : 'Save and Add to Menu')}
+              </ThemedText>
+           </TouchableOpacity>
+        </ThemedView>
+      </KeyboardAvoidingView>
     </ThemedView>
   );
 }
@@ -671,10 +677,6 @@ const styles = StyleSheet.create({
     color: '#C2185B',
   },
   footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     backgroundColor: '#FFF',
     padding: 16,
     borderTopWidth: 1,
