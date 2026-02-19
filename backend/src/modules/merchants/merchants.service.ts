@@ -92,10 +92,16 @@ export class MerchantsService {
 
     const { operatingHours, ...rest } = dto;
 
+    // Strip out null/undefined values — Prisma rejects null for non-nullable fields
+    // (e.g. latitude/longitude are Float and cannot be null in the schema)
+    const cleanRest = Object.fromEntries(
+      Object.entries(rest).filter(([_, v]) => v !== null && v !== undefined)
+    );
+
     return this.prisma.merchant.update({
       where: { id: merchant.id },
       data: {
-        ...rest,
+        ...cleanRest,
         ...(operatingHours !== undefined ? { operatingHours } : {}),
       },
     });
