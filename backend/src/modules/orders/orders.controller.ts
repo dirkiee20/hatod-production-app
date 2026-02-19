@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Patch, Body, Param, UseGuards, Req } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, Param, UseGuards, Req, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto, UpdateOrderStatusDto } from './dto/order.dto';
@@ -21,8 +21,17 @@ export class OrdersController {
     return this.ordersService.findAllAdmin();
   }
 
+  @Get('merchant/analytics')
+  @Roles(UserRole.MERCHANT)
+  @ApiOperation({ summary: 'Get analytics for the merchant dashboard' })
+  getMerchantAnalytics(@Req() req: any, @Query('range') range: string) {
+    const validRange = ['week', 'month', 'year'].includes(range) ? range as 'week' | 'month' | 'year' : 'week';
+    return this.ordersService.getMerchantAnalytics(req.user.userId, validRange);
+  }
+
   @Post()
   @Roles(UserRole.CUSTOMER)
+
   @ApiOperation({ summary: 'Create a new order' })
   create(@Req() req: any, @Body() dto: CreateOrderDto) {
     return this.ordersService.create(req.user.userId, dto);

@@ -3,15 +3,36 @@ import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React from 'react';
-import { logout } from '@/api/client';
+import React, { useState, useEffect } from 'react';
+import { logout, authenticatedFetch, resolveImageUrl } from '@/api/client';
 
 export default function AccountScreen() {
   const router = useRouter();
+  const [logo, setLogo] = useState<string | null>(null);
+  const [storeName, setStoreName] = useState('Merchant Account');
+  const [storeAddress, setStoreAddress] = useState('');
+
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  const fetchProfile = async () => {
+    try {
+      const res = await authenticatedFetch('/merchants/profile');
+      if (res.ok) {
+        const data = await res.json();
+        setStoreName(data.name || 'Merchant Account');
+        setStoreAddress(data.address || '');
+        if (data.logo) setLogo(resolveImageUrl(data.logo) || null);
+      }
+    } catch (e) {
+      console.error('Failed to load merchant profile', e);
+    }
+  };
+
   const menuOptions = [
     { title: 'Store Profiles', subtitle: 'Hours, location, info', icon: 'house.fill' },
     { title: 'Business Analytics', subtitle: 'Payouts, sales reports', icon: 'dashboard' },
-    { title: 'Employee Management', subtitle: 'Staff accounts, permissions', icon: 'person' },
     { title: 'Settings', subtitle: 'Notifications, language', icon: 'filter' },
     { title: 'Help Center', subtitle: 'Contact support', icon: 'paperplane.fill' },
   ];
@@ -38,13 +59,22 @@ export default function AccountScreen() {
     <ThemedView style={styles.container}>
       <ThemedView style={styles.profileHeader}>
          <View style={styles.imageBox}>
-            <Image source={{ uri: 'https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=400' }} style={styles.profileImg} />
+            <Image 
+              source={
+                logo
+                  ? { uri: logo }
+                  : { uri: 'https://via.placeholder.com/90x90?text=Store' }
+              }
+              style={styles.profileImg}
+            />
             <TouchableOpacity style={styles.editBadge} onPress={() => router.push('/store-profile')}>
                <IconSymbol size={12} name="dashboard" color="#FFF" />
             </TouchableOpacity>
          </View>
-         <ThemedText style={styles.storeName}>Merchant Account</ThemedText>
-         <ThemedText style={styles.storeAddress}>Surigao City Central Plaza</ThemedText>
+         <ThemedText style={styles.storeName}>{storeName}</ThemedText>
+         {storeAddress ? (
+           <ThemedText style={styles.storeAddress}>{storeAddress}</ThemedText>
+         ) : null}
       </ThemedView>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -57,8 +87,6 @@ export default function AccountScreen() {
                     router.push('/store-profile');
                 } else if (option.title === 'Business Analytics') {
                     router.push('/analytics');
-                } else if (option.title === 'Employee Management') {
-                    router.push('/employee-management');
                 } else if (option.title === 'Settings') {
                     router.push('/settings');
                 } else if (option.title === 'Help Center') {
@@ -84,6 +112,7 @@ export default function AccountScreen() {
     </ThemedView>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {

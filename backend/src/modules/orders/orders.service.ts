@@ -358,4 +358,125 @@ export class OrdersService {
       return updatedOrder;
     });
   }
+
+  async getMerchantAnalytics(userId: string, range: 'week' | 'month' | 'year') {
+    const merchant = await this.prisma.merchant.findUnique({ where: { userId } });
+    if (!merchant) throw new NotFoundException('Merchant not found');
+
+    const now = new Date();
+    let startDate: Date;
+    if (range === 'week') {
+      startDate = new Date(now);
+      startDate.setDate(now.getDate() - 6);
+    } else if (range === 'month') {
+      startDate = new Date(now);
+      startDate.setDate(now.getDate() - 29);
+    } else {
+      startDate = new Date(now);
+      startDate.setFullYear(now.getFullYear() - 1);
+    }
+    startDate.setHours(0, 0, 0, 0);
+
+    // All delivered orders for this merchant in the range
+    const orders = await this.prisma.order.findMany({
+      where: {
+        merchantId: merchant.id,
+        createdAt: { gte: startDate },
+      },
+      include: {
+        items: { include: { menuItem: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const deliveredOrders = orders.filter(o => o.status === OrderStatus.DELIVERED);
+    const cancelledOrders = orders.filter(o => o.status === OrderStatus.CANCELLED);
+
+    // KPI calculations
+    const totalRevenue = deliveredOrders.reduce((sum, o) => sum + o.subtotal, 0);
+    const totalOrders = orders.length;
+    const avgOrder = deliveredOrders.length > 0 ? totalRevenue / deliveredOrders.length : 0;
+    const cancelRate = totalOrders > 0 ? (cancelledOrders.length / totalOrders) * 100 : 0;
+
+    // Chart data
+    const chartData: { label: string; value: number }[] = [];
+    if (range === 'week') {
+      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(now.getDate() - i);
+        const dayLabel = days[d.getDay()];
+        const dayRevenue = deliveredOrders
+          .filter(o => {
+            const od = new Date(o.createdAt);
+            return od.getDate() === d.getDate() && od.getMonth() === d.getMonth();
+          })
+          .reduce((sum, o) => sum + o.subtotal, 0);
+        chartData.push({ label: dayLabel, value: dayRevenue });
+      }
+    } else if (range === 'month') {
+      for (let i = 29; i >= 0; i -= 5) {
+        const d = new Date(now);
+        d.setDate(now.getDate() - i);
+        const label = `${d.getMonth() + 1}/${d.getDate()}`;
+        const windowStart = new Date(d);
+        windowStart.setDate(d.getDate() - 4);
+        const windowRevenue = deliveredOrders
+          .filter(o => {
+            const od = new Date(o.createdAt);
+            return od >= windowStart && od <= d;
+          })
+          .reduce((sum, o) => sum + o.subtotal, 0);
+        chartData.push({ label, value: windowRevenue });
+      }
+    } else {
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(now);
+        d.setMonth(now.getMonth() - i);
+        const monthRevenue = deliveredOrders
+          .filter(o => {
+            const od = new Date(o.createdAt);
+            return od.getMonth() === d.getMonth() && od.getFullYear() === d.getFullYear();
+          })
+          .reduce((sum, o) => sum + o.subtotal, 0);
+        chartData.push({ label: months[d.getMonth()], value: monthRevenue });
+      }
+    }
+
+    // Top selling items
+    const itemSalesMap = new Map<string, { name: string; sales: number; revenue: number }>();
+    for (const order of deliveredOrders) {
+      for (const item of order.items) {
+        const existing = itemSalesMap.get(item.menuItemId);
+        if (existing) {
+          existing.sales += item.quantity;
+          existing.revenue += item.price * item.quantity;
+        } else {
+          itemSalesMap.set(item.menuItemId, {
+            name: item.menuItem?.name || 'Unknown',
+            sales: item.quantity,
+            revenue: item.price * item.quantity,
+          });
+        }
+      }
+    }
+    const topItems = Array.from(itemSalesMap.values())
+      .sort((a, b) => b.sales - a.sales)
+      .slice(0, 5);
+
+    // Rating from DB
+    const rating = merchant.rating ?? 0;
+
+    return {
+      totalRevenue,
+      totalOrders,
+      avgOrder,
+      cancelRate,
+      rating,
+      chartData,
+      topItems,
+    };
+  }
 }
+

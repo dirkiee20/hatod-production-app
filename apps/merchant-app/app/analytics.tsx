@@ -1,43 +1,66 @@
-import { StyleSheet, View, ScrollView, TouchableOpacity, Dimensions, Platform } from 'react-native';
+import { StyleSheet, View, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { authenticatedFetch } from '@/api/client';
 
-// Mock Data
-const WEEKLY_DATA = [
-  { day: 'Mon', value: 4500, label: '4.5k' },
-  { day: 'Tue', value: 3200, label: '3.2k' },
-  { day: 'Wed', value: 5800, label: '5.8k' },
-  { day: 'Thu', value: 4900, label: '4.9k' },
-  { day: 'Fri', value: 7200, label: '7.2k' },
-  { day: 'Sat', value: 8500, label: '8.5k' },
-  { day: 'Sun', value: 6100, label: '6.1k' },
-];
+type Range = 'Week' | 'Month' | 'Year';
 
-const TOP_ITEMS = [
-  { name: 'Double Cheese Burger', sales: 142, revenue: '28,400', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=200' },
-  { name: 'Spicy Chicken Wings', sales: 98, revenue: '14,700', image: 'https://images.unsplash.com/photo-1567620832903-9fc6debc209f?w=200' },
-  { name: 'French Fries (L)', sales: 85, revenue: '8,500', image: 'https://images.unsplash.com/photo-1630384060421-cb20d0e06497?w=200' },
-];
+interface AnalyticsData {
+  totalRevenue: number;
+  totalOrders: number;
+  avgOrder: number;
+  cancelRate: number;
+  rating: number;
+  chartData: { label: string; value: number }[];
+  topItems: { name: string; sales: number; revenue: number }[];
+}
 
 export default function AnalyticsScreen() {
   const router = useRouter();
-  const [timeRange, setTimeRange] = useState('Week');
-  const screenWidth = Dimensions.get('window').width;
+  const [timeRange, setTimeRange] = useState<Range>('Week');
+  const [data, setData] = useState<AnalyticsData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchAnalytics();
+  }, [timeRange]);
+
+  const fetchAnalytics = async () => {
+    setLoading(true);
+    try {
+      const rangeParam = timeRange.toLowerCase();
+      const res = await authenticatedFetch(`/orders/merchant/analytics?range=${rangeParam}`);
+      if (res.ok) {
+        const json = await res.json();
+        setData(json);
+      }
+    } catch (e) {
+      console.error('Failed to load analytics', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatCurrency = (val: number) => {
+    if (val >= 1000) return `₱${(val / 1000).toFixed(1)}k`;
+    return `₱${val.toFixed(0)}`;
+  };
 
   const renderBarChart = () => {
-    const maxValue = Math.max(...WEEKLY_DATA.map(d => d.value));
-    
+    const chartData = data?.chartData ?? [];
+    const maxValue = Math.max(...chartData.map(d => d.value), 1);
+
     return (
       <View style={styles.chartContainer}>
         <View style={styles.chartHeader}>
           <ThemedText style={styles.chartTitle}>Revenue Overview</ThemedText>
           <View style={styles.timeFilter}>
-            {['Week', 'Month', 'Year'].map((t) => (
-              <TouchableOpacity 
-                key={t} 
+            {(['Week', 'Month', 'Year'] as Range[]).map((t) => (
+              <TouchableOpacity
+                key={t}
                 style={[styles.filterBtn, timeRange === t && styles.filterBtnActive]}
                 onPress={() => setTimeRange(t)}
               >
@@ -46,28 +69,41 @@ export default function AnalyticsScreen() {
             ))}
           </View>
         </View>
-        
-        <View style={styles.chartArea}>
-          {WEEKLY_DATA.map((item, index) => {
-            const heightPercentage = (item.value / maxValue) * 100;
-            return (
-              <View key={index} style={styles.barGroup}>
-                <View style={styles.barTrack}>
-                  <View style={[styles.barFill, { height: `${heightPercentage}%` }]} />
+
+        {loading ? (
+          <View style={{ height: 150, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator color="#C2185B" />
+          </View>
+        ) : (
+          <View style={styles.chartArea}>
+            {chartData.map((item, index) => {
+              const heightPercentage = (item.value / maxValue) * 100;
+              return (
+                <View key={index} style={styles.barGroup}>
+                  <View style={styles.barTrack}>
+                    <View style={[styles.barFill, { height: `${heightPercentage}%` as any }]} />
+                  </View>
+                  <ThemedText style={styles.barLabel}>{item.label}</ThemedText>
                 </View>
-                <ThemedText style={styles.barLabel}>{item.day}</ThemedText>
-              </View>
-            );
-          })}
-        </View>
+              );
+            })}
+          </View>
+        )}
       </View>
     );
   };
 
+  const totalRevenue = data?.totalRevenue ?? 0;
+  const totalOrders = data?.totalOrders ?? 0;
+  const avgOrder = data?.avgOrder ?? 0;
+  const cancelRate = data?.cancelRate ?? 0;
+  const rating = data?.rating ?? 0;
+  const topItems = data?.topItems ?? [];
+
   return (
     <ThemedView style={styles.container}>
-      <Stack.Screen options={{ 
-        headerShown: true, 
+      <Stack.Screen options={{
+        headerShown: true,
         title: 'Business Analytics',
         headerTitleStyle: { fontWeight: '900', fontSize: 16 },
         headerLeft: () => (
@@ -78,7 +114,7 @@ export default function AnalyticsScreen() {
       }} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        
+
         {/* KPI Cards */}
         <View style={styles.kpiRow}>
           <View style={[styles.kpiCard, styles.kpiCardPrimary]}>
@@ -86,26 +122,25 @@ export default function AnalyticsScreen() {
                <IconSymbol size={20} name="creditcard" color="#FFF" />
             </View>
             <ThemedText style={styles.kpiLabelLight}>Total Revenue</ThemedText>
-            <ThemedText style={styles.kpiValueLight}>₱48,500</ThemedText>
+            <ThemedText style={styles.kpiValueLight}>
+              {loading ? '—' : `₱${totalRevenue.toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+            </ThemedText>
             <View style={styles.kpiBadge}>
-               <IconSymbol size={10} name="arrow.up" color="#4CAF50" />
-               <ThemedText style={styles.kpiBadgeText}>+12.5%</ThemedText>
+               <ThemedText style={styles.kpiBadgeText}>{timeRange}</ThemedText>
             </View>
           </View>
-          
+
           <View style={styles.kpiRightCol}>
              <View style={styles.kpiCardSmall}>
                 <ThemedText style={styles.kpiLabel}>Total Orders</ThemedText>
                 <View style={styles.kpiRowSmall}>
-                   <ThemedText style={styles.kpiValue}>342</ThemedText>
-                   <ThemedText style={styles.kpiChangePositive}>+5%</ThemedText>
+                   <ThemedText style={styles.kpiValue}>{loading ? '—' : totalOrders}</ThemedText>
                 </View>
              </View>
              <View style={styles.kpiCardSmall}>
                 <ThemedText style={styles.kpiLabel}>Avg. Order</ThemedText>
                 <View style={styles.kpiRowSmall}>
-                   <ThemedText style={styles.kpiValue}>₱142</ThemedText>
-                   <ThemedText style={styles.kpiChangeNegative}>-2%</ThemedText>
+                   <ThemedText style={styles.kpiValue}>{loading ? '—' : `₱${avgOrder.toFixed(0)}`}</ThemedText>
                 </View>
              </View>
           </View>
@@ -118,43 +153,46 @@ export default function AnalyticsScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <ThemedText style={styles.sectionTitle}>Top Selling Items</ThemedText>
-            <TouchableOpacity>
-               <ThemedText style={styles.seeAll}>See All</ThemedText>
-            </TouchableOpacity>
           </View>
-          
-          {TOP_ITEMS.map((item, idx) => (
-             <View key={idx} style={styles.itemRow}>
-                <View style={styles.rankBadge}>
-                   <ThemedText style={styles.rankText}>#{idx + 1}</ThemedText>
-                </View>
-                <View style={styles.itemInfo}>
-                   <ThemedText style={styles.itemName}>{item.name}</ThemedText>
-                   <ThemedText style={styles.itemSales}>{item.sales} sold</ThemedText>
-                </View>
-                <View style={styles.itemRevenue}>
-                   <ThemedText style={styles.revenueText}>₱{item.revenue}</ThemedText>
-                </View>
-             </View>
-          ))}
+
+          {loading ? (
+            <ActivityIndicator color="#C2185B" style={{ marginVertical: 20 }} />
+          ) : topItems.length === 0 ? (
+            <ThemedText style={{ color: '#999', textAlign: 'center', paddingVertical: 20 }}>No sales data yet</ThemedText>
+          ) : (
+            topItems.map((item, idx) => (
+               <View key={idx} style={styles.itemRow}>
+                  <View style={styles.rankBadge}>
+                     <ThemedText style={styles.rankText}>#{idx + 1}</ThemedText>
+                  </View>
+                  <View style={styles.itemInfo}>
+                     <ThemedText style={styles.itemName}>{item.name}</ThemedText>
+                     <ThemedText style={styles.itemSales}>{item.sales} sold</ThemedText>
+                  </View>
+                  <View style={styles.itemRevenue}>
+                     <ThemedText style={styles.revenueText}>₱{item.revenue.toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</ThemedText>
+                  </View>
+               </View>
+            ))
+          )}
         </View>
 
         {/* Performance Stats */}
         <View style={styles.statsGrid}>
            <View style={styles.statBox}>
               <IconSymbol size={24} name="star.fill" color="#FFD700" />
-              <ThemedText style={styles.statVal}>4.8</ThemedText>
+              <ThemedText style={styles.statVal}>{loading ? '—' : rating.toFixed(1)}</ThemedText>
               <ThemedText style={styles.statLabel}>Rating</ThemedText>
            </View>
            <View style={styles.statBox}>
-              <IconSymbol size={24} name="clock.fill" color="#2196F3" />
-              <ThemedText style={styles.statVal}>24m</ThemedText>
-              <ThemedText style={styles.statLabel}>Avg Prep</ThemedText>
+              <IconSymbol size={24} name="xmark.circle.fill" color="#F44336" />
+              <ThemedText style={styles.statVal}>{loading ? '—' : `${cancelRate.toFixed(1)}%`}</ThemedText>
+              <ThemedText style={styles.statLabel}>Cancel Rate</ThemedText>
            </View>
            <View style={styles.statBox}>
-              <IconSymbol size={24} name="xmark.circle.fill" color="#F44336" />
-              <ThemedText style={styles.statVal}>1.2%</ThemedText>
-              <ThemedText style={styles.statLabel}>Cancel Rate</ThemedText>
+              <IconSymbol size={24} name="bag.fill" color="#4CAF50" />
+              <ThemedText style={styles.statVal}>{loading ? '—' : totalOrders}</ThemedText>
+              <ThemedText style={styles.statLabel}>Total Orders</ThemedText>
            </View>
         </View>
 
@@ -208,7 +246,7 @@ const styles = StyleSheet.create({
   },
   kpiValueLight: {
     color: '#FFF',
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '900',
     marginVertical: 4,
   },
@@ -258,16 +296,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800',
     color: '#333',
-  },
-  kpiChangePositive: {
-    color: '#4CAF50',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  kpiChangeNegative: {
-    color: '#F44336',
-    fontSize: 12,
-    fontWeight: '700',
   },
   chartContainer: {
     backgroundColor: '#FFF',
@@ -364,11 +392,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     color: '#333',
-  },
-  seeAll: {
-    fontSize: 13,
-    color: '#C2185B',
-    fontWeight: '700',
   },
   itemRow: {
     flexDirection: 'row',
