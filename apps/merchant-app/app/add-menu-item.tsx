@@ -113,90 +113,106 @@ export default function AddMenuItemScreen() {
 
     setIsSubmitting(true);
     try {
-        // Upload Image if selected and changed (local URI)
+        // Capture state values up front to avoid any shadowing issues
+        const itemName = formData.name;
+        const itemDescription = formData.description;
+        const itemPrice = parseFloat(formData.price);
+        const itemCategory = formData.category;
+        const itemAvailable = formData.available;
+
+        if (isNaN(itemPrice)) {
+          alert('Please enter a valid price');
+          return;
+        }
+
+        // Upload Image if selected and it's a local file (not already a URL)
         let imageUrl = image;
         if (image && !image.startsWith('http')) {
-             // It's a local file, upload it
             try {
-                const formData = new FormData();
-                formData.append('file', {
+                const uploadForm = new FormData();
+                uploadForm.append('file', {
                     uri: image,
                     name: 'photo.jpg',
                     type: 'image/jpeg',
                 } as any);
 
-                const uploadResponse = await fetch(`${API_BASE}/files/upload`, {
+                const uploadResponse = await authenticatedFetch('/files/upload', {
                     method: 'POST',
-                    body: formData,
+                    body: uploadForm,
                     headers: { 'Content-Type': 'multipart/form-data' },
                 });
 
                 if (uploadResponse.ok) {
                     const uploadResult = await uploadResponse.json();
-                    // Cloudinary returns a full https:// URL, use it directly
                     imageUrl = uploadResult.url;
+                    console.log('Image uploaded:', imageUrl);
                 } else {
-                    console.error('Upload failed:', await uploadResponse.text());
+                    const errText = await uploadResponse.text();
+                    console.error('Image upload failed:', errText);
+                    // Continue without image — don't block the save
                 }
             } catch (err) {
                 console.error('Error uploading image:', err);
+                // Continue without image
             }
         }
 
-        const catRes = await authenticatedFetch('/menu/categories');
-        let categoryId = null;
-        if (catRes.ok) {
-            const cats = await catRes.json();
-             const found = cats.find((c: any) => c.name === formData.category);
-             if (found) {
-                 categoryId = found.id;
-             } else {
-                 const sortOrder = cats.length; 
-                  const newCatRes = await authenticatedFetch('/menu/categories', {
-                     method: 'POST',
-                     body: JSON.stringify({ name: formData.category, sortOrder })
-                  });
-                  if (newCatRes.ok) {
-                     const newCat = await newCatRes.json();
-                     categoryId = newCat.id;
-                  }
-             }
+        // Find or create category
+        let categoryId: string | null = null;
+        try {
+            const catRes = await authenticatedFetch('/menu/categories');
+            if (catRes.ok) {
+                const cats = await catRes.json();
+                const found = cats.find((c: any) => c.name === itemCategory);
+                if (found) {
+                    categoryId = found.id;
+                } else {
+                    const newCatRes = await authenticatedFetch('/menu/categories', {
+                        method: 'POST',
+                        body: JSON.stringify({ name: itemCategory, sortOrder: cats.length })
+                    });
+                    if (newCatRes.ok) {
+                        const newCat = await newCatRes.json();
+                        categoryId = newCat.id;
+                    }
+                }
+            }
+        } catch (catErr) {
+            console.error('Category fetch/create failed:', catErr);
         }
 
-        // Deprecated: No longer appending to description
-        // const variantText = variants.map(...)
-        
-        let finalDescription = formData.description;
-
         const body = {
-            name: formData.name,
-            description: finalDescription,
-            price: parseFloat(formData.price),
-            categoryId: categoryId,
-            isAvailable: formData.available,
+            name: itemName,
+            description: itemDescription,
+            price: itemPrice,
+            categoryId,
+            isAvailable: itemAvailable,
             image: imageUrl,
-            options: variants, // Send structured options
+            options: variants.length > 0 ? variants : undefined,
         };
 
         const url = editId ? `/menu/items/${editId}` : '/menu/items';
         const method = editId ? 'PATCH' : 'POST';
 
+        console.log('Saving menu item to', url, JSON.stringify(body));
+
         const res = await authenticatedFetch(url, {
-            method: method,
-            body: JSON.stringify(body)
+            method,
+            body: JSON.stringify(body),
         });
 
         if (res.ok) {
             alert(editId ? 'Menu item updated!' : 'Menu item added successfully!');
             router.back();
         } else {
-            console.error(await res.text());
-            alert('Failed to save item');
+            const errText = await res.text();
+            console.error('Save failed:', errText);
+            alert(`Failed to save item: ${res.status}`);
         }
 
     } catch (e) {
-        console.error(e);
-        alert('An error occurred');
+        console.error('handleSave error:', e);
+        alert('An error occurred while saving');
     } finally {
         setIsSubmitting(false);
     }

@@ -28,7 +28,6 @@ export class CreateMenuItemDto {
   @IsOptional()
   preparationTime?: number;
 
-  @IsArray()
   @IsOptional()
   @Allow()
   options?: any;
