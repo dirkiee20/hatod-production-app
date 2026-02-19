@@ -90,9 +90,14 @@ export class MerchantsService {
       throw new NotFoundException('Merchant profile not found');
     }
 
+    const { operatingHours, ...rest } = dto;
+
     return this.prisma.merchant.update({
       where: { id: merchant.id },
-      data: dto,
+      data: {
+        ...rest,
+        ...(operatingHours !== undefined ? { operatingHours } : {}),
+      },
     });
   }
 

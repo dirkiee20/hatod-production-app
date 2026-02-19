@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsBoolean, IsOptional, IsUUID, Min, IsArray, Allow } from 'class-validator';
+import { IsString, IsNumber, IsBoolean, IsOptional, IsUUID, Min, IsArray, Allow, IsObject } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateMenuItemDto {
@@ -57,6 +57,21 @@ export class UpdateMerchantDto {
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
+  city?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  state?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  zipCode?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
   phone?: string;
 
   @ApiProperty({ required: false })
@@ -91,5 +106,8 @@ export class UpdateMerchantDto {
 
   @ApiProperty({ required: false })
   @IsOptional()
+  @IsObject()
+  @Allow()
   operatingHours?: any;
 }
+
