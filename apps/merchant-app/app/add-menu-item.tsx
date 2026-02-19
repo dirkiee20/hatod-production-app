@@ -1,4 +1,4 @@
-import { StyleSheet, ScrollView, TouchableOpacity, View, TextInput, Image, Switch, Platform } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, View, TextInput, Image, Switch } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { ThemedText } from '@/components/themed-text';
@@ -6,7 +6,7 @@ import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import React, { useState, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { API_BASE, authenticatedFetch, resolveImageUrl } from '../api/client'; // Import authenticatedFetch
+import { authenticatedFetch, resolveImageUrl } from '../api/client';
 
 export default function AddMenuItemScreen() {
   const router = useRouter();
@@ -33,10 +33,10 @@ export default function AddMenuItemScreen() {
 
   const fetchItemDetails = async (id: string) => {
       try {
-          const res = await authenticatedFetch(`/menu/public/items/${id}`);
+          // Use authenticated merchant endpoint — public endpoint rejects unapproved items
+          const res = await authenticatedFetch(`/menu/items/${id}`);
           if (res.ok) {
               const data = await res.json();
-              // const { description, variants: parsedVariants } = parseVariants(data.description || '');
               
               setFormData({
                   name: data.name,
@@ -47,22 +47,18 @@ export default function AddMenuItemScreen() {
               });
               
               if (data.image) {
-                  const baseUrl = API_BASE.replace(/\/api\/?$/, '');
-                  // Check if it's already a full URL or relative
-                  if (data.image.startsWith('http')) setImage(data.image);
-                  else setImage(`${baseUrl}${data.image}`);
+                  setImage(resolveImageUrl(data.image) || null);
               }
               
-              if (data.options) {
+              if (data.options && Array.isArray(data.options) && data.options.length > 0) {
                   setVariants(data.options);
-              } else if (data.description) {
-                   // Fallback for legacy items: parse description
-                   const { variants: parsedVariants } = parseVariants(data.description);
-                   setVariants(parsedVariants);
               }
+          } else {
+              console.error('Failed to fetch item for edit, status:', res.status);
+              alert('Could not load item details');
           }
       } catch (e) {
-          console.error("Failed to fetch item for edit", e);
+          console.error('Failed to fetch item for edit', e);
       }
   };
 
