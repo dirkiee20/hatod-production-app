@@ -5,13 +5,13 @@ import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import React, { useState } from 'react';
 import { useCart } from '@/context/CartContext';
-import { createOrder } from '@/api/services';
+import { createOrder, createAddress } from '@/api/services';
 
 export default function CheckoutScreen() {
   const router = useRouter();
   const [selectedPayment, setSelectedPayment] = useState('COD');
 
-  const { items, cartTotal, clearCart, deliveryFee, deliveryAddress } = useCart();
+  const { items, cartTotal, clearCart, deliveryFee, deliveryAddress, setDeliveryAddress } = useCart();
   
   const platformFee = 5; // Platform fee might still be hardcoded or need config
   const total = cartTotal + deliveryFee + platformFee;
@@ -29,13 +29,37 @@ export default function CheckoutScreen() {
           return;
       }
 
+      let resolvedAddressId = deliveryAddress.id;
+
+      // If using GPS current location, persist it first to get a real UUID
+      if (deliveryAddress.id === 'temp-current') {
+        try {
+          const saved = await createAddress({
+            label: 'Current Location',
+            street: deliveryAddress.street || 'Current Location',
+            city: '',
+            state: '',
+            latitude: deliveryAddress.latitude ?? 0,
+            longitude: deliveryAddress.longitude ?? 0,
+          });
+          resolvedAddressId = saved.id;
+          // Update context so future orders reuse the saved address
+          setDeliveryAddress({ ...deliveryAddress, id: saved.id });
+        } catch (addrErr) {
+          console.error('Failed to save current location as address:', addrErr);
+          Alert.alert('Error', 'Could not save your current location. Please select an address manually.');
+          setLoading(false);
+          return;
+        }
+      }
+
       // Assuming all items are from the same merchant (handled by UI logic elsewhere usually)
       // Taking merchantId from the first item
       const merchantId = items[0].merchantId;
       
       const orderData = {
         merchantId: merchantId,
-        addressId: deliveryAddress.id, 
+        addressId: resolvedAddressId,
         items: items.map(i => ({
           menuItemId: i.menuItemId,
           quantity: i.quantity,
