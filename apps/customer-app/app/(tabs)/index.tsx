@@ -41,9 +41,20 @@ export default function FoodScreen() {
 
   const loadMerchants = async () => {
     setLoading(true);
-    const data = await getMerchants();
-    setMerchants(data);
-    setLoading(false);
+    try {
+      // Race the fetch against a 10-second timeout so a cold Railway
+      // start never leaves the screen stuck in a spinning state forever.
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), 10_000)
+      );
+      const data = await Promise.race([getMerchants(), timeout]);
+      setMerchants(data);
+    } catch (e: any) {
+      console.warn('loadMerchants failed/timed-out:', e?.message);
+      setMerchants([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const filteredMerchants = merchants.filter(m => 
@@ -152,10 +163,22 @@ export default function FoodScreen() {
         ) : filteredMerchants.length === 0 ? (
           <ThemedView style={styles.emptyContainer}>
             <IconSymbol size={48} name="fork.knife" color="#CCC" />
-            <ThemedText style={styles.emptyText}>No restaurants found</ThemedText>
-            <ThemedText style={styles.emptySubtext}>
-              {searchQuery ? 'Try a different search term' : 'Check back later for new restaurants'}
+            <ThemedText style={styles.emptyText}>
+              {searchQuery ? 'No restaurants found' : 'Could not load restaurants'}
             </ThemedText>
+            <ThemedText style={styles.emptySubtext}>
+              {searchQuery
+                ? 'Try a different search term'
+                : 'The server may be waking up. Tap to retry.'}
+            </ThemedText>
+            {!searchQuery && (
+              <TouchableOpacity
+                style={styles.retryBtn}
+                onPress={loadMerchants}
+              >
+                <ThemedText style={styles.retryText}>Retry</ThemedText>
+              </TouchableOpacity>
+            )}
           </ThemedView>
         ) : (
           sections.map((section, sIndex) => (
@@ -250,6 +273,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#777',
     textAlign: 'center',
+    paddingHorizontal: 30,
+  },
+  retryBtn: {
+    marginTop: 20,
+    backgroundColor: '#5c6cc9',
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  retryText: {
+    color: '#FFF',
+    fontWeight: '800',
+    fontSize: 14,
   },
   sectionContainer: {
     marginBottom: 24,
