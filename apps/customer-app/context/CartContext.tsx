@@ -91,12 +91,31 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
                 const { status } = await Location.requestForegroundPermissionsAsync();
                 if (status === 'granted') {
                     const location = await Location.getCurrentPositionAsync({});
+                    const { latitude, longitude } = location.coords;
+
+                    // Reverse geocode to get a human-readable address
+                    let streetAddress = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+                    try {
+                        const [place] = await Location.reverseGeocodeAsync({ latitude, longitude });
+                        if (place) {
+                            const parts = [
+                                place.streetNumber,
+                                place.street,
+                                place.district ?? place.subregion,
+                                place.city ?? place.region,
+                            ].filter(Boolean);
+                            if (parts.length > 0) streetAddress = parts.join(', ');
+                        }
+                    } catch (geoErr) {
+                        console.log('Reverse geocode failed, using coords', geoErr);
+                    }
+
                     setDeliveryAddress({
                         id: 'temp-current',
                         label: 'Current Location',
-                        street: 'Detected Location',
-                        latitude: location.coords.latitude,
-                        longitude: location.coords.longitude
+                        street: streetAddress,
+                        latitude,
+                        longitude,
                     });
                 }
             } catch (e) {
