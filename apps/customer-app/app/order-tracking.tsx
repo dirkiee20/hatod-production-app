@@ -386,7 +386,35 @@ export default function OrderTrackingScreen() {
                          />
                          <View style={{ flex: 1 }}>
                              <ThemedText style={{ fontWeight: '700', fontSize: 14 }}>{item.quantity}x {item.menuItem?.name}</ThemedText>
-                             {item.notes && <ThemedText style={{ color: '#666', fontSize: 12, marginTop: 2 }}>{item.notes}</ThemedText>}
+                             {(() => {
+                               if (!item.notes) return null;
+                               let parsed: Record<string, any> = {};
+                               try { parsed = typeof item.notes === 'string' ? JSON.parse(item.notes) : item.notes; } catch { return null; }
+                               const entries = Object.entries(parsed).filter(([, v]) =>
+                                 v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0)
+                               );
+                               if (entries.length === 0) return null;
+                               return (
+                                 <View style={{ marginTop: 3 }}>
+                                   {entries.map(([key, value]) => {
+                                     if (key === 'note') {
+                                       return (
+                                         <ThemedText key={key} style={{ fontSize: 11, color: '#999', fontStyle: 'italic' }}>
+                                           📝 {String(value)}
+                                         </ThemedText>
+                                       );
+                                     }
+                                     const display = Array.isArray(value) ? value.join(', ') : String(value);
+                                     return (
+                                       <View key={key} style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                                         <ThemedText style={{ fontSize: 11, color: '#aaa', fontWeight: '700' }}>{key}: </ThemedText>
+                                         <ThemedText style={{ fontSize: 11, color: '#666', fontWeight: '600' }}>{display}</ThemedText>
+                                       </View>
+                                     );
+                                   })}
+                                 </View>
+                               );
+                             })()}
                          </View>
                          <ThemedText style={{ fontWeight: '700' }}>₱{((item.price || 0) * item.quantity).toFixed(2)}</ThemedText>
                     </View>
