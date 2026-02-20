@@ -17,7 +17,8 @@ export default function FeesScreen() {
   // New Config State
   const [newMin, setNewMin] = useState('');
   const [newMax, setNewMax] = useState('');
-  const [newFee, setNewFee] = useState('');
+  const [newBaseFee, setNewBaseFee] = useState('');
+  const [tiers, setTiers] = useState([{ minOrderAmount: '0', maxOrderAmount: '500', fee: '50' }]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -33,26 +34,48 @@ export default function FeesScreen() {
   };
 
   const handleAdd = async () => {
-    if (!newMin || !newMax || !newFee) {
-      Alert.alert('Error', 'Please fill all fields');
+    if (!newMin || !newMax || !newBaseFee) {
+      Alert.alert('Error', 'Please fill basic distance fields and base fee');
       return;
     }
+
+    const payloadTiers = tiers.map(t => ({
+      minOrderAmount: parseFloat(t.minOrderAmount) || 0,
+      maxOrderAmount: t.maxOrderAmount ? parseFloat(t.maxOrderAmount) : null,
+      fee: parseFloat(t.fee) || 0
+    })).filter(t => t.fee > 0);
 
     const success = await createDeliveryFeeConfig({
       minDistance: parseFloat(newMin),
       maxDistance: parseFloat(newMax),
-      fee: parseFloat(newFee),
+      baseFee: parseFloat(newBaseFee),
+      tiers: payloadTiers,
     });
 
     if (success) {
       setNewMin('');
       setNewMax('');
-      setNewFee('');
+      setNewBaseFee('');
+      setTiers([{ minOrderAmount: '0', maxOrderAmount: '500', fee: '50' }]);
       fetchConfigs();
-      Alert.alert('Success', 'Delivery fee range added');
+      Alert.alert('Success', 'Delivery fee range & tiers added');
     } else {
       Alert.alert('Error', 'Failed to add configuration');
     }
+  };
+
+  const addTier = () => {
+    setTiers([...tiers, { minOrderAmount: '', maxOrderAmount: '', fee: '' }]);
+  };
+
+  const updateTier = (index: number, field: string, value: string) => {
+    const newTiers = [...tiers];
+    newTiers[index] = { ...newTiers[index], [field]: value };
+    setTiers(newTiers);
+  };
+
+  const removeTier = (index: number) => {
+    setTiers(tiers.filter((_, i) => i !== index));
   };
 
   const handleDelete = (id: string) => {
@@ -106,19 +129,52 @@ export default function FeesScreen() {
               />
             </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.label}>Fee (₱)</ThemedText>
+              <ThemedText style={styles.label}>Base Fee (Fallback ₱)</ThemedText>
               <TextInput 
                 style={styles.input} 
-                value={newFee} 
-                onChangeText={setNewFee} 
+                value={newBaseFee} 
+                onChangeText={setNewBaseFee} 
                 keyboardType="numeric" 
                 placeholder="50"
                 placeholderTextColor="#999"
               />
             </View>
           </View>
+
+          {/* Dynamic Tiers Section */}
+          <View style={styles.tiersContainer}>
+            <View style={styles.tiersHeader}>
+              <ThemedText style={styles.sectionSubtitle}>Subtotal Tiers (Optional)</ThemedText>
+              <TouchableOpacity onPress={addTier} style={styles.addTierBtn}>
+                <ThemedText style={styles.addTierBtnText}>+ Add Tier</ThemedText>
+              </TouchableOpacity>
+            </View>
+            
+            {tiers.map((tier, index) => (
+              <View key={index} style={styles.tierRow}>
+                <View style={styles.tierInputGroup}>
+                  <ThemedText style={styles.tierLabel}>Min PHP</ThemedText>
+                  <TextInput style={styles.tierInput} value={tier.minOrderAmount} onChangeText={(v) => updateTier(index, 'minOrderAmount', v)} keyboardType="numeric" placeholder="0" />
+                </View>
+                <View style={styles.tierInputGroup}>
+                  <ThemedText style={styles.tierLabel}>Max PHP (Empty=∞)</ThemedText>
+                  <TextInput style={styles.tierInput} value={tier.maxOrderAmount} onChangeText={(v) => updateTier(index, 'maxOrderAmount', v)} keyboardType="numeric" placeholder="500" />
+                </View>
+                <View style={styles.tierInputGroup}>
+                  <ThemedText style={styles.tierLabel}>Fee</ThemedText>
+                  <TextInput style={styles.tierInput} value={tier.fee} onChangeText={(v) => updateTier(index, 'fee', v)} keyboardType="numeric" placeholder="50" />
+                </View>
+                {tiers.length > 1 && (
+                  <TouchableOpacity onPress={() => removeTier(index)} style={styles.removeTierBtn}>
+                    <IconSymbol name="trash.fill" size={16} color="#FF5252" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            ))}
+          </View>
+
           <TouchableOpacity style={styles.addButton} onPress={handleAdd}>
-            <ThemedText style={styles.addButtonText}>Add Rule</ThemedText>
+            <ThemedText style={styles.addButtonText}>Save Configuration</ThemedText>
           </TouchableOpacity>
         </View>
 
@@ -137,7 +193,18 @@ export default function FeesScreen() {
                     {config.minDistance} - {config.maxDistance} km
                     </ThemedText>
                 </View>
-                <ThemedText style={styles.feeText}>₱{config.fee}</ThemedText>
+                <ThemedText style={styles.baseFeeText}>Base Fallback Fee: ₱{config.baseFee}</ThemedText>
+                
+                {config.tiers && config.tiers.length > 0 && (
+                  <View style={styles.tierDisplayList}>
+                    {config.tiers.map(t => (
+                      <View key={t.id} style={styles.tierDisplayRow}>
+                        <ThemedText style={styles.tierDisplayDesc}>💰 Orders ₱{t.minOrderAmount} {t.maxOrderAmount ? `- ₱${t.maxOrderAmount}` : 'and up'}</ThemedText>
+                        <ThemedText style={styles.tierDisplayFee}>₱{t.fee}</ThemedText>
+                      </View>
+                    ))}
+                  </View>
+                )}
               </View>
               
               <TouchableOpacity onPress={() => handleDelete(config.id)} style={styles.deleteButton}>
@@ -273,6 +340,7 @@ const styles = StyleSheet.create({
     padding: 8,
     backgroundColor: '#FFEBEE',
     borderRadius: 8,
+    marginLeft: 12,
   },
   emptyState: {
       padding: 40,
@@ -281,5 +349,98 @@ const styles = StyleSheet.create({
   emptyText: {
       color: '#999',
       fontSize: 14,
+  },
+  tiersContainer: {
+    backgroundColor: '#F9F9F9',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#EEE',
+    marginBottom: 16,
+  },
+  tiersHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#333',
+  },
+  addTierBtn: {
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  addTierBtnText: {
+    color: '#2E7D32',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  tierRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEE',
+    paddingBottom: 10,
+  },
+  tierInputGroup: {
+    flex: 1,
+  },
+  tierLabel: {
+    fontSize: 10,
+    color: '#666',
+    marginBottom: 4,
+    fontWeight: '600',
+  },
+  tierInput: {
+    borderWidth: 1,
+    borderColor: '#DDD',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    height: 36,
+    fontSize: 13,
+    backgroundColor: '#FFF',
+  },
+  removeTierBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+    backgroundColor: '#FFEBEE',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  baseFeeText: {
+    fontSize: 13,
+    color: '#888',
+    fontWeight: '600',
+    marginTop: 6,
+    marginBottom: 8,
+  },
+  tierDisplayList: {
+    backgroundColor: '#F9F9F9',
+    padding: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  tierDisplayRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  tierDisplayDesc: {
+    fontSize: 12,
+    color: '#555',
+    fontWeight: '600',
+  },
+  tierDisplayFee: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#C2185B',
   }
 });

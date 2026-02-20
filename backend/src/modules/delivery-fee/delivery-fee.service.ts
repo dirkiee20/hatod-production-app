@@ -20,7 +20,11 @@ export class DeliveryFeeService {
     }
   }
 
-  async calculateDeliveryFee(origin: { lat: number; lng: number }, destination: { lat: number; lng: number }): Promise<{ fee: number; distance: number; duration: number }> {
+  async calculateDeliveryFee(
+    origin: { lat: number; lng: number }, 
+    destination: { lat: number; lng: number },
+    subtotal?: number
+  ): Promise<{ fee: number; distance: number; duration: number }> {
     try {
       if (!this.mapboxToken) {
         throw new Error('Mapbox token missing');
@@ -50,30 +54,32 @@ export class DeliveryFeeService {
       const duration = route.duration; // seconds
 
       // Get Fee Config
-      // We look for a range that covers this distance
-      // We want to handle "gaps" or "out of bounds" gracefully
       const configs = await this.prisma.deliveryFeeConfig.findMany({
-        orderBy: { minDistance: 'asc' }
+        orderBy: { minDistance: 'asc' },
+        include: { tiers: true }
       });
 
-      let fee = 0;
-      const matchedConfig = configs.find(c => distanceInKm >= c.minDistance && distanceInKm < c.maxDistance);
+      let fee = 50; // Ultimate safety fallback
+      const matchedConfig = configs.find(c => distanceInKm >= c.minDistance && distanceInKm < c.maxDistance) || (configs.length > 0 && distanceInKm >= configs[configs.length - 1].maxDistance ? configs[configs.length - 1] : null);
 
       if (matchedConfig) {
-        fee = matchedConfig.fee;
-      } else if (configs.length > 0) {
-        // If distance > max defined, use the fee of the largest range
-        // Or check if it's below min (shouldn't happen if min is 0)
-        const lastConfig = configs[configs.length - 1];
-        if (distanceInKm >= lastConfig.maxDistance) {
-           fee = lastConfig.fee; // Or add extra logic here
+        if (subtotal !== undefined && matchedConfig.tiers.length > 0) {
+           // Find the tier that matches the subtotal
+           const matchedTier = matchedConfig.tiers.find(t => 
+             subtotal >= t.minOrderAmount && 
+             (t.maxOrderAmount === null || subtotal < t.maxOrderAmount)
+           );
+           
+           if (matchedTier) {
+             fee = matchedTier.fee;
+           } else {
+             fee = matchedConfig.baseFee ?? 50; 
+           }
         } else {
-           // Should ideally be covered by a range
-           fee = configs[0].fee; 
+           fee = matchedConfig.baseFee ?? 50;
         }
-      } else {
-        // No configs found
-        fee = 50; // Default fallback
+      } else if (configs.length > 0) {
+         fee = configs[0].baseFee ?? 50;
       }
 
       return {
@@ -95,17 +101,48 @@ export class DeliveryFeeService {
   async findAll() {
     return this.prisma.deliveryFeeConfig.findMany({
       orderBy: { minDistance: 'asc' },
+      include: {
+        tiers: {
+          orderBy: { minOrderAmount: 'asc' }
+        }
+      }
     });
   }
 
-  async create(data: { minDistance: number; maxDistance: number; fee: number }) {
-    return this.prisma.deliveryFeeConfig.create({ data });
+  async create(data: { minDistance: number; maxDistance: number; baseFee?: number; tiers?: any[] }) {
+    return this.prisma.deliveryFeeConfig.create({ 
+      data: {
+        minDistance: data.minDistance,
+        maxDistance: data.maxDistance,
+        baseFee: data.baseFee,
+        tiers: {
+          create: data.tiers || []
+        }
+      },
+      include: { tiers: true }
+    });
   }
 
-  async update(id: string, data: { minDistance?: number; maxDistance?: number; fee?: number }) {
+  async update(id: string, data: { minDistance?: number; maxDistance?: number; baseFee?: number; tiers?: any[] }) {
+    // Basic update for distance. If you need to deeply update tiers,
+    // usually you delete old tiers and insert new ones or handle a complex upsert
+    if (data.tiers) {
+       await this.prisma.deliveryFeeTier.deleteMany({ where: { configId: id } });
+    }
+
     return this.prisma.deliveryFeeConfig.update({
       where: { id },
-      data,
+      data: {
+        minDistance: data.minDistance,
+        maxDistance: data.maxDistance,
+        baseFee: data.baseFee,
+        ...(data.tiers && {
+           tiers: {
+             create: data.tiers
+           }
+        })
+      },
+      include: { tiers: true }
     });
   }
 

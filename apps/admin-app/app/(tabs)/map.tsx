@@ -8,6 +8,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 import { getMerchants, getAllOrders, getRiders } from '../../api/services';
 import { Merchant, Order, Rider } from '../../api/types';
+import { resolveImageUrl } from '../../api/client';
+import * as Location from 'expo-location';
 
 // Initialize Mapbox with the same token key as other apps
 Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN || '');
@@ -23,6 +25,12 @@ export default function MapScreen() {
   const filters = ['All', 'Restaurants', 'Active Riders'];
 
   useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('Permission to access location was denied');
+      }
+    })();
     fetchData();
   }, []);
 
@@ -147,21 +155,30 @@ export default function MapScreen() {
             />
 
             {/* Restaurant Markers */}
-            {shouldShowRestaurants && merchants.map((merchant) => (
-                merchant.latitude && merchant.longitude && (
-                    <Mapbox.PointAnnotation 
-                        key={`merchant-${merchant.id}`} 
-                        id={`merchant-${merchant.id}`} 
-                        coordinate={[merchant.longitude, merchant.latitude]}
-                    >
-                         <View style={styles.merchantMarker}>
-                             <IconSymbol size={16} name="restaurants" color="#FFF" />
-                         </View>
-                         <Mapbox.Callout title={merchant.name} />
-                    </Mapbox.PointAnnotation>
-                )
-            ))}
-
+            {shouldShowRestaurants && merchants.map((merchant) => {
+                const imageUrl = resolveImageUrl(merchant.logo || merchant.imageUrl || merchant.coverImage);
+                return (
+                    merchant.latitude && merchant.longitude && (
+                        <Mapbox.MarkerView 
+                            key={`merchant-${merchant.id}`} 
+                            id={`merchant-${merchant.id}`} 
+                            coordinate={[merchant.longitude, merchant.latitude]}
+                        >
+                             {imageUrl ? (
+                                 <Image
+                                    source={{ uri: imageUrl }}
+                                    style={styles.merchantLogoMarker}
+                                 />
+                             ) : (
+                                 <View style={[styles.merchantLogoMarker, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#F57C00' }]}>
+                                     <IconSymbol size={20} name="restaurants" color="#FFF" />
+                                 </View>
+                             )}
+                        </Mapbox.MarkerView>
+                    )
+                );
+            })}
+            
             {/* Active Rider Markers */}
             {shouldShowRiders && getActiveRiders().map((rider) => (
                 rider.currentLatitude && rider.currentLongitude && (
@@ -173,10 +190,16 @@ export default function MapScreen() {
                          <View style={styles.riderMarker}>
                              <IconSymbol size={16} name="map" color="#FFF" /> 
                          </View>
-                         <Mapbox.Callout title={`${rider.firstName} ${rider.lastName}`} />
+                        <Mapbox.Callout title={`${rider.firstName} ${rider.lastName}`} />
                     </Mapbox.PointAnnotation>
                 )
             ))}
+
+            <Mapbox.UserLocation 
+                visible={true} 
+                showsUserHeadingIndicator={true}
+                androidRenderMode="gps"
+            />
             
         </Mapbox.MapView>
 
@@ -285,20 +308,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 10,
   },
-  merchantMarker: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F57C00',
-    justifyContent: 'center',
-    alignItems: 'center',
+  merchantLogoMarker: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    resizeMode: 'cover',
     borderWidth: 2,
     borderColor: '#FFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+    backgroundColor: '#FFF',
   },
   riderMarker: {
     width: 32,

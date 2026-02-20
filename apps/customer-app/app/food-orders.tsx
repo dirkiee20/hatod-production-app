@@ -5,6 +5,7 @@ import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import React, { useState, useCallback } from 'react';
 import { getMyOrders } from '@/api/services';
+import { resolveImageUrl } from '@/api/client';
 
 export default function FoodOrdersScreen() {
   const router = useRouter();
@@ -46,7 +47,27 @@ export default function FoodOrdersScreen() {
   const activeOrders = orders.filter(o => !['DELIVERED', 'COMPLETED', 'CANCELED'].includes(o.status));
   const pastOrders = orders.filter(o => ['DELIVERED', 'COMPLETED', 'CANCELED'].includes(o.status));
 
-  const renderOrderCard = (order: any, isPast: boolean) => (
+  const StoreLogo = ({ logoUrl }: { logoUrl: string | null | undefined }) => {
+    const [imageError, setImageError] = useState(false);
+    
+    if (!logoUrl || imageError) {
+      return <IconSymbol size={20} name="food" color="#f78734" />;
+    }
+    
+    return (
+      <Image 
+        source={{ uri: logoUrl }} 
+        style={styles.storeLogo}
+        resizeMode="cover"
+        onError={() => setImageError(true)}
+      />
+    );
+  };
+
+  const renderOrderCard = (order: any, isPast: boolean) => {
+    const logoUrl = order.merchant?.logo ? resolveImageUrl(order.merchant.logo) : null;
+    
+    return (
     <TouchableOpacity 
         key={order.id} 
         style={styles.card} 
@@ -55,7 +76,7 @@ export default function FoodOrdersScreen() {
         <View style={styles.cardHeader}>
             <View style={styles.restaurantRow}>
                 <View style={styles.iconBox}>
-                    <IconSymbol size={20} name="food" color="#f78734" />
+                    <StoreLogo logoUrl={logoUrl} />
                 </View>
                 <View>
                     <ThemedText style={styles.restaurantName}>{order.merchant?.name || 'Unknown Store'}</ThemedText>
@@ -99,7 +120,8 @@ export default function FoodOrdersScreen() {
             )}
         </View>
     </TouchableOpacity>
-  );
+    );
+  };
 
   return (
     <ThemedView style={styles.container}>
@@ -233,6 +255,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
+    overflow: 'hidden',
+  },
+  storeLogo: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
   },
   restaurantName: {
     fontSize: 14,

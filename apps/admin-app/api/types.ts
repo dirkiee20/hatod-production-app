@@ -129,11 +129,22 @@ export interface Rider {
   orders: { id: string; status: OrderStatus; merchant: { name: true } }[];
 }
 
+export interface DeliveryFeeTier {
+  id: string;
+  configId: string;
+  minOrderAmount: number;
+  maxOrderAmount: number | null;
+  fee: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface DeliveryFeeConfig {
   id: string;
   minDistance: number;
   maxDistance: number;
-  fee: number;
+  baseFee: number | null;
+  tiers: DeliveryFeeTier[];
   createdAt: string;
   updatedAt: string;
 }

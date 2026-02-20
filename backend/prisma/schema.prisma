@@ -359,9 +359,26 @@ model DeliveryFeeConfig {
   id          String   @id @default(uuid())
   minDistance Float
   maxDistance Float
-  fee         Float
+  baseFee     Float?   // Optional fallback fee if tiers don't match or for legacy
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
+  tiers       DeliveryFeeTier[]
+
   @@map("delivery_fee_configs")
+}
+
+model DeliveryFeeTier {
+  id             String            @id @default(uuid())
+  configId       String
+  minOrderAmount Float
+  maxOrderAmount Float?            // null implies infinity / everything above minOrderAmount
+  fee            Float
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  config         DeliveryFeeConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  @@index([configId])
+  @@map("delivery_fee_tiers")
 }

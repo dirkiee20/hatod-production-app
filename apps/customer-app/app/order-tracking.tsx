@@ -76,7 +76,34 @@ export default function OrderTrackingScreen() {
             // Match against current order or URL param
             if ((currentOrder && currentOrder.id === updatedOrder.id) || (updatedOrder.id === currentId)) {
                 console.log('[OrderTracking] Updating order state');
-                return { ...currentOrder, ...updatedOrder };
+
+                // Shallow-merge top-level fields first
+                const merged: any = { ...currentOrder, ...updatedOrder };
+
+                // Deep-merge nested objects so we don't lose fields (like merchant.logo)
+                if (currentOrder?.merchant || updatedOrder.merchant) {
+                    merged.merchant = {
+                        ...(currentOrder?.merchant || {}),
+                        ...(updatedOrder.merchant || {}),
+                    };
+                }
+
+                if (currentOrder?.rider || updatedOrder.rider) {
+                    merged.rider = {
+                        ...(currentOrder?.rider || {}),
+                        ...(updatedOrder.rider || {}),
+                    };
+                }
+
+                if (currentOrder?.address || updatedOrder.address) {
+                    merged.address = {
+                        ...(currentOrder?.address || {}),
+                        ...(updatedOrder.address || {}),
+                    };
+                }
+
+                console.log('[OrderTracking] Merged merchant logo:', merged?.merchant?.logo);
+                return merged;
             }
             return currentOrder;
         });
@@ -140,6 +167,9 @@ export default function OrderTrackingScreen() {
   const fetchOrder = async () => {
       try {
           const data = await getOrderById(id as string);
+          console.log('[OrderTracking] Order data:', JSON.stringify(data, null, 2));
+          console.log('[OrderTracking] Merchant logo:', data?.merchant?.logo);
+          console.log('[OrderTracking] Resolved logo URL:', data?.merchant?.logo ? resolveImageUrl(data.merchant.logo) : 'N/A');
           setOrder(data);
           
           // Initial Camera Position Logic
@@ -275,25 +305,13 @@ export default function OrderTrackingScreen() {
                 </Mapbox.PointAnnotation>
             )}
 
-            {/* Restaurant Location */}
-             <Mapbox.PointAnnotation id="restaurant" coordinate={merchantCoords}>
-                 {order.merchant?.logo ? (
-                    <View style={styles.restaurantMarkerContainer}>
-                        <View style={styles.logoFallback}>
-                             <IconSymbol size={18} name="food" color="#F57C00" />
-                        </View>
-                        <Image 
-                            source={{ uri: resolveImageUrl(order.merchant.logo) || undefined }} 
-                            style={styles.restaurantLogoMarker} 
-                        />
-                    </View>
-                 ) : (
-                    <View style={styles.restaurantMarker}>
-                        <IconSymbol size={16} name="food" color="#FFF" />
-                    </View>
-                 )}
-                 <Mapbox.Callout title={order.merchant?.name || 'Restaurant'} />
-            </Mapbox.PointAnnotation>
+            {/* Restaurant Location (Store Logo) */}
+            <Mapbox.MarkerView id="restaurant" coordinate={merchantCoords}>
+                <Image
+                    source={{ uri: resolveImageUrl(order.merchant?.logo) || undefined }}
+                    style={styles.restaurantLogoMarker}
+                />
+            </Mapbox.MarkerView>
         </Mapbox.MapView>
 
         {/* Back Button */}
@@ -496,51 +514,14 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  restaurantMarker: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F57C00',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  restaurantMarkerContainer: {
+  restaurantLogoMarker: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#FFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#F57C00',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-    overflow: 'hidden',
-  },
-  restaurantLogoMarker: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
     resizeMode: 'cover',
-  },
-  logoFallback: {
-    position: 'absolute',
-    top: 0,
-    left: 0, 
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFF',
+    backgroundColor: '#FFF',
   },
   backBtn: {
     position: 'absolute',

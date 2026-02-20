@@ -22,6 +22,7 @@ export class DeliveryFeeController {
     @Query('originLng') originLng: string,
     @Query('destLat') destLat: string,
     @Query('destLng') destLng: string,
+    @Query('subtotal') subtotal?: string,
   ) {
     if (!originLat || !originLng || !destLat || !destLng) {
        throw new BadRequestException('Missing coordinates');
@@ -29,14 +30,15 @@ export class DeliveryFeeController {
     
     const origin = { lat: parseFloat(originLat), lng: parseFloat(originLng) };
     const destination = { lat: parseFloat(destLat), lng: parseFloat(destLng) };
+    const orderSubtotal = subtotal ? parseFloat(subtotal) : undefined;
     
-    return this.deliveryFeeService.calculateDeliveryFee(origin, destination);
+    return this.deliveryFeeService.calculateDeliveryFee(origin, destination, orderSubtotal);
   }
 
   @Post()
   @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Create a delivery fee range configuration' })
-  create(@Body() createDto: { minDistance: number; maxDistance: number; fee: number }) {
+  @ApiOperation({ summary: 'Create a delivery fee range configuration with explicit tiers' })
+  create(@Body() createDto: { minDistance: number; maxDistance: number; baseFee?: number; tiers?: any[] }) {
     return this.deliveryFeeService.create(createDto);
   }
 
@@ -50,7 +52,7 @@ export class DeliveryFeeController {
   @Put(':id')
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Update a delivery fee configuration' })
-  update(@Param('id') id: string, @Body() updateDto: { minDistance?: number; maxDistance?: number; fee?: number }) {
+  update(@Param('id') id: string, @Body() updateDto: { minDistance?: number; maxDistance?: number; baseFee?: number; tiers?: any[] }) {
     return this.deliveryFeeService.update(id, updateDto);
   }
 
