@@ -33,6 +33,7 @@ const MAPPING = {
   'services': 'grid-view',
   'map': 'map',
   'pabili': 'shopping-bag',
+  'trash.fill': 'delete',
 } as IconMapping;
 
 /**

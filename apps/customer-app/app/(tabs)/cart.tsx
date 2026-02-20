@@ -7,7 +7,7 @@ import { useCart } from '@/context/CartContext';
 
 export default function CartScreen() {
   const router = useRouter();
-  const { items, cartTotal, updateQuantity, itemCount, deliveryFee } = useCart();
+  const { items, cartTotal, updateQuantity, removeFromCart, itemCount, deliveryFee } = useCart();
   
   const total = cartTotal + deliveryFee;
 
@@ -49,7 +49,16 @@ export default function CartScreen() {
                     </TouchableOpacity>
                   </ThemedView>
                 </ThemedView>
-                <ThemedText style={styles.itemTotal}>₱{item.totalPrice}</ThemedText>
+                <ThemedView style={styles.itemRight}>
+                  <ThemedText style={styles.itemTotal}>₱{item.totalPrice}</ThemedText>
+                  <TouchableOpacity
+                    style={styles.deleteBtn}
+                    onPress={() => removeFromCart(item.id)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <IconSymbol name="trash.fill" size={16} color="#D32F2F" />
+                  </TouchableOpacity>
+                </ThemedView>
               </ThemedView>
             ))
         )}
@@ -175,6 +184,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     color: '#333',
+  },
+  itemRight: {
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: 10,
+    backgroundColor: 'transparent',
+  },
+  deleteBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#FFEBEE',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   billSection: {
     padding: 20,
