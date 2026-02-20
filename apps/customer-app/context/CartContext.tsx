@@ -65,7 +65,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         id: ci.id,
         menuItemId: ci.menuItemId,
         merchantId: ci.menuItem.merchantId,
-        storeName: ci.menuItem.storeName, // Note: backend needs to include this or we fetch it
+        storeName: ci.menuItem?.merchant?.name,
         deliveryFee: 50, // Hardcoded or from backend
         name: ci.menuItem.name,
         price: ci.menuItem.price,
