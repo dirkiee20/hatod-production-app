@@ -13,11 +13,9 @@ export interface CartItem {
   price: number;
   quantity: number;
   image?: string;
-  options?: {
-    size?: string;
-    addons?: string[];
-    instructions?: string;
-  };
+  // Flexible options: keyed by group name → string (radio) or string[] (checkbox)
+  // Also supports legacy { size, addons, instructions } shape from older code
+  options?: Record<string, any>;
   totalPrice: number; // calculated as (base + options) * quantity
 }
 

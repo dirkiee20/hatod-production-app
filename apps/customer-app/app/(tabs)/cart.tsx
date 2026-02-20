@@ -3,7 +3,45 @@ import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useCart } from '@/context/CartContext';
+import { useCart, CartItem } from '@/context/CartContext';
+
+// Renders the selected variants/add-ons compactly under the item name
+function VariantSummary({ options }: { options: CartItem['options'] }) {
+  if (!options || typeof options !== 'object') return null;
+  const entries = Object.entries(options as Record<string, any>);
+  if (entries.length === 0) return null;
+
+  return (
+    <ThemedView style={variantStyles.container}>
+      {entries.map(([key, value]) => {
+        if (key === 'note') {
+          // Special instructions — italicised
+          return (
+            <ThemedText key={key} style={variantStyles.note}>
+              📝 {String(value)}
+            </ThemedText>
+          );
+        }
+        const display = Array.isArray(value) ? value.join(', ') : String(value);
+        if (!display) return null;
+        return (
+          <ThemedView key={key} style={variantStyles.chipRow}>
+            <ThemedText style={variantStyles.chipLabel}>{key}:</ThemedText>
+            <ThemedText style={variantStyles.chipValue}>{display}</ThemedText>
+          </ThemedView>
+        );
+      })}
+    </ThemedView>
+  );
+}
+
+const variantStyles = StyleSheet.create({
+  container: { marginTop: 4, backgroundColor: 'transparent', gap: 2 },
+  chipRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'transparent', flexWrap: 'wrap' },
+  chipLabel: { fontSize: 10, fontWeight: '700', color: '#999', marginRight: 3 },
+  chipValue: { fontSize: 10, color: '#555', fontWeight: '600' },
+  note: { fontSize: 10, color: '#888', fontStyle: 'italic', marginTop: 1 },
+});
 
 export default function CartScreen() {
   const router = useRouter();
@@ -37,6 +75,7 @@ export default function CartScreen() {
                 <ThemedView style={styles.itemDetails}>
                   <ThemedText style={styles.storeName}>{item.storeName || 'Unknown Store'}</ThemedText>
                   <ThemedText style={styles.itemName}>{item.name}</ThemedText>
+                  <VariantSummary options={item.options} />
                   <ThemedText style={styles.itemPrice}>₱{item.price}</ThemedText>
                   
                   <ThemedView style={styles.quantityControls}>
