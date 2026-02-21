@@ -177,16 +177,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     // But frontend might pass either depending on how it was built. 
     // The mappedItems uses `ci.id` as `id`, so it should be correct.
     const res = await removeCartItem(itemId);
-    if (res) refreshCart();
+    if (res) await refreshCart();
   };
 
   const updateQuantity = async (itemId: string, quantity: number) => {
     if (quantity < 1) {
-      removeFromCart(itemId);
+      await removeFromCart(itemId);
       return;
     }
     const res = await updateCartItem(itemId, quantity);
-    if (res) refreshCart();
+    if (res) await refreshCart();
   };
 
   const clearCart = async () => {
