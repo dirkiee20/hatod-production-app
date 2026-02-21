@@ -1,6 +1,7 @@
 import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Image, useWindowDimensions, View, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -15,9 +16,12 @@ export default function GroceryScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('All');
 
-  useEffect(() => {
-    loadMerchants();
-  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadMerchants();
+    }, [])
+  );
 
   const loadMerchants = async () => {
     setLoading(true);
