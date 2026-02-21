@@ -107,13 +107,31 @@ export class CartService {
       throw new NotFoundException('Menu item not found');
     }
 
-    // Logic to merge items if same options?
-    // For simplicity, we just add even if options are same, or we can check.
-    // Let's implement basic merging if options match exactly.
+    const existingItems = await this.prisma.cartItem.findMany({
+      where: {
+        cartId: cart.id,
+        menuItemId: dto.menuItemId,
+      }
+    });
+
+    const newOptionsStr = JSON.stringify(dto.options || {});
     
-    // Note: Comparing JSON in Prisma/DB is tricky. For this MVP, we will query all items and filter in JS or just create new one.
-    // Creating new one is safer for "different options" logic.
-    
+    // Find an item that exactly matches the incoming options
+    const existingMatch = existingItems.find(item => {
+      const existingOptionsStr = JSON.stringify(item.options || {});
+      return existingOptionsStr === newOptionsStr;
+    });
+
+    if (existingMatch) {
+      // Just merge & increment quantity
+      return this.prisma.cartItem.update({
+        where: { id: existingMatch.id },
+        data: { quantity: existingMatch.quantity + dto.quantity },
+        include: { menuItem: true },
+      });
+    }
+
+    // Otherwise, create a separate cart item entirely
     return this.prisma.cartItem.create({
       data: {
         cartId: cart.id,
