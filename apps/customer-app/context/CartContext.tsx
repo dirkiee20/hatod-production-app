@@ -166,7 +166,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     // Let's wait for server for "production ready" reliability
     const res = await addToCartItem(newItem.menuItemId, newItem.quantity, newItem.options);
     if (res) {
-        refreshCart();
+        await refreshCart();
     } else {
         Alert.alert('Error', 'Failed to add item to cart');
     }
