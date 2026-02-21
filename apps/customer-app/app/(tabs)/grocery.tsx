@@ -148,25 +148,25 @@ export default function GroceryScreen() {
                     </ThemedView>
                     <ThemedView style={styles.storeInfo}>
                       <ThemedText style={styles.storeName} numberOfLines={1}>{store.name}</ThemedText>
-                      {store.description && (
+                      {store.description ? (
                         <ThemedText style={styles.storeDescription} numberOfLines={1}>
                           {store.description}
                         </ThemedText>
-                      )}
+                      ) : null}
                       <ThemedView style={styles.deliveryInfoRow}>
                         <IconSymbol size={12} name="paperplane.fill" color="#888" />
                         <ThemedText style={styles.deliveryText}>
                           {store.deliveryTime || '15-30 min'} • ₱{store.deliveryFee || 29} delivery
                         </ThemedText>
                       </ThemedView>
-                      {store.rating && (
+                      {store.rating ? (
                         <ThemedView style={styles.ratingRow}>
                           <ThemedText style={styles.ratingText}>★ {store.rating.toFixed(1)}</ThemedText>
-                          {store.reviewCount && (
+                          {store.reviewCount ? (
                             <ThemedText style={styles.reviewText}>({store.reviewCount})</ThemedText>
-                          )}
+                          ) : null}
                         </ThemedView>
-                      )}
+                      ) : null}
                     </ThemedView>
                   </TouchableOpacity>
                 ))
