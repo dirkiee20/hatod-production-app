@@ -81,6 +81,24 @@ export default function ItemDetailScreen() {
     return Math.round(((item?.price ?? 0) + extra) * quantity * 100) / 100;
   }, [radioSelections, checkboxSelections, quantity, item]);
 
+  // Ensure all required groups have at least one selection
+  const isValid = useMemo(() => {
+    if (!item) return false;
+    const groups = normaliseGroups(Array.isArray(item.options) ? item.options : []);
+    for (let gi = 0; gi < groups.length; gi++) {
+      const g = groups[gi];
+      if (g.required) {
+        if (g.isRadio) {
+          if (radioSelections[gi] === undefined) return false;
+        } else {
+          const selected = checkboxSelections[gi] ?? new Set();
+          if (selected.size === 0) return false;
+        }
+      }
+    }
+    return true;
+  }, [radioSelections, checkboxSelections, item]);
+
   const handleAddToCart = () => {
     if (!item) return;
     const groups = normaliseGroups(Array.isArray(item.options) ? item.options : []);
@@ -269,8 +287,15 @@ export default function ItemDetailScreen() {
         </ThemedView>
 
         {/* Add to cart */}
-        <TouchableOpacity style={styles.addToCartBtn} onPress={handleAddToCart} activeOpacity={0.85}>
-          <ThemedText style={styles.addToCartText}>Add to Cart — ₱{total.toFixed(2)}</ThemedText>
+        <TouchableOpacity 
+          style={[styles.addToCartBtn, !isValid && styles.addToCartBtnDisabled]} 
+          onPress={handleAddToCart} 
+          activeOpacity={0.85}
+          disabled={!isValid}
+        >
+          <ThemedText style={styles.addToCartText}>
+            {!isValid ? 'Select required options' : `Add to Cart — ₱${total.toFixed(2)}`}
+          </ThemedText>
         </TouchableOpacity>
       </ThemedView>
     </ThemedView>
@@ -366,6 +391,9 @@ const styles = StyleSheet.create({
   addToCartBtn: {
     flex: 1, backgroundColor: '#C2185B', height: 50,
     borderRadius: 12, justifyContent: 'center', alignItems: 'center',
+  },
+  addToCartBtnDisabled: {
+    backgroundColor: '#CCC',
   },
   addToCartText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
 });
