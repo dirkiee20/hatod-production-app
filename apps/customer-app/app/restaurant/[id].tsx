@@ -61,13 +61,25 @@ export default function RestaurantDetailScreen() {
   const handleQuickAdd = async (item: MenuItem) => {
     if (!merchant) return;
 
-    // Check for required options in description (simple heuristic)
-    const hasRequired = (item.description || '').toLowerCase().includes('(required)');
+    // Normalise options and select default (cheapest/base) required choices automatically
+    const groups = (Array.isArray(item.options) ? item.options : []).map(group => {
+      const choices = (Array.isArray(group.options) ? group.options : Array.isArray(group.items) ? group.items : []).map((c: any) => ({
+        label: c.label ?? c.name ?? '',
+        price: parseFloat(String(c.price ?? 0)),
+      }));
+      const required = !!(group.isRequired ?? group.required ?? false);
+      const isRadio = required || group.type === 'radio';
+      return { name: group.name ?? group.title ?? '', required, isRadio, choices };
+    });
 
-    if (hasRequired) {
-      router.push(`/menu-item/${item.id}`);
-      return;
-    }
+    const defaultOptions: Record<string, any> = {};
+    groups.forEach(g => {
+      if (g.isRadio && g.required && g.choices.length > 0) {
+        // Find choice with 0 price (base size), fallback to first
+        const defaultChoice = g.choices.find(c => c.price === 0) || g.choices[0];
+        defaultOptions[g.name] = defaultChoice.label;
+      }
+    });
 
     setAddingItemId(item.id);
     try {
@@ -81,10 +93,7 @@ export default function RestaurantDetailScreen() {
         price: item.price,
         quantity: 1,
         image: item.image || item.imageUrl,
-        options: {
-          size: 'Regular',
-          addons: [],
-        },
+        options: defaultOptions,
         totalPrice: item.price,
       });
     } finally {
