@@ -8,6 +8,7 @@ import { getMerchantById, getMenuItemsByMerchant } from '@/api/services';
 import { resolveImageUrl } from '@/api/client';
 import { Merchant, MenuItem } from '@/api/types';
 import { useCart } from '@/context/CartContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function GroceryStoreScreen() {
   const { id } = useLocalSearchParams();
@@ -17,8 +18,9 @@ export default function GroceryStoreScreen() {
   const [merchant, setMerchant] = useState<Merchant | null>(null);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const { addToCart } = useCart();
+  const { items, itemCount, cartTotal, addToCart } = useCart();
   const [addingItemId, setAddingItemId] = useState<string | null>(null);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     loadData();
@@ -214,15 +216,17 @@ export default function GroceryStoreScreen() {
       </Animated.ScrollView>
 
       {/* Cart Bar */}
-      <ThemedView style={styles.cartBar}>
-        <ThemedView style={styles.cartBarInfo}>
-          <ThemedText style={styles.cartQty}>1 ITEM</ThemedText>
-          <ThemedText style={styles.cartPrice}>₱120</ThemedText>
+      {itemCount > 0 && (
+        <ThemedView style={[styles.cartBar, { bottom: Math.max(30, insets.bottom + 10) }]}>
+          <ThemedView style={styles.cartBarInfo}>
+            <ThemedText style={styles.cartQty}>{itemCount} ITEM{itemCount > 1 ? 'S' : ''}</ThemedText>
+            <ThemedText style={styles.cartPrice}>₱{cartTotal}</ThemedText>
+          </ThemedView>
+          <TouchableOpacity style={styles.viewCartButton} onPress={() => router.push('/(tabs)/cart')}>
+            <ThemedText style={styles.viewCartText}>View Cart</ThemedText>
+          </TouchableOpacity>
         </ThemedView>
-        <TouchableOpacity style={styles.viewCartButton} onPress={() => router.push('/cart')}>
-          <ThemedText style={styles.viewCartText}>View Cart</ThemedText>
-        </TouchableOpacity>
-      </ThemedView>
+      )}
     </ThemedView>
   );
 }
