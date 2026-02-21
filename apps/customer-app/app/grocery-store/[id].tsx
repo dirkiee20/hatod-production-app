@@ -1,48 +1,118 @@
-import { StyleSheet, ScrollView, TouchableOpacity, Image, View, TextInput, Animated } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, Image, View, TextInput, Animated, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { getMerchantById, getMenuItemsByMerchant } from '@/api/services';
+import { resolveImageUrl } from '@/api/client';
+import { Merchant, MenuItem } from '@/api/types';
+import { useCart } from '@/context/CartContext';
 
 export default function GroceryStoreScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const scrollY = useRef(new Animated.Value(0)).current;
 
-  // Mock data for grocery store
-  const store = {
-    name: 'Shell Select - Borromeo',
-    rating: '4.9',
-    reviews: '1200+ ratings',
-    time: '30-45 min',
-    image: 'https://images.unsplash.com/photo-1534723452862-4c874018d66d?w=800',
-    logo: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400', 
-    promos: ['₱100 off with ₱800 spend', 'Free Delivery'],
+  const [merchant, setMerchant] = useState<Merchant | null>(null);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { addToCart } = useCart();
+  const [addingItemId, setAddingItemId] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadData();
+  }, [id]);
+
+  const loadData = async () => {
+    if (!id || typeof id !== 'string') return;
+    setLoading(true);
+    const [merchantData, menuData] = await Promise.all([
+      getMerchantById(id),
+      getMenuItemsByMerchant(id)
+    ]);
+    setMerchant(merchantData);
+    setMenuItems(menuData);
+    setLoading(false);
   };
 
-  const categories = [
-    {
-      title: 'Beverages',
-      items: [
-        { id: 'g1', name: 'Cold Brew Coffee 250ml', price: 120, image: 'https://images.unsplash.com/photo-1499638673689-79a0b5115d87?w=400' },
-        { id: 'g2', name: 'Orange Juice Fresh', price: 85, image: 'https://images.unsplash.com/photo-1613478223719-2ab8026aba72?w=400' },
-      ],
-    },
-    {
-      title: 'Snacks & Chips',
-      items: [
-        { id: 'g3', name: 'Potato Chips Regular', price: 45, image: 'https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=400' },
-        { id: 'g4', name: 'Mixed Nuts 50g', price: 65, image: 'https://images.unsplash.com/photo-1511067007398-7e4b90cfa4bc?w=400' },
-      ],
+  // Group menu items by category
+  const menuByCategory = menuItems.reduce((acc, item) => {
+    const categoryName = item.category?.name || 'Other';
+    if (!acc[categoryName]) {
+      acc[categoryName] = [];
     }
-  ];
+    acc[categoryName].push(item);
+    return acc;
+  }, {} as Record<string, MenuItem[]>);
+
+  const categories = Object.keys(menuByCategory).map(key => ({
+    title: key,
+    items: menuByCategory[key]
+  }));
+
+  const handleQuickAdd = async (item: MenuItem) => {
+    if (!merchant) return;
+    
+    // Simplistic default option resolution
+    const defaultOptions: Record<string, any> = {};
+    if (Array.isArray(item.options)) {
+      item.options.forEach(group => {
+        if (group.required && Array.isArray(group.options) && group.options.length > 0) {
+          const defaultChoice = group.options.find((c: any) => c.price === 0) || group.options[0];
+          defaultOptions[group.name] = defaultChoice.label;
+        }
+      });
+    }
+
+    setAddingItemId(item.id);
+    try {
+      await addToCart({
+        id: Date.now().toString(),
+        menuItemId: item.id,
+        merchantId: merchant.id,
+        storeName: merchant.name,
+        deliveryFee: merchant.deliveryFee || 0,
+        name: item.name,
+        price: item.price,
+        quantity: 1,
+        image: item.image || item.imageUrl,
+        options: defaultOptions,
+        totalPrice: item.price,
+      });
+    } finally {
+      setAddingItemId(null);
+    }
+  };
 
   const headerOpacity = scrollY.interpolate({
     inputRange: [0, 80],
     outputRange: [0, 1],
     extrapolate: 'clamp',
   });
+
+  if (loading) {
+    return (
+      <ThemedView style={styles.container}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ThemedView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+          <ActivityIndicator size="large" color="#C2185B" />
+          <ThemedText style={{ marginTop: 12 }}>Loading store...</ThemedText>
+        </ThemedView>
+      </ThemedView>
+    );
+  }
+
+  if (!merchant) {
+    return (
+      <ThemedView style={styles.container}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ThemedView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+           <ThemedText>Store not found.</ThemedText>
+        </ThemedView>
+      </ThemedView>
+    );
+  }
 
   return (
     <ThemedView style={styles.container}>
@@ -54,7 +124,7 @@ export default function GroceryStoreScreen() {
           <TouchableOpacity onPress={() => router.back()}>
             <IconSymbol size={20} name="chevron.right" color="#000" style={{transform: [{rotate: '180deg'}]}} />
           </TouchableOpacity>
-          <ThemedText style={styles.headerTitle} numberOfLines={1}>{store.name}</ThemedText>
+          <ThemedText style={styles.headerTitle} numberOfLines={1}>{merchant.name}</ThemedText>
           <View style={styles.headerActions}>
             <IconSymbol size={18} name="filter" color="#000" />
           </View>
@@ -77,7 +147,7 @@ export default function GroceryStoreScreen() {
         scrollEventThrottle={16}
       >
         <ThemedView style={styles.bannerContainer}>
-          <Image source={{ uri: store.image }} style={styles.bannerImage} />
+          <Image source={{ uri: resolveImageUrl(merchant.coverImage || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=800') }} style={styles.bannerImage} />
         </ThemedView>
         
         <ThemedView style={styles.infoCard}>
@@ -86,18 +156,19 @@ export default function GroceryStoreScreen() {
                <IconSymbol size={30} name="grocery" color="#C2185B" />
             </ThemedView>
             <ThemedView style={styles.storeInfoDetails}>
-               <ThemedText style={styles.storeNameMain} numberOfLines={1}>{store.name}</ThemedText>
-               <ThemedText style={styles.storeMetaSub}>★ {store.rating} • {store.time}</ThemedText>
+               <ThemedText style={styles.storeNameMain} numberOfLines={1}>{merchant.name}</ThemedText>
+               <ThemedText style={styles.storeMetaSub}>★ {merchant.rating?.toFixed(1) || 'N/A'} • {merchant.deliveryTime || '15-30 min'}</ThemedText>
             </ThemedView>
           </ThemedView>
 
           {/* Promo Section */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.promoScroll}>
-            {store.promos.map((promo, i) => (
-              <ThemedView key={i} style={styles.promoBadge}>
-                <ThemedText style={styles.promoText}>🎫 {promo}</ThemedText>
+            {/* Real promo fields might not exist on merchant yet, showing mock ones to layout visually or omit */}
+            {merchant.deliveryFee === 0 && (
+              <ThemedView style={styles.promoBadge}>
+                <ThemedText style={styles.promoText}>🎫 Free Delivery</ThemedText>
               </ThemedView>
-            ))}
+            )}
           </ScrollView>
 
           {/* Grocery Search */}
@@ -117,11 +188,15 @@ export default function GroceryStoreScreen() {
               <ThemedText style={styles.groupTitle}>{section.title}</ThemedText>
               <View style={styles.groceryGrid}>
                 {section.items.map((item) => (
-                  <TouchableOpacity key={item.id} style={styles.groceryItem}>
+                  <TouchableOpacity key={item.id} style={styles.groceryItem} onPress={() => router.push(`/menu-item-details/${item.id}` as any)}>
                     <ThemedView style={styles.itemImageContainer}>
-                      <Image source={{ uri: item.image }} style={styles.itemImg} />
-                      <TouchableOpacity style={styles.addBtn}>
-                        <IconSymbol size={18} name="add" color="#C2185B" />
+                      <Image source={{ uri: resolveImageUrl(item.image) }} style={styles.itemImg} />
+                      <TouchableOpacity style={styles.addBtn} onPress={() => handleQuickAdd(item)} disabled={addingItemId === item.id}>
+                        {addingItemId === item.id ? (
+                          <ActivityIndicator size="small" color="#C2185B" />
+                        ) : (
+                          <IconSymbol size={18} name="add" color="#C2185B" />
+                        )}
                       </TouchableOpacity>
                     </ThemedView>
                     <ThemedView style={styles.itemInfo}>
