@@ -188,7 +188,7 @@ export default function GroceryStoreScreen() {
               <ThemedText style={styles.groupTitle}>{section.title}</ThemedText>
               <View style={styles.groceryGrid}>
                 {section.items.map((item) => (
-                  <TouchableOpacity key={item.id} style={styles.groceryItem} onPress={() => router.push(`/menu-item-details/${item.id}` as any)}>
+                  <TouchableOpacity key={item.id} style={styles.groceryItem} onPress={() => router.push(`/menu-item/${item.id}` as any)}>
                     <ThemedView style={styles.itemImageContainer}>
                       <Image source={{ uri: resolveImageUrl(item.image) }} style={styles.itemImg} />
                       <TouchableOpacity style={styles.addBtn} onPress={() => handleQuickAdd(item)} disabled={addingItemId === item.id}>
