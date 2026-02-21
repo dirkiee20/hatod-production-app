@@ -306,7 +306,7 @@ export default function RestaurantDetailScreen() {
                             items.some(ci => ci.menuItemId === item.id) && { borderColor: '#4CAF50', backgroundColor: '#F1F8E9' }
                           ]} 
                           onPress={() => handleQuickAdd(item)}
-                          disabled={addingItemId === item.id}
+                          disabled={addingItemId === item.id || items.some(ci => ci.menuItemId === item.id)}
                         >
                           {addingItemId === item.id ? (
                             <ActivityIndicator size="small" color={items.some(ci => ci.menuItemId === item.id) ? "#4CAF50" : "#C2185B"} />
