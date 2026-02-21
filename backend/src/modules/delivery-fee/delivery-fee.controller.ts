@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '@prisma/client';
+import { CreateDeliveryFeeDto, UpdateDeliveryFeeDto } from './dto/delivery-fee.dto';
 
 @ApiTags('delivery-fee')
 @ApiBearerAuth()
@@ -38,7 +39,7 @@ export class DeliveryFeeController {
   @Post()
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Create a delivery fee range configuration with explicit tiers' })
-  create(@Body() createDto: { minDistance: number; maxDistance: number; baseFee?: number; tiers?: any[] }) {
+  create(@Body() createDto: CreateDeliveryFeeDto) {
     return this.deliveryFeeService.create(createDto);
   }
 
@@ -52,7 +53,7 @@ export class DeliveryFeeController {
   @Put(':id')
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Update a delivery fee configuration' })
-  update(@Param('id') id: string, @Body() updateDto: { minDistance?: number; maxDistance?: number; baseFee?: number; tiers?: any[] }) {
+  update(@Param('id') id: string, @Body() updateDto: UpdateDeliveryFeeDto) {
     return this.deliveryFeeService.update(id, updateDto);
   }
 
