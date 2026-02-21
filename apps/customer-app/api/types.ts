@@ -13,7 +13,6 @@ export interface Merchant {
   reviewCount?: number;
   deliveryTime?: string;
   deliveryFee?: number;
-  isActive: boolean;
   isOpen?: boolean;
   isApproved?: boolean;
   operatingHours?: any;

@@ -25,9 +25,15 @@ export default function GroceryScreen() {
 
   const loadMerchants = async () => {
     setLoading(true);
-    const data = await getMerchants();
-    setMerchants(data.filter((m: Merchant) => m.isActive && (m.type === 'GROCERY' || m.type === 'PHARMACY')));
-    setLoading(false);
+    try {
+      const data = await getMerchants();
+      setMerchants(data.filter((m: Merchant) => m.type === 'GROCERY' || m.type === 'PHARMACY'));
+    } catch (e: any) {
+      console.warn('loadMerchants failed:', e?.message);
+      setMerchants([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const filteredMerchants = merchants.filter(m => 
@@ -133,7 +139,7 @@ export default function GroceryScreen() {
                       />
                       <ThemedView style={styles.storeOverlay}>
                         <ThemedText style={styles.storeStatusText}>
-                          {store.isActive ? 'Open Now' : 'Closed'}
+                          {store.isOpen ? 'Open Now' : 'Closed'}
                         </ThemedText>
                       </ThemedView>
                       <ThemedView style={styles.heartButton}>
