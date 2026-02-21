@@ -295,13 +295,14 @@ export const createReview = async (orderId: string, rating: number, comment?: st
   }
 };
 
-export const getDeliveryFeeEstimate = async (origin: { lat: number, lng: number }, destination: { lat: number, lng: number }): Promise<{ fee: number, distance: number, duration: number } | null> => {
+export const getDeliveryFeeEstimate = async (origin: { lat: number, lng: number }, destination: { lat: number, lng: number }, subtotal: number): Promise<{ fee: number, distance: number, duration: number } | null> => {
   try {
     const params = new URLSearchParams({
       originLat: origin.lat.toString(),
       originLng: origin.lng.toString(),
       destLat: destination.lat.toString(),
-      destLng: destination.lng.toString()
+      destLng: destination.lng.toString(),
+      subtotal: subtotal.toString(),
     });
 
     const response = await authenticatedFetch(`/delivery-fee/estimate?${params.toString()}`);

@@ -128,9 +128,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   // Calculate delivery fee when address or items change
   useEffect(() => {
     const calculateFee = async () => {
-      if (!deliveryAddress || !deliveryAddress.latitude || !deliveryAddress.longitude || items.length === 0) {
+      // If cart is completely empty or subtotal is empty, fee is absolutely 0.
+      const localCartTotal = items.reduce((sum, item) => sum + item.totalPrice, 0);
 
-        setDeliveryFee(50); // Fallback to default
+      if (items.length === 0 || localCartTotal === 0) {
+        setDeliveryFee(0);
+        return;
+      }
+
+      if (!deliveryAddress || !deliveryAddress.latitude || !deliveryAddress.longitude) {
+        setDeliveryFee(50); // Fallback to default if they have items but no address
         return;
       }
 
@@ -140,10 +147,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         console.log('Fetching merchant for fee calculation:', merchantId);
         const merchant = await getMerchantById(merchantId);
         if (merchant && merchant.latitude && merchant.longitude) {
-            console.log('Calculating estimate from', { lat: merchant.latitude, lng: merchant.longitude }, 'to', { lat: deliveryAddress.latitude, lng: deliveryAddress.longitude });
+            console.log('Calculating estimate from', { lat: merchant.latitude, lng: merchant.longitude }, 'to', { lat: deliveryAddress.latitude, lng: deliveryAddress.longitude }, 'with subtotal', localCartTotal);
             const estimate = await getDeliveryFeeEstimate(
                 { lat: merchant.latitude, lng: merchant.longitude },
-                { lat: deliveryAddress.latitude, lng: deliveryAddress.longitude }
+                { lat: deliveryAddress.latitude, lng: deliveryAddress.longitude },
+                localCartTotal
             );
             console.log('Fee estimate received:', estimate);
             if (estimate) {
@@ -158,7 +166,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     };
     
     calculateFee();
-  }, [deliveryAddress, items.length > 0 ? items[0].merchantId : null]);
+  }, [deliveryAddress, items]);
 
 
   const addToCart = async (newItem: CartItem) => {
