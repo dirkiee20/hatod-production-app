@@ -34,6 +34,7 @@ const MAPPING = {
   'map': 'map',
   'pabili': 'shopping-bag',
   'trash.fill': 'delete',
+  'checkmark': 'check',
 } as IconMapping;
 
 /**

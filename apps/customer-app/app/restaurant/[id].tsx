@@ -30,13 +30,14 @@ function FallbackImage({ uri, style, placeholder }: { uri?: string; style: any; 
 export default function RestaurantDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
-  const { itemCount, cartTotal, addToCart } = useCart();
+  const { items, itemCount, cartTotal, addToCart } = useCart();
   const insets = useSafeAreaInsets();
   const [activeCategory, setActiveCategory] = useState(0);
   const scrollY = useRef(new Animated.Value(0)).current;
   const [merchant, setMerchant] = useState<Merchant | null>(null);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [addingItemId, setAddingItemId] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -57,7 +58,7 @@ export default function RestaurantDetailScreen() {
   };
 
   // Handle quick add to cart
-  const handleQuickAdd = (item: MenuItem) => {
+  const handleQuickAdd = async (item: MenuItem) => {
     if (!merchant) return;
 
     // Check for required options in description (simple heuristic)
@@ -68,22 +69,27 @@ export default function RestaurantDetailScreen() {
       return;
     }
 
-    addToCart({
-      id: Date.now().toString(),
-      menuItemId: item.id,
-      merchantId: merchant.id,
-      storeName: merchant.name,
-      deliveryFee: merchant.deliveryFee || 0,
-      name: item.name,
-      price: item.price,
-      quantity: 1,
-      image: item.image || item.imageUrl,
-      options: {
-        size: 'Regular',
-        addons: [],
-      },
-      totalPrice: item.price,
-    });
+    setAddingItemId(item.id);
+    try {
+      await addToCart({
+        id: Date.now().toString(),
+        menuItemId: item.id,
+        merchantId: merchant.id,
+        storeName: merchant.name,
+        deliveryFee: merchant.deliveryFee || 0,
+        name: item.name,
+        price: item.price,
+        quantity: 1,
+        image: item.image || item.imageUrl,
+        options: {
+          size: 'Regular',
+          addons: [],
+        },
+        totalPrice: item.price,
+      });
+    } finally {
+      setAddingItemId(null);
+    }
   };
 
   // Group menu items by category
@@ -294,8 +300,21 @@ export default function RestaurantDetailScreen() {
                       )}
                       {/* Add button — only when available and store is open */}
                       {item.isAvailable && isStoreOpen && (
-                        <TouchableOpacity style={styles.addBtn} onPress={() => handleQuickAdd(item)}>
-                          <IconSymbol size={22} name="add" color="#C2185B" />
+                        <TouchableOpacity 
+                          style={[
+                            styles.addBtn, 
+                            items.some(ci => ci.menuItemId === item.id) && { borderColor: '#4CAF50', backgroundColor: '#F1F8E9' }
+                          ]} 
+                          onPress={() => handleQuickAdd(item)}
+                          disabled={addingItemId === item.id}
+                        >
+                          {addingItemId === item.id ? (
+                            <ActivityIndicator size="small" color={items.some(ci => ci.menuItemId === item.id) ? "#4CAF50" : "#C2185B"} />
+                          ) : items.some(ci => ci.menuItemId === item.id) ? (
+                            <IconSymbol size={22} name="checkmark" color="#4CAF50" />
+                          ) : (
+                            <IconSymbol size={22} name="add" color="#C2185B" />
+                          )}
                         </TouchableOpacity>
                       )}
                     </ThemedView>
