@@ -193,11 +193,20 @@ export default function GroceryStoreScreen() {
                   <TouchableOpacity key={item.id} style={styles.groceryItem} onPress={() => router.push(`/menu-item/${item.id}` as any)}>
                     <ThemedView style={styles.itemImageContainer}>
                       <Image source={{ uri: resolveImageUrl(item.image) }} style={styles.itemImg} />
-                      <TouchableOpacity style={styles.addBtn} onPress={() => handleQuickAdd(item)} disabled={addingItemId === item.id}>
+                      <TouchableOpacity 
+                        style={[
+                          styles.addBtn,
+                          items.some(ci => ci.menuItemId === item.id) && { borderColor: '#4CAF50', backgroundColor: '#F1F8E9' }
+                        ]} 
+                        onPress={() => handleQuickAdd(item)} 
+                        disabled={addingItemId === item.id || items.some(ci => ci.menuItemId === item.id)}
+                      >
                         {addingItemId === item.id ? (
-                          <ActivityIndicator size="small" color="#C2185B" />
+                          <ActivityIndicator size="small" color={items.some(ci => ci.menuItemId === item.id) ? "#4CAF50" : "#C2185B"} />
+                        ) : items.some(ci => ci.menuItemId === item.id) ? (
+                          <IconSymbol size={22} name="checkmark" color="#4CAF50" />
                         ) : (
-                          <IconSymbol size={18} name="add" color="#C2185B" />
+                          <IconSymbol size={22} name="add" color="#C2185B" />
                         )}
                       </TouchableOpacity>
                     </ThemedView>
