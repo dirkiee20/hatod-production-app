@@ -114,6 +114,10 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server.emit('rider:location', { riderId, location });
   }
 
+  emitMerchantUpdated(merchant: any) {
+    this.emitToAll('merchant:updated', merchant);
+  }
+
   @SubscribeMessage('rider:updateLocation')
   handleRiderLocation(
     @ConnectedSocket() client: Socket,

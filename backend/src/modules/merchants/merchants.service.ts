@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMenuItemDto, UpdateMerchantDto } from './dto/merchant.dto';
+import { SocketGateway } from '../socket/socket.gateway';
 
 @Injectable()
 export class MerchantsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private socketGateway: SocketGateway
+  ) {}
 
   async findAll() {
     return this.prisma.merchant.findMany({
@@ -98,13 +102,17 @@ export class MerchantsService {
       Object.entries(rest).filter(([_, v]) => v !== null && v !== undefined)
     );
 
-    return this.prisma.merchant.update({
+    const updatedMerchant = await this.prisma.merchant.update({
       where: { id: merchant.id },
       data: {
         ...cleanRest,
         ...(operatingHours !== undefined ? { operatingHours } : {}),
       },
     });
+
+    this.socketGateway.emitMerchantUpdated(updatedMerchant);
+
+    return updatedMerchant;
   }
 
   async createMenuItem(userId: string, dto: CreateMenuItemDto) {
