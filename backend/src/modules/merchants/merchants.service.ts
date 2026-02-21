@@ -165,6 +165,13 @@ export class MerchantsService {
     });
   }
 
+  async updateMerchantById(id: string, dto: UpdateMerchantDto) {
+    return this.prisma.merchant.update({
+      where: { id },
+      data: dto
+    });
+  }
+
   async adjustMenuPrices(merchantId: string, percentage: number) {
     const items = await this.prisma.menuItem.findMany({
       where: { merchantId },

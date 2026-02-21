@@ -114,4 +114,12 @@ export class MerchantsController {
   approveMenuItem(@Param('id') id: string) {
     return this.merchantsService.approveMenuItem(id);
   }
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Patch('admin/:id')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Update a merchant (Admin only)' })
+  updateAdmin(@Param('id') id: string, @Body() dto: UpdateMerchantDto) {
+    return this.merchantsService.updateMerchantById(id, dto);
+  }
 }

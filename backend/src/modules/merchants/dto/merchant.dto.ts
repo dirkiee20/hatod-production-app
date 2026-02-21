@@ -109,5 +109,10 @@ export class UpdateMerchantDto {
   @IsObject()
   @Allow()
   operatingHours?: any;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  type?: 'RESTAURANT' | 'GROCERY' | 'PHARMACY';
 }
 

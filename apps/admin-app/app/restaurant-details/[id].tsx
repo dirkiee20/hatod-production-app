@@ -6,7 +6,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import React, { useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { resolveImageUrl } from '../../api/client';
-import { approveMerchant, suspendMerchant } from '../../api/services';
+import { approveMerchant, suspendMerchant, updateMerchantType } from '../../api/services';
 
 export default function RestaurantDetailsScreen() {
   const { id } = useLocalSearchParams();
@@ -89,6 +89,17 @@ export default function RestaurantDetailsScreen() {
         setRestaurant((prev: any) => ({ ...prev, isApproved: !prev.isApproved }));
     } else {
         alert('Failed to update status');
+    }
+  };
+
+  const handleChangeType = async (newType: 'RESTAURANT' | 'GROCERY' | 'PHARMACY') => {
+    if (!restaurant || restaurant.type === newType) return;
+
+    const success = await updateMerchantType(id as string, newType);
+    if (success) {
+        setRestaurant((prev: any) => ({ ...prev, type: newType }));
+    } else {
+        alert('Failed to update business type');
     }
   };
 
@@ -299,6 +310,27 @@ export default function RestaurantDetailsScreen() {
               </View>
             ) : null}
           </View>
+
+          {/* Store Type Selection */}
+          <ThemedView style={styles.storeTypeCard}>
+            <ThemedText style={styles.sectionTitle}>Store Category Type</ThemedText>
+            <ThemedText style={styles.sectionSubtitle}>
+              determines which tab this merchant appears on in the customer app
+            </ThemedText>
+            <View style={styles.typeSelectorRow}>
+              {(['RESTAURANT', 'GROCERY', 'PHARMACY'] as const).map(type => (
+                <TouchableOpacity 
+                  key={type}
+                  style={[styles.typeButton, restaurant.type === type && styles.typeButtonActive]}
+                  onPress={() => handleChangeType(type)}
+                >
+                  <ThemedText style={[styles.typeButtonText, restaurant.type === type && styles.typeButtonTextActive]}>
+                    {type}
+                  </ThemedText>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ThemedView>
 
           {/* Price Adjustment Section */}
           <ThemedView style={styles.priceAdjustmentCard}>
@@ -554,6 +586,40 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#F0F0F0',
     marginVertical: 12,
+  },
+  storeTypeCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#EEE',
+  },
+  typeSelectorRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  typeButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 8,
+    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  typeButtonActive: {
+    backgroundColor: '#E8F5E9',
+    borderColor: '#388E3C',
+  },
+  typeButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#666',
+  },
+  typeButtonTextActive: {
+    color: '#388E3C',
   },
   priceAdjustmentCard: {
     backgroundColor: '#FFF9FB',

@@ -270,3 +270,16 @@ export const deleteDeliveryFeeConfig = async (id: string): Promise<boolean> => {
     return false;
   }
 };
+
+export const updateMerchantType = async (id: string, type: 'RESTAURANT' | 'GROCERY' | 'PHARMACY'): Promise<boolean> => {
+  try {
+    const response = await authenticatedFetch(`/merchants/admin/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ type }),
+    });
+    return response.ok;
+  } catch (error) {
+    console.error('Error updating merchant type:', error);
+    return false;
+  }
+};
