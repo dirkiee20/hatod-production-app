@@ -1,4 +1,5 @@
-import { StyleSheet, ScrollView, TouchableOpacity, Image, View } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, Image, View, ActivityIndicator } from 'react-native';
+import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -46,6 +47,16 @@ const variantStyles = StyleSheet.create({
 export default function CartScreen() {
   const router = useRouter();
   const { items, cartTotal, updateQuantity, removeFromCart, itemCount, deliveryFee } = useCart();
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
+
+  const handleRemove = async (itemId: string) => {
+    setDeletingItemId(itemId);
+    try {
+      await removeFromCart(itemId);
+    } finally {
+      setDeletingItemId(null);
+    }
+  };
   
   const total = cartTotal + deliveryFee;
 
@@ -92,10 +103,15 @@ export default function CartScreen() {
                   <ThemedText style={styles.itemTotal}>₱{item.totalPrice}</ThemedText>
                   <TouchableOpacity
                     style={styles.deleteBtn}
-                    onPress={() => removeFromCart(item.id)}
+                    onPress={() => handleRemove(item.id)}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    disabled={deletingItemId === item.id}
                   >
-                    <IconSymbol name="trash.fill" size={16} color="#D32F2F" />
+                    {deletingItemId === item.id ? (
+                      <ActivityIndicator size="small" color="#D32F2F" />
+                    ) : (
+                      <IconSymbol name="trash.fill" size={16} color="#D32F2F" />
+                    )}
                   </TouchableOpacity>
                 </ThemedView>
               </ThemedView>
