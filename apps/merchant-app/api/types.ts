@@ -13,6 +13,7 @@ export interface Merchant {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  type?: 'RESTAURANT' | 'GROCERY' | 'PHARMACY';
 }
 
 export interface MenuItem {

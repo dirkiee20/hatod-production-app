@@ -1,5 +1,6 @@
 import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Image, useWindowDimensions, View, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { useState, useEffect, useCallback } from 'react';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -24,6 +25,7 @@ function MerchantImage({ uri, style, placeholder }: { uri?: string; style: any; 
   );
 }
 import { isMerchantOpen } from '@/utils/time';
+import { useSocket } from '@/context/SocketContext';
 
 export default function FoodScreen() {
   const router = useRouter();
@@ -34,10 +36,29 @@ export default function FoodScreen() {
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  const { socket } = useSocket();
 
   useEffect(() => {
-    loadMerchants();
-  }, []);
+    if (!socket) return;
+    
+    const handleMerchantUpdate = (updatedMerchant: Merchant) => {
+      setMerchants(prev => prev.map(m => 
+        m.id === updatedMerchant.id ? { ...m, ...updatedMerchant } : m
+      ));
+    };
+
+    socket.on('merchant:updated', handleMerchantUpdate);
+    return () => {
+      socket.off('merchant:updated', handleMerchantUpdate);
+    };
+  }, [socket]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadMerchants();
+    }, [])
+  );
 
   const loadMerchants = async () => {
     setLoading(true);
@@ -58,6 +79,7 @@ export default function FoodScreen() {
   };
 
   const filteredMerchants = merchants.filter(m => 
+    (!m.type || m.type === 'RESTAURANT') && 
     m.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 

@@ -47,6 +47,12 @@ enum RiderStatus {
   BUSY
 }
 
+enum MerchantType {
+  RESTAURANT
+  GROCERY
+  PHARMACY
+}
+
 model User {
   id            String    @id @default(uuid())
   email         String    @unique
@@ -195,6 +201,7 @@ model Merchant {
   isApproved  Boolean  @default(false)
   isOpen      Boolean  @default(true)
   operatingHours Json?
+  type        MerchantType @default(RESTAURANT)
   rating      Float    @default(0)
   totalOrders Int      @default(0)
   createdAt   DateTime @default(now())

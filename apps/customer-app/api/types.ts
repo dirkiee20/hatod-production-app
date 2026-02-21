@@ -21,6 +21,7 @@ export interface Merchant {
   updatedAt: string;
   latitude?: number;
   longitude?: number;
+  type?: 'RESTAURANT' | 'GROCERY' | 'PHARMACY';
 }
 
 export interface MenuItem {

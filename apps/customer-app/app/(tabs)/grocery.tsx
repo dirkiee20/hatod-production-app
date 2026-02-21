@@ -22,9 +22,7 @@ export default function GroceryScreen() {
   const loadMerchants = async () => {
     setLoading(true);
     const data = await getMerchants();
-    // For now, showing all active merchants as grocery stores
-    // In production, you'd filter by merchant type/category
-    setMerchants(data.filter(m => m.isActive));
+    setMerchants(data.filter((m: Merchant) => m.isActive && (m.type === 'GROCERY' || m.type === 'PHARMACY')));
     setLoading(false);
   };
 
@@ -72,7 +70,7 @@ export default function GroceryScreen() {
                     <TouchableOpacity key={shop.id} style={styles.shopItem} onPress={() => router.push(`/grocery-store/${shop.id}`)}>
                       <ThemedView style={styles.shopIcon}>
                         <Image 
-                          source={{ uri: shop.imageUrl || 'https://images.unsplash.com/photo-1534723452862-4c874018d66d?w=100' }} 
+                          source={{ uri: shop.logo || shop.coverImage || 'https://images.unsplash.com/photo-1534723452862-4c874018d66d?w=100' }} 
                           style={styles.shopIconImage}
                         />
                       </ThemedView>
@@ -126,7 +124,7 @@ export default function GroceryScreen() {
                   <TouchableOpacity key={store.id} style={styles.storeCard} onPress={() => router.push(`/grocery-store/${store.id}`)}>
                     <ThemedView style={styles.storeImageContainer}>
                       <Image 
-                        source={{ uri: store.imageUrl || 'https://images.unsplash.com/photo-1534723452862-4c874018d66d?w=400' }} 
+                        source={{ uri: store.coverImage || store.logo || 'https://images.unsplash.com/photo-1534723452862-4c874018d66d?w=400' }} 
                         style={styles.storeImage} 
                       />
                       <ThemedView style={styles.storeOverlay}>

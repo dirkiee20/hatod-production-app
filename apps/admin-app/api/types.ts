@@ -41,6 +41,7 @@ export interface Merchant {
   totalOrders?: number;
   createdAt: string;
   updatedAt: string;
+  type?: 'RESTAURANT' | 'GROCERY' | 'PHARMACY';
 }
 
 export interface MenuItem {
