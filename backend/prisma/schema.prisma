@@ -104,6 +104,7 @@ model Customer {
   orders    Order[]
   reviews   Review[]
   cart      Cart?
+  pabiliRequests PabiliRequest[]
 
   @@map("customers")
 }
@@ -388,4 +389,29 @@ model DeliveryFeeTier {
 
   @@index([configId])
   @@map("delivery_fee_tiers")
+}
+
+enum PabiliRequestStatus {
+  PENDING_REVIEW
+  QUOTED
+  ACCEPTED
+  REJECTED
+  COMPLETED
+}
+
+model PabiliRequest {
+  id                String              @id @default(uuid())
+  customerId        String
+  items             Json                // Array of items (strings)
+  estimatedItemCost Float
+  serviceFee        Float?              // To be filled by Admin
+  status            PabiliRequestStatus @default(PENDING_REVIEW)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  
+  customer          Customer            @relation(fields: [customerId], references: [id])
+
+  @@index([customerId])
+  @@index([status])
+  @@map("pabili_requests")
 }
