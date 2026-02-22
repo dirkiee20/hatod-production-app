@@ -22,13 +22,16 @@ export class OrdersService {
       throw new NotFoundException('Customer profile not found');
     }
 
-    // Verify merchant exists
-    const merchant = await this.prisma.merchant.findUnique({
-      where: { id: dto.merchantId },
-    });
+    let merchant = null;
+    if (!dto.pabiliRequestId && dto.merchantId) {
+      // Verify merchant exists
+      merchant = await this.prisma.merchant.findUnique({
+        where: { id: dto.merchantId },
+      });
 
-    if (!merchant || !merchant.isOpen) {
-      throw new BadRequestException('Merchant is not available');
+      if (!merchant || !merchant.isOpen) {
+        throw new BadRequestException('Merchant is not available');
+      }
     }
 
     // Verify address belongs to customer
@@ -65,14 +68,7 @@ export class OrdersService {
         subtotal = pabiliReq.estimatedItemCost;
         deliveryFee = pabiliReq.serviceFee || 50;
 
-        for (const item of dto.items) {
-           orderItemsData.push({
-               menuItemId: item.menuItemId,
-               quantity: item.quantity,
-               price: subtotal, // assign total budget to this ghost item
-               notes: item.notes
-           });
-        }
+        // Internal items array left empty for Pabili, items are stored on the Request directly
         
         // Mark the request as officially ACCEPTED/Placed
         await this.prisma.pabiliRequest.update({
@@ -114,21 +110,28 @@ export class OrdersService {
     
     const total = subtotal + deliveryFee;
 
+    const orderData: any = {
+      orderNumber: `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      customerId: customer.id,
+      addressId: dto.addressId,
+      subtotal,
+      deliveryFee,
+      total,
+      specialInstructions: dto.specialInstructions,
+    };
+
+    if (dto.merchantId) {
+        orderData.merchantId = dto.merchantId;
+    }
+    if (dto.pabiliRequestId) {
+        orderData.pabiliRequestId = dto.pabiliRequestId;
+    }
+    if (orderItemsData.length > 0) {
+        orderData.items = { create: orderItemsData };
+    }
+
     const order = await this.prisma.order.create({
-      data: {
-        orderNumber: `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-        customerId: customer.id,
-        merchantId: dto.merchantId,
-        addressId: dto.addressId,
-        subtotal,
-        deliveryFee,
-        total,
-        specialInstructions: dto.specialInstructions,
-        pabiliRequestId: dto.pabiliRequestId,
-        items: {
-          create: orderItemsData,
-        },
-      },
+      data: orderData,
       include: {
         customer: { include: { user: true } },
         merchant: { include: { user: true } },

@@ -158,7 +158,7 @@ export default function OrdersScreen() {
         if (customActiveTab === 'Quoted') return r.status === 'QUOTED';
         if (customActiveTab === 'Placed') return r.status === 'ACCEPTED' && (!r.order || r.order.status === 'PENDING');
         if (customActiveTab === 'Preparing') return r.status === 'ACCEPTED' && r.order?.status === 'PREPARING';
-        if (customActiveTab === 'In Delivery') return r.status === 'ACCEPTED' && r.order?.status === 'DELIVERING';
+        if (customActiveTab === 'In Delivery') return r.status === 'ACCEPTED' && ['READY_FOR_PICKUP', 'PICKED_UP', 'DELIVERING'].includes(r.order?.status || '');
         if (customActiveTab === 'Delivered') return r.status === 'COMPLETED' || r.order?.status === 'DELIVERED';
         return true;
       });

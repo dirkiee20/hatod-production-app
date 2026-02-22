@@ -18,19 +18,21 @@ class OrderItemDto {
 }
 
 export class CreateOrderDto {
-  @ApiProperty()
+  @ApiProperty({ required: false })
+  @IsOptional()
   @IsString()
-  merchantId: string;
+  merchantId?: string;
 
   @ApiProperty()
   @IsString()
   addressId: string;
 
-  @ApiProperty({ type: [OrderItemDto] })
+  @ApiProperty({ type: [OrderItemDto], required: false })
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => OrderItemDto)
-  items: OrderItemDto[];
+  items?: OrderItemDto[];
 
   @ApiProperty({ required: false })
   @IsOptional()

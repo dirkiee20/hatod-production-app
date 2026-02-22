@@ -77,12 +77,7 @@ export default function CheckoutScreen() {
 
       if (isPabili) {
         orderData.pabiliRequestId = pabiliRequest.id;
-        orderData.merchantId = '22222222-2222-2222-2222-222222222222'; // Ghost Merchant
-        orderData.items = [{
-            menuItemId: '44444444-4444-4444-4444-444444444444', // Ghost Item
-            quantity: 1,
-            notes: JSON.stringify({ items: pabiliRequest.items })
-        }];
+        // Pabili requests no longer need a ghost merchant or items array mapped.
       } else {
         orderData.merchantId = items[0].merchantId;
         orderData.items = items.map(i => ({

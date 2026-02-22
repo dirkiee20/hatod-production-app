@@ -262,7 +262,7 @@ model Order {
   id                String        @id @default(uuid())
   orderNumber       String        @unique
   customerId        String
-  merchantId        String
+  merchantId        String?
   riderId           String?
   addressId         String
   status            OrderStatus   @default(PENDING)
@@ -286,7 +286,7 @@ model Order {
   updatedAt         DateTime      @updatedAt
   
   customer   Customer    @relation(fields: [customerId], references: [id])
-  merchant   Merchant    @relation(fields: [merchantId], references: [id])
+  merchant   Merchant?   @relation(fields: [merchantId], references: [id])
   rider      Rider?      @relation(fields: [riderId], references: [id])
   address    Address     @relation(fields: [addressId], references: [id])
   items      OrderItem[]
