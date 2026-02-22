@@ -5,8 +5,8 @@ import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import api from '@/services/api';
 import { updateRiderStatus, updateRiderLocation } from '../../api/rider-service';
+import { getMe, getRiderOrders } from '../../api/client';
 import * as Location from 'expo-location';
 import { useLocationTracker } from '@/hooks/useLocationTracker';
 
@@ -30,19 +30,19 @@ export default function DashboardScreen() {
     try {
       setLoading(true);
       const [userRes, ordersRes] = await Promise.all([
-        api.get('/users/me'),
-        api.get('/orders'),
+        getMe(),
+        getRiderOrders(),
       ]);
 
-      setUserData(userRes.data);
+      setUserData(userRes);
       
-      const allOrders = ordersRes.data;
+      const allOrders = ordersRes;
       // Filter for delivered orders
       const deliveredOrders = allOrders.filter((o: any) => o.status === 'DELIVERED');
       
       // Find active order (Assigned to me and active)
       // Note: Backend findAll might return unassigned READY orders too, so check riderId.
-      const myId = userRes.data.rider?.id;
+      const myId = userRes.rider?.id;
       
       // 1. Check for Active Order (Assigned to me and in progress)
       let active = allOrders.find((o: any) => 
@@ -52,7 +52,7 @@ export default function DashboardScreen() {
 
       // 2. If no active order, check for Available Orders (Ready and Unassigned)
       // Only if rider is ONLINE
-      if (!active && (userRes.data.rider?.status === 'AVAILABLE' || userRes.data.rider?.status === 'BUSY')) {
+      if (!active && (userRes.rider?.status === 'AVAILABLE' || userRes.rider?.status === 'BUSY')) {
           active = allOrders.find((o: any) => 
             o.status === 'READY_FOR_PICKUP' && 
             !o.riderId // Unassigned
@@ -75,7 +75,7 @@ export default function DashboardScreen() {
       const sortedOrders = allOrders.sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
       setRecentOrders(sortedOrders.slice(0, 5));
       
-      if (userRes.data.rider?.status === 'AVAILABLE' || userRes.data.rider?.status === 'BUSY') {
+      if (userRes.rider?.status === 'AVAILABLE' || userRes.rider?.status === 'BUSY') {
         setIsOnline(true);
       } else {
         setIsOnline(false);

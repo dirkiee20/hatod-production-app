@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 import { updateRiderStatus, updateRiderLocation } from '../../api/rider-service';
 import * as Location from 'expo-location';
-import api from '@/services/api';
+import { getMe } from '../../api/client';
 import { useFocusEffect } from 'expo-router';
 
 export default function MapScreen() {
@@ -25,8 +25,8 @@ export default function MapScreen() {
 
   const fetchRiderStatus = async () => {
     try {
-      const res = await api.get('/users/me');
-      const status = res.data?.rider?.status;
+      const res = await getMe();
+      const status = res?.rider?.status;
       if (status === 'AVAILABLE' || status === 'BUSY') {
         setIsOnline(true);
       } else {
