@@ -43,13 +43,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol size={26} name="orders" color={color} />,
         }}
       />
-      <Tabs.Screen
-        name="custom-requests"
-        options={{
-          title: 'Requests',
-          tabBarIcon: ({ color }) => <IconSymbol size={26} name="bag.fill" color={color} />,
-        }}
-      />
+
       <Tabs.Screen
         name="manage"
         options={{

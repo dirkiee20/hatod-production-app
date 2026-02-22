@@ -1,19 +1,34 @@
-import { StyleSheet, ScrollView, TouchableOpacity, View, RefreshControl, ActivityIndicator } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, View, RefreshControl, ActivityIndicator, Alert, TextInput, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import React, { useState, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getAllOrders } from '../../api/services';
+import { getAllOrders, getPabiliRequests, quotePabiliRequest } from '../../api/services';
 import { Order } from '../../api/types';
+import { useSocket } from '@/context/SocketContext';
 
 export default function OrdersScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { socket } = useSocket();
+
+  // Top Level Tab: Standard Orders vs Custom Requests
+  const [mainTab, setMainTab] = useState<'Standard' | 'Custom'>('Standard');
+
+  // Standard Orders State
   const [activeTab, setActiveTab] = useState('All');
   const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingOrders, setLoadingOrders] = useState(true);
+
+  // Custom Requests State
+  const [requests, setRequests] = useState<any[]>([]);
+  const [loadingRequests, setLoadingRequests] = useState(true);
+  const [selectedRequest, setSelectedRequest] = useState<any>(null);
+  const [quoteAmount, setQuoteAmount] = useState('');
+  const [submittingQuote, setSubmittingQuote] = useState(false);
+
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchOrders = async () => {
@@ -23,18 +38,67 @@ export default function OrdersScreen() {
     } catch (e) {
       console.error(e);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      setLoadingOrders(false);
     }
+  };
+
+  const fetchRequests = async () => {
+    try {
+      const data = await getPabiliRequests();
+      setRequests(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingRequests(false);
+    }
+  };
+
+  const fetchAll = async () => {
+    setRefreshing(true);
+    await Promise.all([fetchOrders(), fetchRequests()]);
+    setRefreshing(false);
   };
 
   useEffect(() => {
     fetchOrders();
+    fetchRequests();
   }, []);
 
+  // Socket listener for new custom requests
+  useEffect(() => {
+    if (!socket) return;
+    const handleNewRequest = (newReq: any) => {
+        fetchRequests();
+    };
+    socket.on('new_pabili_request', handleNewRequest);
+    return () => {
+        socket.off('new_pabili_request', handleNewRequest);
+    };
+  }, [socket]);
+
   const onRefresh = () => {
-    setRefreshing(true);
-    fetchOrders();
+    fetchAll();
+  };
+
+  const handleQuoteSubmit = async () => {
+      const fee = parseFloat(quoteAmount);
+      if (isNaN(fee) || fee <= 0) {
+          Alert.alert('Invalid Amount', 'Please enter a valid service fee.');
+          return;
+      }
+
+      setSubmittingQuote(true);
+      try {
+          await quotePabiliRequest(selectedRequest.id, fee);
+          Alert.alert('Success', 'Quote has been sent to the customer!');
+          setSelectedRequest(null);
+          setQuoteAmount('');
+          fetchRequests();
+      } catch (error) {
+          Alert.alert('Error', 'Failed to submit quote.');
+      } finally {
+          setSubmittingQuote(false);
+      }
   };
 
   const statusTabs = ['All', 'Pending', 'In Progress', 'Delivered', 'Cancelled'];
@@ -49,31 +113,31 @@ export default function OrdersScreen() {
         return true;
       });
 
-  return (
-    <ThemedView style={styles.container}>
-      <View style={[styles.titleRow, { marginTop: insets.top + 16 }]}>
-        <ThemedText style={styles.screenTitle}>Orders</ThemedText>
-      </View>
-
-      <View style={styles.tabContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScroll}>
-          {statusTabs.map((tab) => (
-            <TouchableOpacity 
-              key={tab} 
-              onPress={() => setActiveTab(tab)}
-              style={[styles.tab, activeTab === tab && styles.activeTab]}
-            >
-              <ThemedText style={[styles.tabText, activeTab === tab && styles.activeTabText]}>{tab}</ThemedText>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
-      {loading ? (
+  const renderStandardOrders = () => {
+    if (loadingOrders) {
+      return (
         <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
           <ActivityIndicator size="large" color="#C2185B" />
         </View>
-      ) : (
+      );
+    }
+
+    return (
+      <>
+        <View style={styles.tabContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScroll}>
+            {statusTabs.map((tab) => (
+              <TouchableOpacity 
+                key={tab} 
+                onPress={() => setActiveTab(tab)}
+                style={[styles.tab, activeTab === tab && styles.activeTab]}
+              >
+                <ThemedText style={[styles.tabText, activeTab === tab && styles.activeTabText]}>{tab}</ThemedText>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
         <ScrollView 
           showsVerticalScrollIndicator={false} 
           contentContainerStyle={styles.scrollContent}
@@ -127,7 +191,151 @@ export default function OrdersScreen() {
             ))
           )}
         </ScrollView>
-      )}
+      </>
+    );
+  };
+
+  const renderCustomRequests = () => {
+    if (loadingRequests) {
+      return (
+        <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
+          <ActivityIndicator size="large" color="#C2185B" />
+        </View>
+      );
+    }
+
+    return (
+      <>
+        <ScrollView 
+          showsVerticalScrollIndicator={false} 
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
+          {requests.length === 0 ? (
+             <View style={{alignItems: 'center', marginTop: 50}}>
+                <ThemedText style={{color: '#888', fontStyle: 'italic'}}>No requests found</ThemedText>
+             </View>
+          ) : (
+            requests.map((req) => {
+              const statusColor = req.status === 'PENDING_REVIEW' ? '#F57C00' :
+                                  req.status === 'QUOTED' ? '#1976D2' : 
+                                  req.status === 'ACCEPTED' ? '#388E3C' : '#888';
+
+              const statusBg = req.status === 'PENDING_REVIEW' ? '#FFF3E0' :
+                               req.status === 'QUOTED' ? '#E3F2FD' : 
+                               req.status === 'ACCEPTED' ? '#E8F5E9' : '#EEE';
+
+              return (
+                <ThemedView key={req.id} style={styles.reqCard}>
+                  <View style={styles.reqCardHeader}>
+                    <View style={styles.reqCustomerInfoBlock}>
+                        <ThemedText style={styles.reqCustomerName}>
+                           {req.customer?.firstName} {req.customer?.lastName}
+                        </ThemedText>
+                        <ThemedText style={styles.reqContactDetails}>{req.customer?.user?.phone}</ThemedText>
+                    </View>
+                    <View style={[styles.reqBadge, { backgroundColor: statusBg }]}>
+                        <ThemedText style={[styles.reqBadgeText, { color: statusColor }]}>{req.status.replace('_', ' ')}</ThemedText>
+                    </View>
+                  </View>
+
+                  <View style={styles.divider} />
+
+                  <View style={styles.reqItemsBlock}>
+                      <ThemedText style={styles.reqItemsTitle}>Shopping List:</ThemedText>
+                      {(Array.isArray(req.items) ? req.items : []).map((itemStr: string, idx: number) => (
+                           <ThemedText key={idx} style={styles.reqItemText}>• {itemStr}</ThemedText>
+                      ))}
+                  </View>
+
+                  <View style={styles.divider} />
+
+                  <View style={styles.reqFooterRow}>
+                      <View>
+                          <ThemedText style={{fontSize: 12, color: '#888'}}>Est. Cost</ThemedText>
+                          <ThemedText style={styles.reqEstCost}>₱{req.estimatedItemCost?.toLocaleString()}</ThemedText>
+                      </View>
+
+                      {req.status === 'PENDING_REVIEW' && (
+                          <TouchableOpacity 
+                             style={styles.reqQuoteButton} 
+                             onPress={() => setSelectedRequest(req)}
+                          >
+                             <ThemedText style={styles.reqQuoteButtonText}>Provide Quote</ThemedText>
+                          </TouchableOpacity>
+                      )}
+
+                      {req.status !== 'PENDING_REVIEW' && req.serviceFee !== null && (
+                          <View style={{alignItems: 'flex-end'}}>
+                             <ThemedText style={{fontSize: 12, color: '#888'}}>Service Fee</ThemedText>
+                             <ThemedText style={{fontSize: 16, fontWeight: 'bold', color: '#C2185B'}}>₱{req.serviceFee?.toLocaleString()}</ThemedText>
+                          </View>
+                      )}
+                  </View>
+
+                </ThemedView>
+            )})
+          )}
+        </ScrollView>
+
+        {/* Quote Dialog Modal */}
+        <Modal visible={!!selectedRequest} transparent animationType="fade">
+            <View style={styles.modalOverlay}>
+               <View style={styles.modalContent}>
+                  <ThemedText style={styles.modalTitle}>Set Service Fee</ThemedText>
+                  <ThemedText style={styles.modalSubtitle}>How much to charge for shopping logic & delivery?</ThemedText>
+                  
+                  <View style={styles.feeInputContainer}>
+                       <ThemedText style={styles.currencySymbol}>₱</ThemedText>
+                       <TextInput 
+                           style={styles.feeInput}
+                           keyboardType="numeric"
+                           placeholder="0.00"
+                           value={quoteAmount}
+                           onChangeText={setQuoteAmount}
+                           autoFocus
+                       />
+                  </View>
+
+                  <View style={styles.modalActions}>
+                       <TouchableOpacity style={styles.modalCancel} onPress={() => { setSelectedRequest(null); setQuoteAmount(''); }} disabled={submittingQuote}>
+                           <ThemedText style={{color: '#888', fontWeight: '600'}}>Cancel</ThemedText>
+                       </TouchableOpacity>
+                       
+                       <TouchableOpacity style={styles.modalSubmit} onPress={handleQuoteSubmit} disabled={submittingQuote}>
+                           {submittingQuote ? <ActivityIndicator size="small" color="#FFF" /> : <ThemedText style={{color: '#FFF', fontWeight: 'bold'}}>Send Quote</ThemedText>}
+                       </TouchableOpacity>
+                  </View>
+               </View>
+            </View>
+        </Modal>
+      </>
+    );
+  };
+
+  return (
+    <ThemedView style={styles.container}>
+      <View style={[styles.titleRow, { marginTop: insets.top + 16 }]}>
+        <ThemedText style={styles.screenTitle}>Track Orders</ThemedText>
+      </View>
+
+      <View style={styles.mainTabContainer}>
+         <TouchableOpacity 
+            style={[styles.mainTabBtn, mainTab === 'Standard' && styles.mainTabBtnActive]} 
+            onPress={() => setMainTab('Standard')}
+         >
+            <ThemedText style={[styles.mainTabBtnText, mainTab === 'Standard' && styles.mainTabBtnTextActive]}>Regular Orders</ThemedText>
+         </TouchableOpacity>
+         <TouchableOpacity 
+            style={[styles.mainTabBtn, mainTab === 'Custom' && styles.mainTabBtnActive]} 
+            onPress={() => setMainTab('Custom')}
+         >
+            <ThemedText style={[styles.mainTabBtnText, mainTab === 'Custom' && styles.mainTabBtnTextActive]}>Custom Requests</ThemedText>
+         </TouchableOpacity>
+      </View>
+
+      {mainTab === 'Standard' ? renderStandardOrders() : renderCustomRequests()}
+      
     </ThemedView>
   );
 }
@@ -142,9 +350,32 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   screenTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '900',
     color: '#333',
+  },
+  mainTabContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    gap: 12,
+  },
+  mainTabBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    backgroundColor: '#F0F0F0',
+    borderRadius: 8,
+  },
+  mainTabBtnActive: {
+    backgroundColor: '#C2185B',
+  },
+  mainTabBtnText: {
+    fontWeight: '700',
+    color: '#888',
+  },
+  mainTabBtnTextActive: {
+    color: '#FFF',
   },
   tabContainer: {
     backgroundColor: '#FAFAFA',
@@ -177,7 +408,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingBottom: 40,
   },
   orderCard: {
     backgroundColor: '#FFF',
@@ -220,7 +451,7 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: '#F5F5F5',
-    marginBottom: 12,
+    marginVertical: 12,
   },
   orderDetails: {
     marginBottom: 12,
@@ -245,4 +476,151 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#C2185B',
   },
+
+  // Custom Requests Styles
+  reqCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  reqCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  reqCustomerInfoBlock: {
+    flex: 1,
+  },
+  reqCustomerName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#222',
+  },
+  reqContactDetails: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 2,
+  },
+  reqBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  reqBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  reqItemsBlock: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    padding: 12,
+  },
+  reqItemsTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#555',
+    marginBottom: 8,
+  },
+  reqItemText: {
+    fontSize: 14,
+    color: '#333',
+    marginBottom: 4,
+  },
+  reqFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 4,
+  },
+  reqEstCost: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#333',
+    marginTop: 2,
+  },
+  reqQuoteButton: {
+    backgroundColor: '#C2185B',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  reqQuoteButtonText: {
+    color: '#FFF',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '85%',
+    backgroundColor: '#FFF',
+    borderRadius: 20,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 20,
+  },
+  feeInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F7F9',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    marginBottom: 30,
+  },
+  currencySymbol: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    marginRight: 10,
+  },
+  feeInput: {
+    flex: 1,
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    paddingVertical: 16,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  modalCancel: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    backgroundColor: '#F5F5F5',
+  },
+  modalSubmit: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+    backgroundColor: '#C2185B',
+  }
 });
