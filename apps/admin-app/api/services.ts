@@ -283,3 +283,29 @@ export const updateMerchantType = async (id: string, type: 'RESTAURANT' | 'GROCE
     return false;
   }
 };
+
+// Pabili Requests APIs
+export const getPabiliRequests = async (): Promise<any[]> => {
+  try {
+    const response = await authenticatedFetch('/pabili-requests/admin');
+    if (!response.ok) throw new Error('Failed to load pabili requests');
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching pabili requests:', error);
+    return [];
+  }
+};
+
+export const quotePabiliRequest = async (id: string, serviceFee: number): Promise<any> => {
+  try {
+    const response = await authenticatedFetch(`/pabili-requests/${id}/quote`, {
+      method: 'PATCH',
+      body: JSON.stringify({ serviceFee }),
+    });
+    if (!response.ok) throw new Error('Failed to quote request');
+    return await response.json();
+  } catch (error) {
+    console.error('Error quoting pabili request:', error);
+    throw error;
+  }
+};
