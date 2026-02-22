@@ -119,6 +119,11 @@ export default function OrderDetailsScreen() {
     }
 
      switch(order.status) {
+         case 'PREPARING':
+             if (order.pabiliRequestId) {
+                 return { label: 'Done Shopping', status: 'DELIVERING', color: '#1976D2' };
+             }
+             return null;
          case 'READY_FOR_PICKUP':
              return { label: 'Confirm Pickup', status: 'PICKED_UP', color: '#1976D2' };
          case 'PICKED_UP':

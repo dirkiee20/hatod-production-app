@@ -316,7 +316,7 @@ export class OrdersService {
       where: { id },
       data: {
         riderId: riderId,
-        // Optionally update status if needed, e.g. to READY_FOR_PICKUP or similar if not already
+        ...(order.pabiliRequestId ? { status: 'PREPARING' } : {}),
       },
       include: {
         customer: { include: { user: true } },

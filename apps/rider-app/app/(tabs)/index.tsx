@@ -44,7 +44,7 @@ export default function DashboardScreen() {
       
       // 1. Check for Active Order (Assigned to me and in progress)
       let active = allOrders.find((o: any) => 
-        (o.status === 'READY_FOR_PICKUP' || o.status === 'DELIVERING') && 
+        ['PREPARING', 'READY_FOR_PICKUP', 'PICKED_UP', 'DELIVERING'].includes(o.status) && 
         o.rider?.id === myId
       );
 
@@ -113,6 +113,8 @@ export default function DashboardScreen() {
       case 'CANCELLED': return '#D32F2F';
       case 'DELIVERING': return '#1976D2';
       case 'READY_FOR_PICKUP': return '#FBC02D';
+      case 'PICKED_UP': return '#FF9800';
+      case 'PREPARING': return '#F57C00';
       default: return '#999';
     }
   };
@@ -179,7 +181,11 @@ export default function DashboardScreen() {
                         <ThemedText style={{ fontSize: 18, fontWeight: '800', color: activeOrder.isAvailableRequest ? '#2E7D32' : '#333' }}>
                             {activeOrder.isAvailableRequest 
                                 ? 'New Delivery Request' 
-                                : (activeOrder.status === 'READY_FOR_PICKUP' ? 'Prepare for Pickup' : 'Delivery in Progress')
+                                : (
+                                  activeOrder.status === 'PREPARING' ? 'Shopping in Progress' 
+                                  : activeOrder.status === 'READY_FOR_PICKUP' ? 'Prepare for Pickup' 
+                                  : 'Delivery in Progress'
+                                )
                             }
                         </ThemedText>
                         <ThemedText style={{ color: '#666' }}>ID: #{activeOrder.id.slice(0,8)}</ThemedText>

@@ -149,14 +149,17 @@ export default function OrdersScreen() {
         return true;
       });
 
-  const customStatusTabs = ['All', 'Pending Review', 'Quoted', 'Placed'];
+  const customStatusTabs = ['All', 'Pending Review', 'Quoted', 'Placed', 'Preparing', 'In Delivery', 'Delivered'];
 
   const filteredRequests = customActiveTab === 'All'
     ? requests
     : requests.filter((r: any) => {
         if (customActiveTab === 'Pending Review') return r.status === 'PENDING_REVIEW';
         if (customActiveTab === 'Quoted') return r.status === 'QUOTED';
-        if (customActiveTab === 'Placed') return ['ACCEPTED', 'COMPLETED'].includes(r.status);
+        if (customActiveTab === 'Placed') return r.status === 'ACCEPTED' && (!r.order || r.order.status === 'PENDING');
+        if (customActiveTab === 'Preparing') return r.status === 'ACCEPTED' && r.order?.status === 'PREPARING';
+        if (customActiveTab === 'In Delivery') return r.status === 'ACCEPTED' && r.order?.status === 'DELIVERING';
+        if (customActiveTab === 'Delivered') return r.status === 'COMPLETED' || r.order?.status === 'DELIVERED';
         return true;
       });
 
@@ -333,7 +336,7 @@ export default function OrdersScreen() {
                           </View>
                       )}
 
-                      {req.status === 'ACCEPTED' && (
+                      {req.status === 'ACCEPTED' && (!req.order || req.order.status === 'PENDING') && (
                           <TouchableOpacity 
                              style={[styles.reqQuoteButton, { backgroundColor: '#4CAF50' }]} 
                              onPress={() => {
@@ -346,6 +349,24 @@ export default function OrdersScreen() {
                           >
                              <ThemedText style={styles.reqQuoteButtonText}>Assign Rider</ThemedText>
                           </TouchableOpacity>
+                      )}
+
+                      {req.order?.status === 'PREPARING' && (
+                          <View style={{alignItems: 'flex-end', justifyContent: 'center'}}>
+                              <ThemedText style={{fontSize: 12, color: '#F57C00', fontWeight: 'bold'}}>Rider is Shopping</ThemedText>
+                          </View>
+                      )}
+                      
+                      {req.order?.status === 'DELIVERING' && (
+                          <View style={{alignItems: 'flex-end', justifyContent: 'center'}}>
+                              <ThemedText style={{fontSize: 12, color: '#1976D2', fontWeight: 'bold'}}>Out for Delivery</ThemedText>
+                          </View>
+                      )}
+
+                      {(req.order?.status === 'DELIVERED' || req.status === 'COMPLETED') && (
+                          <View style={{alignItems: 'flex-end', justifyContent: 'center'}}>
+                              <ThemedText style={{fontSize: 12, color: '#388E3C', fontWeight: 'bold'}}>Request Completed</ThemedText>
+                          </View>
                       )}
                   </View>
 
