@@ -4,7 +4,7 @@ import { ApiProperty } from '@nestjs/swagger';
 
 class OrderItemDto {
   @ApiProperty()
-  @IsUUID()
+  @IsString()
   menuItemId: string;
 
   @ApiProperty()
@@ -19,11 +19,11 @@ class OrderItemDto {
 
 export class CreateOrderDto {
   @ApiProperty()
-  @IsUUID()
+  @IsString()
   merchantId: string;
 
   @ApiProperty()
-  @IsUUID()
+  @IsString()
   addressId: string;
 
   @ApiProperty({ type: [OrderItemDto] })
@@ -39,7 +39,7 @@ export class CreateOrderDto {
 
   @ApiProperty({ required: false })
   @IsOptional()
-  @IsUUID()
+  @IsString()
   pabiliRequestId?: string;
 }
 
