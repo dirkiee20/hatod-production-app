@@ -2,11 +2,13 @@ import { StyleSheet, View, TouchableOpacity, ActivityIndicator } from 'react-nat
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 import { updateRiderStatus, updateRiderLocation } from '../../api/rider-service';
 import * as Location from 'expo-location';
+import api from '@/services/api';
+import { useFocusEffect } from 'expo-router';
 
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
@@ -15,9 +17,26 @@ export default function MapScreen() {
   const [currentLocation, setCurrentLocation] = useState<[number, number] | null>(null);
   const cameraRef = useRef<Mapbox.Camera>(null);
 
-  useEffect(() => {
-    getCurrentLocation();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+        getCurrentLocation();
+        fetchRiderStatus();
+    }, [])
+  );
+
+  const fetchRiderStatus = async () => {
+    try {
+      const res = await api.get('/users/me');
+      const status = res.data?.rider?.status;
+      if (status === 'AVAILABLE' || status === 'BUSY') {
+        setIsOnline(true);
+      } else {
+        setIsOnline(false);
+      }
+    } catch (e) {
+      console.error('[RiderApp Map] Error fetching rider status', e);
+    }
+  };
 
   const getCurrentLocation = async () => {
     try {

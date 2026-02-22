@@ -1,6 +1,6 @@
 import { StyleSheet, ScrollView, TouchableOpacity, View, Switch, RefreshControl, ActivityIndicator, Alert } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import React, { useState, useEffect, useCallback } from 'react';
@@ -87,9 +87,11 @@ export default function DashboardScreen() {
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [])
+  );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
