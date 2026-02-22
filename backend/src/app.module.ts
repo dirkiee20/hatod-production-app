@@ -20,6 +20,7 @@ import { CartModule } from './modules/cart/cart.module';
 import { AddressModule } from './modules/address/address.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { DeliveryFeeModule } from './modules/delivery-fee/delivery-fee.module';
+import { PabiliRequestsModule } from './modules/pabili-requests/pabili-requests.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { DeliveryFeeModule } from './modules/delivery-fee/delivery-fee.module';
     AddressModule,
     ReviewsModule,
     DeliveryFeeModule,
+    PabiliRequestsModule,
   ],
 })
 export class AppModule {}
