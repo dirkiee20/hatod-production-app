@@ -160,7 +160,7 @@ export class OrdersService {
       ];
     }
 
-    return this.prisma.order.findMany({
+    const queryOptions: any = {
       where,
       include: {
         customer: true,
@@ -170,7 +170,14 @@ export class OrdersService {
         rider: true,
       },
       orderBy: { createdAt: 'desc' },
-    });
+    };
+
+    // Limit to recent 50 for rider to optimize dashboard load times
+    if (role === UserRole.RIDER) {
+      queryOptions.take = 50;
+    }
+
+    return this.prisma.order.findMany(queryOptions);
   }
 
   async findAllAdmin() {

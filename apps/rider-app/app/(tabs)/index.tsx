@@ -6,6 +6,8 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '@/services/api';
+import { updateRiderStatus, updateRiderLocation } from '../../api/rider-service';
+import * as Location from 'expo-location';
 import { useLocationTracker } from '@/hooks/useLocationTracker';
 
 export default function DashboardScreen() {
@@ -101,7 +103,18 @@ export default function DashboardScreen() {
   const toggleOnlineStatus = async (value: boolean) => {
     setIsOnline(value);
     try {
-        await api.patch('/riders/status', { status: value ? 'AVAILABLE' : 'OFFLINE' });
+        await updateRiderStatus(value ? 'AVAILABLE' : 'OFFLINE');
+        
+        // Also ping location to backend when coming online
+        if (value) {
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status === 'granted') {
+                const location = await Location.getCurrentPositionAsync({
+                    accuracy: Location.Accuracy.Balanced,
+                });
+                await updateRiderLocation(location.coords.latitude, location.coords.longitude);
+            }
+        }
     } catch (error) {
         console.error('Failed to update status', error);
         setIsOnline(!value);
