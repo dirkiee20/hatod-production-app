@@ -45,6 +45,13 @@ export class PabiliRequestsService {
             user: { select: { phone: true, email: true } },
           },
         },
+        order: {
+          select: {
+            id: true,
+            status: true,
+            riderId: true,
+          }
+        }
       },
     });
   }

@@ -82,8 +82,8 @@ export class OrdersController {
   }
 
   @Patch(':id/assign-rider')
-  @Roles(UserRole.MERCHANT)
-  @ApiOperation({ summary: 'Merchant assigns a rider to an order' })
+  @Roles(UserRole.MERCHANT, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Merchant or Admin assigns a rider to an order' })
   assignRider(
     @Param('id') id: string,
     @Body('riderId') riderId: string,

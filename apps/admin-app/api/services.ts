@@ -118,6 +118,19 @@ export const getOrderById = async (id: string): Promise<Order | null> => {
   }
 };
 
+export const assignRiderToOrder = async (orderId: string, riderId: string): Promise<boolean> => {
+  try {
+    const response = await authenticatedFetch(`/orders/${orderId}/assign-rider`, {
+      method: 'PATCH',
+      body: JSON.stringify({ riderId })
+    });
+    return response.ok;
+  } catch (error) {
+    console.error('Error assigning rider:', error);
+    return false;
+  }
+};
+
 // User APIs
 export const getCurrentUser = async (): Promise<User | null> => {
   try {

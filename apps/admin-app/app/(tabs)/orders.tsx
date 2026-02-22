@@ -5,7 +5,7 @@ import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import React, { useState, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getAllOrders, getPabiliRequests, quotePabiliRequest } from '../../api/services';
+import { getAllOrders, getPabiliRequests, quotePabiliRequest, getRiders, assignRiderToOrder } from '../../api/services';
 import { Order } from '../../api/types';
 import { useSocket } from '@/context/SocketContext';
 
@@ -29,6 +29,12 @@ export default function OrdersScreen() {
   const [quoteAmount, setQuoteAmount] = useState('');
   const [submittingQuote, setSubmittingQuote] = useState(false);
   const [customActiveTab, setCustomActiveTab] = useState('Pending Review');
+
+  // Rider Assignment State
+  const [riders, setRiders] = useState<any[]>([]);
+  const [showRiderModal, setShowRiderModal] = useState(false);
+  const [selectedOrderForRider, setSelectedOrderForRider] = useState<string | null>(null);
+  const [assigningRiderId, setAssigningRiderId] = useState<string | null>(null);
 
   const [refreshing, setRefreshing] = useState(false);
 
@@ -99,6 +105,35 @@ export default function OrdersScreen() {
           Alert.alert('Error', 'Failed to submit quote.');
       } finally {
           setSubmittingQuote(false);
+      }
+  };
+
+  const handleOpenAssignRider = async (orderId: string) => {
+      setSelectedOrderForRider(orderId);
+      setShowRiderModal(true);
+      try {
+          const fetchedRiders = await getRiders();
+          // Filter to only show available riders if you want, or show all
+          setRiders(fetchedRiders.filter((r: any) => r.status === 'AVAILABLE'));
+      } catch (error) {
+          console.error("Error fetching riders", error);
+      }
+  };
+
+  const handleAssignRiderSubmit = async (riderId: string) => {
+      if (!selectedOrderForRider) return;
+      setAssigningRiderId(riderId);
+      try {
+          await assignRiderToOrder(selectedOrderForRider, riderId);
+          Alert.alert("Success", "Rider assigned successfully!");
+          setShowRiderModal(false);
+          setSelectedOrderForRider(null);
+          // Refresh both the custom requests and standard orders to reflect the assignment
+          fetchAll();
+      } catch (error) {
+          Alert.alert("Error", "Failed to assign rider.");
+      } finally {
+          setAssigningRiderId(null);
       }
   };
 
@@ -302,8 +337,11 @@ export default function OrdersScreen() {
                           <TouchableOpacity 
                              style={[styles.reqQuoteButton, { backgroundColor: '#4CAF50' }]} 
                              onPress={() => {
-                                 setMainTab('Standard');
-                                 setActiveTab('Pending');
+                                 if (req.order?.id) {
+                                     handleOpenAssignRider(req.order.id);
+                                 } else {
+                                     Alert.alert('Error', 'No actual order found yet. The customer might still be paying.');
+                                 }
                              }}
                           >
                              <ThemedText style={styles.reqQuoteButtonText}>Assign Rider</ThemedText>
@@ -345,6 +383,56 @@ export default function OrdersScreen() {
                        </TouchableOpacity>
                   </View>
                </View>
+            </View>
+        </Modal>
+
+        {/* Assign Rider Modal */}
+        <Modal visible={showRiderModal} transparent animationType="slide">
+            <View style={styles.modalOverlay}>
+                <View style={[styles.modalContent, { maxHeight: '80%' }]}>
+                    <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16}}>
+                        <ThemedText style={styles.modalTitle}>Select a Rider</ThemedText>
+                        <TouchableOpacity onPress={() => setShowRiderModal(false)}>
+                            <ThemedText style={{ color: '#999', fontWeight: 'bold' }}>Close</ThemedText>
+                        </TouchableOpacity>
+                    </View>
+                    
+                    <ScrollView showsVerticalScrollIndicator={false}>
+                        {riders.length === 0 ? (
+                            <ThemedText style={{color: '#888', textAlign: 'center', marginVertical: 20}}>No available riders found.</ThemedText>
+                        ) : (
+                            riders.map(rider => (
+                                <TouchableOpacity 
+                                    key={rider.id}
+                                    style={{
+                                        flexDirection: 'row', 
+                                        justifyContent: 'space-between', 
+                                        alignItems: 'center',
+                                        padding: 12,
+                                        borderWidth: 1,
+                                        borderColor: '#EEE',
+                                        borderRadius: 8,
+                                        marginBottom: 8
+                                    }}
+                                    onPress={() => handleAssignRiderSubmit(rider.id)}
+                                    disabled={!!assigningRiderId}
+                                >
+                                    <View>
+                                        <ThemedText style={{fontSize: 16, fontWeight: 'bold'}}>{rider.user?.name || `${rider.firstName || ''} ${rider.lastName || ''}`.trim() || 'Unknown Rider'}</ThemedText>
+                                        <ThemedText style={{fontSize: 12, color: '#666'}}>{rider.vehicleType} • {rider.plateNumber}</ThemedText>
+                                    </View>
+                                    {assigningRiderId === rider.id ? (
+                                        <ActivityIndicator size="small" color="#C2185B" />
+                                    ) : (
+                                        <View style={{backgroundColor: '#E8F5E9', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12}}>
+                                            <ThemedText style={{fontSize: 12, color: '#388E3C', fontWeight: 'bold'}}>Assign</ThemedText>
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
+                            ))
+                        )}
+                    </ScrollView>
+                </View>
             </View>
         </Modal>
       </>
