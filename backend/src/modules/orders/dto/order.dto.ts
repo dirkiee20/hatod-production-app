@@ -36,6 +36,11 @@ export class CreateOrderDto {
   @IsOptional()
   @IsString()
   specialInstructions?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsUUID()
+  pabiliRequestId?: string;
 }
 
 export class UpdateOrderStatusDto {

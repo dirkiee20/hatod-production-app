@@ -1,25 +1,43 @@
 import { StyleSheet, ScrollView, TouchableOpacity, View, Image, Alert } from 'react-native';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCart } from '@/context/CartContext';
-import { createOrder, createAddress } from '@/api/services';
+import { createOrder, createAddress, getPabiliRequestById } from '@/api/services';
 
 export default function CheckoutScreen() {
   const router = useRouter();
   const [selectedPayment, setSelectedPayment] = useState('COD');
 
   const { items, cartTotal, clearCart, deliveryFee, deliveryAddress, setDeliveryAddress } = useCart();
+  const { pabiliRequestId } = useLocalSearchParams<{ pabiliRequestId?: string }>();
+  const [pabiliRequest, setPabiliRequest] = useState<any>(null);
+
+  useEffect(() => {
+    if (pabiliRequestId) {
+        getPabiliRequestById(pabiliRequestId).then(data => {
+            if (data) setPabiliRequest(data);
+        });
+    }
+  }, [pabiliRequestId]);
+
+  const platformFee = 5; 
   
-  const platformFee = 5; // Platform fee might still be hardcoded or need config
-  const total = cartTotal + deliveryFee + platformFee;
+  const isPabili = !!pabiliRequest;
+  const displayItems = isPabili ? [
+     { id: 'pabili-item', quantity: 1, name: 'Custom Pabili Items', options: { addons: pabiliRequest.items } as any, totalPrice: pabiliRequest.estimatedItemCost }
+  ] : items;
+
+  const displaySubtotal = isPabili ? pabiliRequest.estimatedItemCost : cartTotal;
+  const displayDeliveryFee = isPabili ? (pabiliRequest.serviceFee || 0) : deliveryFee;
+  const total = displaySubtotal + displayDeliveryFee + platformFee;
 
   const [loading, setLoading] = useState(false);
 
   const handlePlaceOrder = async () => {
-    if (items.length === 0) return;
+    if (displayItems.length === 0) return;
 
     setLoading(true);
     try {
@@ -53,19 +71,26 @@ export default function CheckoutScreen() {
         }
       }
 
-      // Assuming all items are from the same merchant (handled by UI logic elsewhere usually)
-      // Taking merchantId from the first item
-      const merchantId = items[0].merchantId;
-      
-      const orderData = {
-        merchantId: merchantId,
+      const orderData: any = {
         addressId: resolvedAddressId,
-        items: items.map(i => ({
+      };
+
+      if (isPabili) {
+        orderData.pabiliRequestId = pabiliRequest.id;
+        orderData.merchantId = '22222222-2222-2222-2222-222222222222'; // Ghost Merchant
+        orderData.items = [{
+            menuItemId: '44444444-4444-4444-4444-444444444444', // Ghost Item
+            quantity: 1,
+            notes: JSON.stringify({ items: pabiliRequest.items })
+        }];
+      } else {
+        orderData.merchantId = items[0].merchantId;
+        orderData.items = items.map(i => ({
           menuItemId: i.menuItemId,
           quantity: i.quantity,
           notes: i.options ? JSON.stringify(i.options) : undefined
-        }))
-      };
+        }));
+      }
       
       console.log('Placing order with data:', JSON.stringify(orderData, null, 2));
 
@@ -92,9 +117,9 @@ export default function CheckoutScreen() {
   };
 
   const orderSummary = {
-    items: items.length,
-    subtotal: cartTotal,
-    deliveryFee: deliveryFee,
+    items: displayItems.length,
+    subtotal: displaySubtotal,
+    deliveryFee: displayDeliveryFee,
     platformFee: platformFee,
     total: total,
   };
@@ -142,22 +167,22 @@ export default function CheckoutScreen() {
         {/* Order Items Section */}
         <ThemedView style={styles.section}>
           <ThemedText style={styles.sectionTitle}>Order Items</ThemedText>
-          {items.map((item) => (
+          {displayItems.map((item) => (
             <ThemedView key={item.id} style={styles.itemRow}>
               <ThemedView style={styles.itemInfo}>
                 <ThemedText style={styles.itemQty}>{item.quantity}x</ThemedText>
-                <ThemedView>
+                <ThemedView style={{flex: 1}}>
                   <ThemedText style={styles.itemName}>{item.name}</ThemedText>
                   {item.options?.size && <ThemedText style={styles.itemOptions}>Size: {item.options.size}</ThemedText>}
                   {item.options?.addons && item.options.addons.length > 0 && (
-                     <ThemedText style={styles.itemOptions}>Addons: {item.options.addons.join(', ')}</ThemedText>
+                     <ThemedText style={styles.itemOptions}>List: {item.options.addons.join(', ')}</ThemedText>
                   )}
                 </ThemedView>
               </ThemedView>
               <ThemedText style={styles.itemPrice}>₱{item.totalPrice}</ThemedText>
             </ThemedView>
           ))}
-          {items.length === 0 && (
+          {displayItems.length === 0 && (
              <ThemedText style={styles.emptyCartText}>Your cart is empty.</ThemedText>
           )}
         </ThemedView>
@@ -223,7 +248,7 @@ export default function CheckoutScreen() {
 
       {/* Place Order Footer */}
       <ThemedView style={styles.footer}>
-         <TouchableOpacity style={[styles.placeOrderBtn, (items.length === 0 || loading) && styles.placeOrderBtnDisabled]} onPress={handlePlaceOrder} disabled={items.length === 0 || loading}>
+         <TouchableOpacity style={[styles.placeOrderBtn, (displayItems.length === 0 || loading) && styles.placeOrderBtnDisabled]} onPress={handlePlaceOrder} disabled={displayItems.length === 0 || loading}>
             <ThemedText style={styles.placeOrderText}>{loading ? 'Placing Order...' : `Place Order — ₱${orderSummary.total}`}</ThemedText>
          </TouchableOpacity>
       </ThemedView>

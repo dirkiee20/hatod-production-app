@@ -58,8 +58,12 @@ export default function PabiliOrdersScreen() {
     <TouchableOpacity 
         key={req.id} 
         style={styles.card} 
-        onPress={() => router.push({ pathname: '/services/pabili' })} // Assuming we can resume if needed
-        disabled={true} // For now, simple view
+        onPress={() => {
+            if (req.status === 'QUOTED') {
+                router.push({ pathname: '/checkout', params: { pabiliRequestId: req.id } })
+            }
+        }}
+        disabled={req.status !== 'QUOTED'}
     >
         <View style={styles.cardHeader}>
             <View style={styles.restaurantRow}>
@@ -88,7 +92,7 @@ export default function PabiliOrdersScreen() {
             {req.status === 'QUOTED' && !isPast && (
                  <TouchableOpacity 
                     style={styles.trackBtn} 
-                    onPress={() => router.push({ pathname: '/services/pabili' })} // Go back to pabili screen
+                    onPress={() => router.push({ pathname: '/checkout', params: { pabiliRequestId: req.id } })}
                  >
                     <ThemedText style={styles.trackText}>View Quote</ThemedText>
                 </TouchableOpacity>

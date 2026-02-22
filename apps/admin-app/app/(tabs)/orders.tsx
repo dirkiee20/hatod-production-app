@@ -28,6 +28,7 @@ export default function OrdersScreen() {
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
   const [quoteAmount, setQuoteAmount] = useState('');
   const [submittingQuote, setSubmittingQuote] = useState(false);
+  const [customActiveTab, setCustomActiveTab] = useState('Pending Review');
 
   const [refreshing, setRefreshing] = useState(false);
 
@@ -110,6 +111,17 @@ export default function OrdersScreen() {
         if (activeTab === 'In Progress') return ['CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP'].includes(o.status);
         if (activeTab === 'Delivered') return o.status === 'DELIVERED';
         if (activeTab === 'Cancelled') return o.status === 'CANCELLED';
+        return true;
+      });
+
+  const customStatusTabs = ['All', 'Pending Review', 'Quoted', 'Placed'];
+
+  const filteredRequests = customActiveTab === 'All'
+    ? requests
+    : requests.filter((r: any) => {
+        if (customActiveTab === 'Pending Review') return r.status === 'PENDING_REVIEW';
+        if (customActiveTab === 'Quoted') return r.status === 'QUOTED';
+        if (customActiveTab === 'Placed') return ['ACCEPTED', 'COMPLETED'].includes(r.status);
         return true;
       });
 
@@ -206,17 +218,31 @@ export default function OrdersScreen() {
 
     return (
       <>
+        <View style={styles.tabContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScroll}>
+            {customStatusTabs.map((tab) => (
+              <TouchableOpacity 
+                key={tab} 
+                onPress={() => setCustomActiveTab(tab)}
+                style={[styles.tab, customActiveTab === tab && styles.activeTab]}
+              >
+                <ThemedText style={[styles.tabText, customActiveTab === tab && styles.activeTabText]}>{tab}</ThemedText>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
         <ScrollView 
           showsVerticalScrollIndicator={false} 
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { marginTop: 10 }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
-          {requests.length === 0 ? (
+          {filteredRequests.length === 0 ? (
              <View style={{alignItems: 'center', marginTop: 50}}>
                 <ThemedText style={{color: '#888', fontStyle: 'italic'}}>No requests found</ThemedText>
              </View>
           ) : (
-            requests.map((req) => {
+            filteredRequests.map((req: any) => {
               const statusColor = req.status === 'PENDING_REVIEW' ? '#F57C00' :
                                   req.status === 'QUOTED' ? '#1976D2' : 
                                   req.status === 'ACCEPTED' ? '#388E3C' : '#888';
@@ -270,6 +296,18 @@ export default function OrdersScreen() {
                              <ThemedText style={{fontSize: 12, color: '#888'}}>Service Fee</ThemedText>
                              <ThemedText style={{fontSize: 16, fontWeight: 'bold', color: '#C2185B'}}>₱{req.serviceFee?.toLocaleString()}</ThemedText>
                           </View>
+                      )}
+
+                      {req.status === 'ACCEPTED' && (
+                          <TouchableOpacity 
+                             style={[styles.reqQuoteButton, { backgroundColor: '#4CAF50' }]} 
+                             onPress={() => {
+                                 setMainTab('Standard');
+                                 setActiveTab('Pending');
+                             }}
+                          >
+                             <ThemedText style={styles.reqQuoteButtonText}>Assign Rider</ThemedText>
+                          </TouchableOpacity>
                       )}
                   </View>
 

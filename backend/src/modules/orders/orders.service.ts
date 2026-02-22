@@ -52,37 +52,64 @@ export class OrdersService {
     // Calculate totals
     let subtotal = 0;
     const orderItemsData = [];
-
-    for (const item of dto.items) {
-      const menuItem = await this.prisma.menuItem.findUnique({
-        where: { id: item.menuItemId, merchantId: dto.merchantId },
-      });
-
-      if (!menuItem || !menuItem.isAvailable) {
-        throw new BadRequestException(`Item ${item.menuItemId} is not available`);
-      }
-
-      subtotal += menuItem.price * item.quantity;
-      orderItemsData.push({
-        menuItemId: item.menuItemId,
-        quantity: item.quantity,
-        price: menuItem.price,
-        notes: item.notes,
-      });
-    }
-
-    // Calculate Delivery Fee using DeliveryFeeService
-    const origin = { lat: merchant.latitude, lng: merchant.longitude };
-    const destination = { lat: address.latitude, lng: address.longitude };
-    
-    // Default fee if calculation fails or returns 0
     let deliveryFee = 50;
+    
+    let pabiliReq = null;
+    if (dto.pabiliRequestId) {
+        // Handle Pabili Flow
+        pabiliReq = await this.prisma.pabiliRequest.findUnique({
+            where: { id: dto.pabiliRequestId }
+        });
+        if (!pabiliReq) throw new NotFoundException('Pabili Request not found');
+        
+        subtotal = pabiliReq.estimatedItemCost;
+        deliveryFee = pabiliReq.serviceFee || 50;
 
-    try {
-      const feeResult = await this.deliveryFeeService.calculateDeliveryFee(origin, destination);
-      deliveryFee = feeResult.fee;
-    } catch (error) {
-      console.error('Failed to calculate delivery fee, using default:', error);
+        for (const item of dto.items) {
+           orderItemsData.push({
+               menuItemId: item.menuItemId,
+               quantity: item.quantity,
+               price: subtotal, // assign total budget to this ghost item
+               notes: item.notes
+           });
+        }
+        
+        // Mark the request as officially ACCEPTED/Placed
+        await this.prisma.pabiliRequest.update({
+            where: { id: dto.pabiliRequestId },
+            data: { status: 'ACCEPTED' }
+        });
+
+    } else {
+        // Existing flow for normal food orders
+        for (const item of dto.items) {
+          const menuItem = await this.prisma.menuItem.findUnique({
+            where: { id: item.menuItemId, merchantId: dto.merchantId },
+          });
+
+          if (!menuItem || !menuItem.isAvailable) {
+            throw new BadRequestException(`Item ${item.menuItemId} is not available`);
+          }
+
+          subtotal += menuItem.price * item.quantity;
+          orderItemsData.push({
+            menuItemId: item.menuItemId,
+            quantity: item.quantity,
+            price: menuItem.price,
+            notes: item.notes,
+          });
+        }
+
+        // Calculate Delivery Fee using DeliveryFeeService
+        const origin = { lat: merchant.latitude, lng: merchant.longitude };
+        const destination = { lat: address.latitude, lng: address.longitude };
+        
+        try {
+          const feeResult = await this.deliveryFeeService.calculateDeliveryFee(origin, destination);
+          deliveryFee = feeResult.fee;
+        } catch (error) {
+          console.error('Failed to calculate delivery fee, using default:', error);
+        }
     }
     
     const total = subtotal + deliveryFee;
@@ -97,6 +124,7 @@ export class OrdersService {
         deliveryFee,
         total,
         specialInstructions: dto.specialInstructions,
+        pabiliRequestId: dto.pabiliRequestId,
         items: {
           create: orderItemsData,
         },

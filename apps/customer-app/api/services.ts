@@ -341,3 +341,13 @@ export const getMyPabiliRequests = async (): Promise<any[]> => {
   }
 };
 
+export const getPabiliRequestById = async (id: string): Promise<any> => {
+  try {
+    const response = await authenticatedFetch(`/pabili-requests/${id}`);
+    if (!response.ok) throw new Error('Failed to fetch pabili request');
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching pabili request:', error);
+    return null;
+  }
+};
