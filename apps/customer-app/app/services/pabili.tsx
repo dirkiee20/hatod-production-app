@@ -3,16 +3,36 @@ import { useRouter, Stack } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createPabiliRequest } from '../../api/services';
+import { useSocket } from '@/context/SocketContext';
 
 type Step = 'request' | 'waiting' | 'review';
 
 export default function PabiliScreen() {
   const router = useRouter();
+  const { socket } = useSocket();
   const [items, setItems] = useState<string[]>(['']);
   const [estimatedPrice, setEstimatedPrice] = useState('');
   const [step, setStep] = useState<Step>('request');
   const [serviceFee, setServiceFee] = useState(0);
+  const [requestId, setRequestId] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleQuote = (updatedRequest: any) => {
+      if (updatedRequest.id === requestId) {
+        setServiceFee(updatedRequest.serviceFee);
+        setStep('review');
+      }
+    };
+    
+    socket.on('pabili_request_quoted', handleQuote);
+    return () => {
+       socket.off('pabili_request_quoted', handleQuote);
+    };
+  }, [socket, requestId]);
 
   const addItem = () => setItems([...items, '']);
   const updateItem = (text: string, index: number) => {
@@ -27,18 +47,23 @@ export default function PabiliScreen() {
     }
   };
 
-  const handleSubmit = () => {
-    if (items.some(i => i.trim() === '') || !estimatedPrice) {
-      Alert.alert('Missing Info', 'Please list all items and estimated price.');
+  const handleSubmit = async () => {
+    const validItems = items.filter(i => i.trim() !== '');
+    if (validItems.length === 0 || !estimatedPrice) {
+      Alert.alert('Missing Info', 'Please list at least one item and estimated price.');
       return;
     }
-    setStep('waiting');
-  };
-
-  // Mock function to simulate Admin updating the fee
-  const simulateAdminUpdate = () => {
-    setServiceFee(50); // Admin sets 50 fee
-    setStep('review');
+    
+    setIsSubmitting(true);
+    try {
+       const req = await createPabiliRequest(validItems, parseFloat(estimatedPrice));
+       setRequestId(req.id);
+       setStep('waiting');
+    } catch (error) {
+       Alert.alert('Error', 'Failed to submit request. Please try again.');
+    } finally {
+       setIsSubmitting(false);
+    }
   };
 
   const handleCheckout = () => {
@@ -108,9 +133,15 @@ export default function PabiliScreen() {
          </View>
       </ThemedView>
 
-      <TouchableOpacity style={styles.primaryButton} onPress={handleSubmit} activeOpacity={0.8}>
-          <ThemedText style={styles.primaryButtonText}>Submit Request</ThemedText>
-          <IconSymbol name="chevron.right" size={20} color="#FFF" />
+      <TouchableOpacity style={styles.primaryButton} onPress={handleSubmit} activeOpacity={0.8} disabled={isSubmitting}>
+          {isSubmitting ? (
+              <ActivityIndicator size="small" color="#FFF" />
+          ) : (
+             <>
+                 <ThemedText style={styles.primaryButtonText}>Submit Request</ThemedText>
+                 <IconSymbol name="chevron.right" size={20} color="#FFF" />
+             </>
+          )}
       </TouchableOpacity>
     </View>
   );
@@ -130,11 +161,6 @@ export default function PabiliScreen() {
              <IconSymbol name="phone" size={20} color="#F57C00" />
              <ThemedText style={styles.waitingTipText}>We may call you if we need clarification. Keep your app open.</ThemedText>
           </View>
-
-          {/* SIMULATION BUTTON - Remove in production */}
-          <TouchableOpacity style={styles.simButton} onPress={simulateAdminUpdate}>
-               <ThemedText style={styles.simButtonText}>[DEV: Simulate Admin Call]</ThemedText>
-          </TouchableOpacity>
       </ThemedView>
     </View>
   );
@@ -451,18 +477,10 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     lineHeight: 20,
   },
-  simButton: {
-    marginTop: 40,
-    padding: 15,
-    backgroundColor: '#F5F7F9',
-    borderRadius: 10,
-    width: '100%',
-    alignItems: 'center',
-  },
-  simButtonText: {
-    fontSize: 12,
-    color: '#78909C',
-    fontWeight: '600',
+  totalAmount: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#F57C00',
   },
   receiptCard: {
     backgroundColor: '#FFF',
@@ -532,10 +550,5 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '900',
     color: '#2A3037',
-  },
-  totalAmount: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: '#F57C00',
   }
 });

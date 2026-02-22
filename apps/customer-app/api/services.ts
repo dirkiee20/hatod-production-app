@@ -315,3 +315,29 @@ export const getDeliveryFeeEstimate = async (origin: { lat: number, lng: number 
   }
 };
 
+// Pabili Requests API
+export const createPabiliRequest = async (items: string[], estimatedItemCost: number): Promise<any> => {
+  try {
+    const response = await authenticatedFetch('/pabili-requests', {
+      method: 'POST',
+      body: JSON.stringify({ items, estimatedItemCost }),
+    });
+    if (!response.ok) throw new Error('Failed to create pabili request');
+    return await response.json();
+  } catch (error) {
+    console.error('Error creating pabili request:', error);
+    throw error;
+  }
+};
+
+export const getMyPabiliRequests = async (): Promise<any[]> => {
+  try {
+    const response = await authenticatedFetch('/pabili-requests/customer');
+    if (!response.ok) throw new Error('Failed to fetch pabili requests');
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching pabili requests:', error);
+    return [];
+  }
+};
+
