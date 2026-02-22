@@ -13,7 +13,6 @@ import { useFocusEffect } from 'expo-router';
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const [isOnline, setIsOnline] = useState(false);
-  const [updatingStatus, setUpdatingStatus] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<[number, number] | null>(null);
   const cameraRef = useRef<Mapbox.Camera>(null);
 
@@ -65,39 +64,6 @@ export default function MapScreen() {
     }
   };
 
-  const toggleOnlineStatus = async () => {
-    if (updatingStatus) return;
-
-    try {
-      setUpdatingStatus(true);
-      const newStatus = !isOnline;
-      const status = newStatus ? 'AVAILABLE' : 'OFFLINE';
-
-      console.log('[RiderApp MapScreen] Toggling status to:', status);
-      
-      // Update status
-      await updateRiderStatus(status);
-      
-      // If going online, also update location so merchants can find the rider
-      if (newStatus && currentLocation) {
-        console.log('[RiderApp MapScreen] Updating location for merchant search:', currentLocation);
-        await updateRiderLocation(currentLocation[1], currentLocation[0]); // lat, lng
-      } else if (newStatus && !currentLocation) {
-        // Try to get location if we don't have it yet
-        await getCurrentLocation();
-        if (currentLocation) {
-          await updateRiderLocation(currentLocation[1], currentLocation[0]);
-        }
-      }
-      
-      setIsOnline(newStatus);
-    } catch (error) {
-      console.error('[RiderApp MapScreen] Error updating status:', error);
-    } finally {
-      setUpdatingStatus(false);
-    }
-  };
-
   return (
     <ThemedView style={styles.container}>
       {/* Map View */}
@@ -136,16 +102,14 @@ export default function MapScreen() {
           <TouchableOpacity style={styles.menuBtn}>
             <IconSymbol size={24} name="dashboard" color="#333" />
           </TouchableOpacity>
-          <TouchableOpacity 
+          <View 
             style={[styles.statusPill, { backgroundColor: isOnline ? '#E8F5E9' : '#ECEFF1' }]}
-            onPress={toggleOnlineStatus}
-            disabled={updatingStatus}
           >
             <View style={[styles.statusDot, { backgroundColor: isOnline ? '#388E3C' : '#999' }]} />
             <ThemedText style={[styles.statusText, { color: isOnline ? '#388E3C' : '#666' }]}>
-              {updatingStatus ? 'Updating...' : (isOnline ? 'Online' : 'Offline')}
+              {isOnline ? 'Online' : 'Offline'}
             </ThemedText>
-          </TouchableOpacity>
+          </View>
           <TouchableOpacity style={styles.menuBtn}>
             <IconSymbol size={24} name="account" color="#333" />
           </TouchableOpacity>
