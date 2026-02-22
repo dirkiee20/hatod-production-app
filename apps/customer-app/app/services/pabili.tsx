@@ -1,4 +1,4 @@
-import { StyleSheet, ScrollView, TextInput, TouchableOpacity, View, ActivityIndicator, Alert } from 'react-native';
+import { StyleSheet, ScrollView, TextInput, TouchableOpacity, View, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Image } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -20,6 +20,12 @@ export default function PabiliScreen() {
     newItems[index] = text;
     setItems(newItems);
   };
+  const removeItem = (index: number) => {
+    if (items.length > 1) {
+      const newItems = items.filter((_, i) => i !== index);
+      setItems(newItems);
+    }
+  };
 
   const handleSubmit = () => {
     if (items.some(i => i.trim() === '') || !estimatedPrice) {
@@ -36,70 +42,101 @@ export default function PabiliScreen() {
   };
 
   const handleCheckout = () => {
-    // Navigate to checkout or address selection
-    // For now, we just show an alert
     Alert.alert('Proceed to Checkout', 'Navigate to address selection...');
   };
 
   const renderRequestStep = () => (
-    <ThemedView style={styles.content}>
-        <ThemedView style={styles.section}>
-            <ThemedText style={styles.sectionTitle}>What do you need?</ThemedText>
-            {items.map((item, index) => (
-                <TextInput
-                    key={index}
-                    style={styles.input}
-                    placeholder={`Item #${index + 1} (e.g. 1kg Rice)`}
-                    value={item}
-                    onChangeText={(text) => updateItem(text, index)}
-                />
-            ))}
-            <TouchableOpacity style={styles.addButton} onPress={addItem}>
-                <IconSymbol name="add" size={20} color="#C2185B" />
-                <ThemedText style={styles.addButtonText}>Add another item</ThemedText>
-            </TouchableOpacity>
-        </ThemedView>
+    <View style={styles.stepContainer}>
+      <ThemedView style={styles.card}>
+        <View style={styles.cardHeaderRow}>
+          <IconSymbol name="pabili" size={22} color="#F57C00" />
+          <ThemedText style={styles.cardTitle}>Shopping List</ThemedText>
+        </View>
+        <ThemedText style={styles.cardSubtitle}>List exactly what you need us to buy</ThemedText>
+        
+        <View style={styles.divider} />
 
-        <ThemedView style={styles.section}>
-             <ThemedText style={styles.sectionTitle}>Estimated Total Price</ThemedText>
-             <ThemedText style={styles.sectionSubtitle}>This helps riders prepare enough cash.</ThemedText>
+        {items.map((item, index) => (
+          <View key={index} style={styles.inputWrapper}>
+             <View style={styles.bulletPoint} />
              <TextInput
-                style={styles.input}
-                placeholder="₱ 0.00"
-                keyboardType="numeric"
-                value={estimatedPrice}
-                onChangeText={setEstimatedPrice}
+                style={styles.inputItem}
+                placeholder={`Item ${index + 1} (e.g. 1kg Rice)`}
+                placeholderTextColor="#A0AAB5"
+                value={item}
+                onChangeText={(text) => updateItem(text, index)}
              />
-             
-             {/* Read-only Service Fee field initially */}
-             <ThemedText style={[styles.sectionSubtitle, {marginTop: 10}]}>Service Fee (To be added via admin call)</ThemedText>
-             <TextInput
-                style={[styles.input, { backgroundColor: '#EEE', color: '#999' }]}
-                placeholder="--.--"
-                editable={false}
-             />
-        </ThemedView>
+             {items.length > 1 && (
+               <TouchableOpacity style={styles.removeBtn} onPress={() => removeItem(index)}>
+                 <IconSymbol name="trash.fill" size={18} color="#FF5252" />
+               </TouchableOpacity>
+             )}
+          </View>
+        ))}
 
-        <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-            <ThemedText style={styles.submitButtonText}>Submit Request</ThemedText>
+        <TouchableOpacity style={styles.addButton} onPress={addItem}>
+            <View style={styles.addIconCircle}>
+              <IconSymbol name="add" size={16} color="#F57C00" />
+            </View>
+            <ThemedText style={styles.addButtonText}>Add another item</ThemedText>
         </TouchableOpacity>
-    </ThemedView>
+      </ThemedView>
+
+      <ThemedView style={styles.card}>
+         <View style={styles.cardHeaderRow}>
+            <IconSymbol name="cart" size={22} color="#F57C00" />
+            <ThemedText style={styles.cardTitle}>Estimated Budget</ThemedText>
+         </View>
+         <ThemedText style={styles.cardSubtitle}>This helps our riders prepare enough cash.</ThemedText>
+         
+         <View style={styles.priceInputContainer}>
+            <ThemedText style={styles.currencySymbol}>₱</ThemedText>
+            <TextInput
+              style={styles.priceInput}
+              placeholder="0.00"
+              placeholderTextColor="#A0AAB5"
+              keyboardType="numeric"
+              value={estimatedPrice}
+              onChangeText={setEstimatedPrice}
+            />
+         </View>
+         
+         {/* Read-only Service Fee field initially */}
+         <View style={styles.feeInfoBox}>
+            <IconSymbol name="government" size={16} color="#78909C" />
+            <ThemedText style={styles.feeInfoText}>Service Fee will be calculated by our admin after reviewing your request.</ThemedText>
+         </View>
+      </ThemedView>
+
+      <TouchableOpacity style={styles.primaryButton} onPress={handleSubmit} activeOpacity={0.8}>
+          <ThemedText style={styles.primaryButtonText}>Submit Request</ThemedText>
+          <IconSymbol name="chevron.right" size={20} color="#FFF" />
+      </TouchableOpacity>
+    </View>
   );
 
   const renderWaitingStep = () => (
-    <ThemedView style={[styles.content, { alignItems: 'center', paddingTop: 60 }]}>
-        <ActivityIndicator size="large" color="#FB8C00" style={{ marginBottom: 20 }} />
-        <ThemedText style={styles.waitingTitle}>Request Submitted!</ThemedText>
-        <ThemedText style={styles.waitingSubtitle}>
-          Please wait for our admin to call you to confirm the service details and fee.
-        </ThemedText>
-        <ThemedText style={styles.waitingSubtitle}>Do not close this app.</ThemedText>
+    <View style={styles.stepContainer}>
+      <ThemedView style={styles.waitingCard}>
+          <View style={styles.spinnerWrapper}>
+             <ActivityIndicator size="large" color="#F57C00" />
+          </View>
+          <ThemedText style={styles.waitingTitle}>Request Submitted 🎉</ThemedText>
+          <ThemedText style={styles.waitingSubtitle}>
+            Please wait while our admin reviews your list to calculate the precise service fee.
+          </ThemedText>
+          
+          <View style={styles.waitingTipBox}>
+             <IconSymbol name="phone" size={20} color="#F57C00" />
+             <ThemedText style={styles.waitingTipText}>We may call you if we need clarification. Keep your app open.</ThemedText>
+          </View>
 
-        {/* SIMULATION BUTTON - Remove in production */}
-        <TouchableOpacity style={styles.simButton} onPress={simulateAdminUpdate}>
-             <ThemedText style={styles.simButtonText}>[DEV: Simulate Admin Call]</ThemedText>
-        </TouchableOpacity>
-    </ThemedView>
+          {/* SIMULATION BUTTON - Remove in production */}
+          <TouchableOpacity style={styles.simButton} onPress={simulateAdminUpdate}>
+               <ThemedText style={styles.simButtonText}>[DEV: Simulate Admin Call]</ThemedText>
+          </TouchableOpacity>
+      </ThemedView>
+    </View>
   );
 
   const renderReviewStep = () => {
@@ -107,43 +144,65 @@ export default function PabiliScreen() {
     const finalTotal = estTotal + serviceFee;
 
     return (
-        <ThemedView style={styles.content}>
-            <ThemedView style={styles.section}>
-                <ThemedText style={styles.sectionTitle}>Order Summary</ThemedText>
+        <View style={styles.stepContainer}>
+            <ThemedView style={styles.receiptCard}>
+                <View style={styles.receiptHeader}>
+                   <IconSymbol name="pabili" size={28} color="#F57C00" />
+                   <ThemedText style={styles.receiptTitle}>Order Summary</ThemedText>
+                   <ThemedText style={styles.receiptId}>ORDER #{(Math.random() * 100000).toFixed(0)}</ThemedText>
+                </View>
+
+                <View style={styles.dottedDivider} />
                 
-                <View style={styles.row}>
-                    <ThemedText>Est. Item Cost</ThemedText>
-                    <ThemedText>₱{estTotal.toFixed(2)}</ThemedText>
+                <View style={styles.receiptRow}>
+                    <ThemedText style={styles.receiptLabel}>Estimated Item Cost</ThemedText>
+                    <ThemedText style={styles.receiptValue}>₱{estTotal.toFixed(2)}</ThemedText>
                 </View>
-                <View style={styles.row}>
-                    <ThemedText>Service Fee</ThemedText>
-                    <ThemedText style={{ color: '#C2185B', fontWeight: 'bold' }}>₱{serviceFee.toFixed(2)}</ThemedText>
+                <View style={styles.receiptRow}>
+                    <ThemedText style={styles.receiptLabel}>Service Fee</ThemedText>
+                    <View style={styles.feeHighlight}>
+                       <ThemedText style={styles.feeHighlightText}>₱{serviceFee.toFixed(2)}</ThemedText>
+                    </View>
                 </View>
-                <View style={[styles.row, styles.totalRow]}>
+
+                <View style={styles.dottedDivider} />
+
+                <View style={[styles.receiptRow, { marginBottom: 0 }]}>
                     <ThemedText style={styles.totalText}>Total Estimate</ThemedText>
-                    <ThemedText style={styles.totalText}>₱{finalTotal.toFixed(2)}</ThemedText>
+                    <ThemedText style={styles.totalAmount}>₱{finalTotal.toFixed(2)}</ThemedText>
                 </View>
             </ThemedView>
 
-            <TouchableOpacity style={styles.submitButton} onPress={handleCheckout}>
-                <ThemedText style={styles.submitButtonText}>Proceed to Checkout</ThemedText>
+            <TouchableOpacity style={styles.primaryButton} onPress={handleCheckout} activeOpacity={0.8}>
+                <ThemedText style={styles.primaryButtonText}>Proceed to Checkout</ThemedText>
+                <IconSymbol name="chevron.right" size={20} color="#FFF" />
             </TouchableOpacity>
-        </ThemedView>
+        </View>
     );
   };
 
   return (
-    <>
+    <KeyboardAvoidingView style={{flex: 1}} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false} bounces={false}>
+        
         <ThemedView style={styles.header}>
-             <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-               <IconSymbol name="chevron.right" size={28} color="#FFF" style={{ transform: [{ rotate: '180deg' }] }} />
-             </TouchableOpacity>
-            <ThemedView>
-              <ThemedText style={styles.headerTitle}>We Buy For You</ThemedText>
-              <ThemedText style={styles.headerSubtitle}>List what you need, we'll find it.</ThemedText>
-            </ThemedView>
+            <Image 
+              source={{ uri: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=800' }} 
+              style={styles.headerImage} 
+            />
+            <View style={styles.headerOverlay} />
+            
+            <View style={styles.headerSafeArea}>
+              <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+                <IconSymbol name="chevron.right" size={24} color="#FFF" style={{ transform: [{ rotate: '180deg' }] }} />
+              </TouchableOpacity>
+              
+              <View style={styles.headerTextContainer}>
+                <ThemedText style={styles.headerTitle}>We Buy For You</ThemedText>
+                <ThemedText style={styles.headerSubtitle}>Your personal shopper for anything you need.</ThemedText>
+              </View>
+            </View>
         </ThemedView>
 
         {step === 'request' && renderRequestStep()}
@@ -151,140 +210,332 @@ export default function PabiliScreen() {
         {step === 'review' && renderReviewStep()}
 
       </ScrollView>
-    </>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: '#F7F8FA',
   },
   header: {
+    height: 240,
+    position: 'relative',
+    backgroundColor: '#F57C00',
+  },
+  headerImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  headerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(245, 124, 0, 0.8)', // Orange vibrant overlay
+  },
+  headerSafeArea: {
     paddingTop: 60,
     paddingHorizontal: 20,
+    height: '100%',
+    justifyContent: 'space-between',
     paddingBottom: 30,
-    backgroundColor: '#FB8C00',
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
   },
   backButton: {
-    marginBottom: 16,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.25)',
     justifyContent: 'center',
     alignItems: 'center',
   },
+  headerTextContainer: {
+    marginTop: 'auto',
+  },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontSize: 32,
+    fontWeight: '900',
     color: '#FFF',
+    letterSpacing: 0.5,
   },
   headerSubtitle: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.9)',
-    marginTop: 4,
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.95)',
+    marginTop: 6,
+    fontWeight: '500',
   },
-  content: {
-    padding: 20,
+  stepContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 100,
   },
-  section: {
+  card: {
     backgroundColor: '#FFF',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 20,
+    padding: 24,
     marginBottom: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowRadius: 10,
+    elevation: 3,
   },
-  sectionTitle: {
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  cardTitle: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#333',
+    fontWeight: '800',
+    color: '#2A3037',
+    marginLeft: 8,
+  },
+  cardSubtitle: {
+    fontSize: 14,
+    color: '#78909C',
+    marginBottom: 16,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F0F2F5',
+    marginBottom: 16,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 12,
   },
-  sectionSubtitle: {
-    fontSize: 13,
-    color: '#888',
-    marginBottom: 5,
+  bulletPoint: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#F57C00',
+    marginRight: 12,
   },
-  input: {
-    backgroundColor: '#F5F5F5',
+  inputItem: {
+    flex: 1,
+    backgroundColor: '#F5F7F9',
     borderRadius: 12,
-    padding: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     fontSize: 15,
-    color: '#333',
-    marginBottom: 10,
+    color: '#2A3037',
+    fontWeight: '500',
+  },
+  removeBtn: {
+    padding: 10,
+    marginLeft: 4,
   },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 12,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  addIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FFF3E0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
   },
   addButtonText: {
-    color: '#C2185B',
-    fontWeight: '600',
-    marginLeft: 8,
+    color: '#F57C00',
+    fontWeight: '700',
+    fontSize: 15,
   },
-  submitButton: {
-    backgroundColor: '#FB8C00',
-    borderRadius: 16,
-    paddingVertical: 18,
+  priceInputContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 40,
-    shadowColor: '#FB8C00',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 5,
+    backgroundColor: '#F5F7F9',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    marginBottom: 16,
   },
-  submitButtonText: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  waitingTitle: {
+  currencySymbol: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 10,
-    textAlign: 'center',
+    color: '#2A3037',
+    marginRight: 8,
+  },
+  priceInput: {
+    flex: 1,
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#2A3037',
+    paddingVertical: 16,
+  },
+  feeInfoBox: {
+    flexDirection: 'row',
+    backgroundColor: '#F0F4F8',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  feeInfoText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#546E7A',
+    marginLeft: 10,
+    lineHeight: 18,
+  },
+  primaryButton: {
+    backgroundColor: '#F57C00',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 18,
+    paddingVertical: 18,
+    marginTop: 10,
+    shadowColor: '#F57C00',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  primaryButtonText: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '800',
+    marginRight: 8,
+  },
+  waitingCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 24,
+    padding: 30,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.05,
+    shadowRadius: 15,
+    elevation: 4,
+    marginTop: 20,
+  },
+  spinnerWrapper: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#FFF3E0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  waitingTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#2A3037',
+    marginBottom: 12,
   },
   waitingSubtitle: {
     fontSize: 15,
-    color: '#666',
+    color: '#546E7A',
     textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 5,
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  waitingTipBox: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF9C4',
+    padding: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  waitingTipText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#F57C00',
+    fontWeight: '600',
+    marginLeft: 12,
+    lineHeight: 20,
   },
   simButton: {
     marginTop: 40,
     padding: 15,
-    backgroundColor: '#EEE',
-    borderRadius: 8,
+    backgroundColor: '#F5F7F9',
+    borderRadius: 10,
+    width: '100%',
+    alignItems: 'center',
   },
   simButtonText: {
     fontSize: 12,
-    color: '#555',
+    color: '#78909C',
+    fontWeight: '600',
   },
-  row: {
+  receiptCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  receiptHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  receiptTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#2A3037',
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  receiptId: {
+    fontSize: 12,
+    color: '#A0AAB5',
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  dottedDivider: {
+    height: 1,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+    borderRadius: 1,
+    width: '100%',
+    marginVertical: 20,
+  },
+  receiptRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    alignItems: 'center',
+    marginBottom: 16,
   },
-  totalRow: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#EEE',
+  receiptLabel: {
+    fontSize: 15,
+    color: '#546E7A',
+    fontWeight: '500',
+  },
+  receiptValue: {
+    fontSize: 16,
+    color: '#2A3037',
+    fontWeight: '700',
+  },
+  feeHighlight: {
+    backgroundColor: '#FCE4EC',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  feeHighlightText: {
+    color: '#C2185B',
+    fontWeight: '800',
+    fontSize: 16,
   },
   totalText: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: '900',
+    color: '#2A3037',
+  },
+  totalAmount: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#F57C00',
   }
 });
