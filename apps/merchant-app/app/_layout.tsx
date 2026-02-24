@@ -14,7 +14,7 @@ import { SocketProvider } from '@/context/SocketContext';
 
 
 import { useEffect, useState } from 'react';
-import { getAuthToken } from '@/api/client';
+import { getAuthToken, registerLogoutCallback } from '@/api/client';
 import { getCurrentUser } from '@/api/services';
 import { useRouter, useSegments } from 'expo-router';
 
@@ -23,6 +23,12 @@ export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
   const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    registerLogoutCallback(() => {
+        router.replace('/login');
+    });
+  }, [router]);
 
   useEffect(() => {
     const checkAuth = async () => {

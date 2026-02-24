@@ -12,6 +12,11 @@ const API_URL = getApiUrl();
 console.log('Rider App API URL:', API_URL);
 
 let authToken: string | null = null;
+let logoutCallback: (() => void) | null = null;
+
+export const registerLogoutCallback = (callback: () => void) => {
+  logoutCallback = callback;
+};
 
 export const getAuthToken = async () => {
   if (authToken) return authToken;
@@ -81,6 +86,7 @@ export const register = async (userData: { firstName: string; lastName: string; 
 export const logout = async () => {
   authToken = null;
   await AsyncStorage.removeItem('auth_token');
+  if (logoutCallback) logoutCallback();
 };
 
 export const getMe = async () => {
@@ -170,6 +176,11 @@ export const authenticatedFetch = async (endpoint: string, options: RequestInit 
     ...options,
     headers,
   });
+
+  if (res.status === 401) {
+      console.log('Rider API Received 401. Logging out...');
+      await logout();
+  }
   
   return res;
 };

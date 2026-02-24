@@ -42,7 +42,7 @@ export default function GovernmentScreen() {
   if (loading) {
      return (
         <ThemedView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-            <ActivityIndicator size="large" color="#C2185B" />
+            <ActivityIndicator size="large" color="#5c6cc9" />
         </ThemedView>
      );
   }
@@ -51,32 +51,64 @@ export default function GovernmentScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false} bounces={false}>
-      {/* Pink Header with Search */}
+      {/* Sub-page Header */}
       <ThemedView style={styles.headerBackground}>
+        <Image 
+          source={{ uri: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=800' }} 
+          style={styles.headerImage} 
+        />
+        <View style={styles.headerOverlay} />
+        
+        <View style={styles.headerSafeArea}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <IconSymbol name="chevron.right" size={24} color="#FFF" style={{ transform: [{ rotate: '180deg' }] }} />
+          </TouchableOpacity>
+          <View style={styles.headerTextContainer}>
+            <ThemedText style={styles.headerTitle}>Government Services</ThemedText>
+            <ThemedText style={styles.headerSubtitle}>Skip the line. We handle the delivery.</ThemedText>
+          </View>
+        </View>
+      </ThemedView>
+
+      <ThemedView style={styles.contentBody}>
         <ThemedView style={styles.searchRow}>
           <ThemedView style={styles.searchBar}>
             <IconSymbol size={18} name="chevron.right" color="#777" style={{ transform: [{ rotate: '90deg' }], marginRight: 8 }} />
             <TextInput
-              placeholder="Search for government services..."
+              placeholder="Search services..."
               style={styles.searchInput}
               placeholderTextColor="#777"
             />
           </ThemedView>
-          <TouchableOpacity style={styles.filterButton}>
-            <IconSymbol size={20} name="filter" color="#FFF" />
-          </TouchableOpacity>
         </ThemedView>
-      </ThemedView>
-
-      <ThemedView style={styles.contentBody}>
-        <ThemedView style={styles.introSection}>
-          <ThemedText style={styles.pageTitle}>Government Services</ThemedText>
-          <ThemedText style={styles.pageSubtitle}>Skip the line. We'll handle the delivery only for you.</ThemedText>
+        <ThemedView style={styles.sectionContainer}>
+            <ThemedText style={styles.sectionTitle}>Business & Trade</ThemedText>
+            <ThemedView style={styles.itemsGrid}>
+                <TouchableOpacity 
+                    style={styles.serviceCard}
+                    onPress={() => router.push('/services/business-permit')}
+                >
+                    <ThemedView style={[styles.iconBox, { backgroundColor: '#E3F2FD' }]}>
+                        <IconSymbol size={24} name="building.2.fill" color="#1565C0" />
+                    </ThemedView>
+                    
+                    <ThemedView style={styles.cardInfo}>
+                        <ThemedText style={styles.itemName} numberOfLines={1}>Business Permits</ThemedText>
+                        <ThemedText style={styles.itemMeta} numberOfLines={1}>New or Renewal business application processing</ThemedText>
+                        
+                        <ThemedView style={styles.feeHighlight}>
+                            <ThemedText style={styles.feeText}>Quoted service fee</ThemedText>
+                        </ThemedView>
+                    </ThemedView>
+                    
+                    <IconSymbol size={18} name="chevron.right" color="#DDD" />
+                </TouchableOpacity>
+            </ThemedView>
         </ThemedView>
 
         {groupedServices.length === 0 ? (
             <ThemedView style={{ padding: 20 }}>
-                <ThemedText>No services found.</ThemedText>
+                <ThemedText>No additional services found.</ThemedText>
             </ThemedView>
         ) : (
             groupedServices.map((section, sIndex) => (
@@ -125,14 +157,54 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
   },
   headerBackground: {
-    backgroundColor: '#C2185B',
+    height: 180,
+    position: 'relative',
+    backgroundColor: '#1565C0',
+  },
+  headerImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  headerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(21, 101, 192, 0.85)',
+  },
+  headerSafeArea: {
     paddingTop: 50,
-    paddingBottom: 15,
+    paddingHorizontal: 16,
+    height: '100%',
+    justifyContent: 'space-between',
+    paddingBottom: 20,
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTextContainer: {
+    marginTop: 'auto',
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#FFF',
+    letterSpacing: 0.5,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: 4,
+    fontWeight: '500',
   },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
+    marginBottom: 20,
     backgroundColor: 'transparent',
   },
   searchBar: {
@@ -140,41 +212,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFF',
-    borderRadius: 25,
+    borderRadius: 16,
     paddingHorizontal: 15,
-    height: 40,
-    marginRight: 10,
+    height: 48,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 3,
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 14,
     color: '#333',
-  },
-  filterButton: {
-    width: 30,
-    height: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   contentBody: {
     flex: 1,
     paddingTop: 20,
-  },
-  introSection: {
-    paddingHorizontal: 16,
-    marginBottom: 20,
-    backgroundColor: 'transparent',
-  },
-  pageTitle: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#222',
-  },
-  pageSubtitle: {
-    fontSize: 13,
-    color: '#666',
-    marginTop: 4,
-    lineHeight: 18,
+    backgroundColor: '#F5F7FA', // distinct backing for lists
   },
   sectionContainer: {
     marginBottom: 24,
@@ -194,22 +249,20 @@ const styles = StyleSheet.create({
   serviceCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
+    padding: 16,
     backgroundColor: '#FFF',
-    borderRadius: 12,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
+    borderRadius: 16,
+    marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowRadius: 8,
     elevation: 2,
   },
   iconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
+    width: 48,
+    height: 48,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -234,7 +287,7 @@ const styles = StyleSheet.create({
   },
   feeText: {
     fontSize: 11,
-    color: '#C2185B',
+    color: '#5c6cc9',
     fontWeight: '800',
   },
 });

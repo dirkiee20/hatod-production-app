@@ -98,7 +98,7 @@ export default function GroceryStoreScreen() {
       <ThemedView style={styles.container}>
         <Stack.Screen options={{ headerShown: false }} />
         <ThemedView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-          <ActivityIndicator size="large" color="#C2185B" />
+          <ActivityIndicator size="large" color="#5c6cc9" />
           <ThemedText style={{ marginTop: 12 }}>Loading store...</ThemedText>
         </ThemedView>
       </ThemedView>
@@ -155,7 +155,7 @@ export default function GroceryStoreScreen() {
         <ThemedView style={styles.infoCard}>
           <ThemedView style={styles.storeHeaderRow}>
             <ThemedView style={styles.logoBoxOverlap}>
-               <IconSymbol size={30} name="grocery" color="#C2185B" />
+               <IconSymbol size={30} name="grocery" color="#5c6cc9" />
             </ThemedView>
             <ThemedView style={styles.storeInfoDetails}>
                <ThemedText style={styles.storeNameMain} numberOfLines={1}>{merchant.name}</ThemedText>
@@ -202,11 +202,11 @@ export default function GroceryStoreScreen() {
                         disabled={addingItemId === item.id || items.some(ci => ci.menuItemId === item.id)}
                       >
                         {addingItemId === item.id ? (
-                          <ActivityIndicator size="small" color={items.some(ci => ci.menuItemId === item.id) ? "#4CAF50" : "#C2185B"} />
+                          <ActivityIndicator size="small" color={items.some(ci => ci.menuItemId === item.id) ? "#4CAF50" : "#5c6cc9"} />
                         ) : items.some(ci => ci.menuItemId === item.id) ? (
                           <IconSymbol size={22} name="checkmark" color="#4CAF50" />
                         ) : (
-                          <IconSymbol size={22} name="add" color="#C2185B" />
+                          <IconSymbol size={22} name="add" color="#5c6cc9" />
                         )}
                       </TouchableOpacity>
                     </ThemedView>
@@ -347,7 +347,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   promoBadge: {
-    backgroundColor: '#FCE4EC',
+    backgroundColor: '#EBEFFF',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
@@ -441,7 +441,7 @@ const styles = StyleSheet.create({
     bottom: 30,
     left: 16,
     right: 16,
-    backgroundColor: '#C2185B',
+    backgroundColor: '#5c6cc9',
     padding: 15,
     borderRadius: 12,
     flexDirection: 'row',

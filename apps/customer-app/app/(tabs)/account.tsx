@@ -21,7 +21,7 @@ export default function AccountScreen() {
     { icon: 'person', label: 'Profile Information', color: '#f78734' },
     { icon: 'cart', label: 'My Food Orders', color: '#5856D6' },
     { icon: 'grocery', label: 'My Grocery Orders', color: '#4CAF50' },
-    { icon: 'bag.fill', label: 'My Custom Requests', color: '#F57C00' },
+    { icon: 'bag.fill', label: 'My Custom Requests', color: '#f78734' },
     { icon: 'government', label: 'Government Transcripts', color: '#4CD964' },
     { icon: 'paperplane.fill', label: 'Support & Feedback', color: '#FF9500' },
   ];

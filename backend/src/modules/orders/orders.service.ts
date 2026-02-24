@@ -64,7 +64,15 @@ export class OrdersService {
             where: { id: dto.pabiliRequestId }
         });
         if (!pabiliReq) throw new NotFoundException('Pabili Request not found');
+
+        if (pabiliReq.customerId !== customer.id) {
+          throw new ForbiddenException('You can only place an order for your own pabili request');
+        }
         
+        if (pabiliReq.status === 'ACCEPTED') {
+            throw new BadRequestException('Order for this Pabili Request has already been placed');
+        }
+
         subtotal = pabiliReq.estimatedItemCost;
         deliveryFee = pabiliReq.serviceFee || 50;
 
@@ -113,7 +121,7 @@ export class OrdersService {
     const orderData: any = {
       orderNumber: `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       customerId: customer.id,
-      addressId: dto.addressId,
+      addressId: address.id,
       subtotal,
       deliveryFee,
       total,
@@ -130,15 +138,29 @@ export class OrdersService {
         orderData.items = { create: orderItemsData };
     }
 
-    const order = await this.prisma.order.create({
-      data: orderData,
-      include: {
-        customer: { include: { user: true } },
-        merchant: { include: { user: true } },
-        items: { include: { menuItem: true } },
-        address: true,
-      },
-    });
+    let order;
+    try {
+      order = await this.prisma.order.create({
+        data: orderData,
+        include: {
+          customer: { include: { user: true } },
+          merchant: { include: { user: true } },
+          items: { include: { menuItem: true } },
+          address: true,
+        },
+      });
+    } catch (error: any) {
+      if (error?.code === 'P2003') {
+        console.error('Order create failed: invalid reference (e.g. address)', error?.meta);
+        throw new BadRequestException('Invalid order data: address or related reference is no longer valid. Please try again.');
+      }
+      if (error?.code === 'P2002') {
+        console.error('Order create failed: unique constraint', error?.meta);
+        throw new BadRequestException('Order could not be created due to a conflict. Please try again.');
+      }
+      console.error('Order create failed:', error?.message ?? error);
+      throw new BadRequestException('Could not create order. Please check your data and try again.');
+    }
 
     // Notify merchant via Socket
     this.socketGateway.emitOrderCreated(order);

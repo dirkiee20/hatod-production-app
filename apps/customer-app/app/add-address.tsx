@@ -138,7 +138,7 @@ export default function AddAddressScreen() {
                      id="selectedLocation"
                      coordinate={coordinates}
                 >
-                     <IconSymbol size={36} name="location.fill" color="#C2185B" />
+                     <IconSymbol size={36} name="location.fill" color="#5c6cc9" />
                 </Mapbox.PointAnnotation>
              </Mapbox.MapView>
           </View>
@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 13, fontWeight: '700', color: '#666', marginBottom: 10, marginTop: 10 },
   labelSelector: { flexDirection: 'row', gap: 10, marginBottom: 10 },
   labelChip: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, backgroundColor: '#F0F0F0' },
-  labelChipActive: { backgroundColor: '#C2185B' },
+  labelChipActive: { backgroundColor: '#5c6cc9' },
   labelText: { color: '#666', fontWeight: '600', fontSize: 13 },
   labelTextActive: { color: '#FFF' },
   inputWrapper: { position: 'relative', marginBottom: 10 },
@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
       fontSize: 14, color: '#333',
   },
   saveBtn: {
-      backgroundColor: '#C2185B', height: 50, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginTop: 20
+      backgroundColor: '#5c6cc9', height: 50, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginTop: 20
   },
   saveBtnText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' }
 });

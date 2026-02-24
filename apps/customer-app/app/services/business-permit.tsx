@@ -9,15 +9,19 @@ import { useSocket } from '@/context/SocketContext';
 
 type Step = 'request' | 'waiting' | 'review';
 
-export default function PabiliScreen() {
+export default function BusinessPermitScreen() {
   const router = useRouter();
   const { socket } = useSocket();
-  const [items, setItems] = useState<string[]>(['']);
-  const [estimatedPrice, setEstimatedPrice] = useState('');
   const [step, setStep] = useState<Step>('request');
   const [serviceFee, setServiceFee] = useState(0);
   const [requestId, setRequestId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Form Fields
+  const [companyName, setCompanyName] = useState('');
+  const [binPermitNo, setBinPermitNo] = useState('');
+  const [renewalOrNew, setRenewalOrNew] = useState('');
+  const [lgu, setLgu] = useState('Claver BPLO');
 
   useEffect(() => {
     if (!socket) return;
@@ -34,103 +38,98 @@ export default function PabiliScreen() {
     };
   }, [socket, requestId]);
 
-  const addItem = () => setItems([...items, '']);
-  const updateItem = (text: string, index: number) => {
-    const newItems = [...items];
-    newItems[index] = text;
-    setItems(newItems);
-  };
-  const removeItem = (index: number) => {
-    if (items.length > 1) {
-      const newItems = items.filter((_, i) => i !== index);
-      setItems(newItems);
-    }
-  };
-
   const handleSubmit = async () => {
-    const validItems = items.filter(i => i.trim() !== '');
-    if (validItems.length === 0 || !estimatedPrice) {
-      Alert.alert('Missing Info', 'Please list at least one item and estimated price.');
+    if (!companyName.trim() || !binPermitNo.trim() || !renewalOrNew.trim() || !lgu.trim()) {
+      Alert.alert('Missing Info', 'Please fill up all required fields.');
       return;
     }
     
     setIsSubmitting(true);
     try {
-       const req = await createPabiliRequest(validItems, parseFloat(estimatedPrice));
+       const formArr = [
+         `Service: Business Permit`,
+         `Company Name: ${companyName}`,
+         `BIN Permit No.: ${binPermitNo}`,
+         `Renewal/New (DTI/Business Name): ${renewalOrNew}`,
+         `LGU: ${lgu}`
+       ];
+       // Since it's a permit, estimated item cost might be 0 or small base fee, lets use 0
+       const req = await createPabiliRequest(formArr, 0); 
        setRequestId(req.id);
        setStep('waiting');
     } catch (error) {
-       Alert.alert('Error', 'Failed to submit request. Please try again.');
+       Alert.alert('Error', 'Failed to submit application. Please try again.');
     } finally {
        setIsSubmitting(false);
     }
   };
 
   const handleCheckout = () => {
-    Alert.alert('Proceed to Checkout', 'Navigate to address selection...');
+    // Navigating back or specific receipt page for now we just alert
+    Alert.alert('Proceed to Checkout', 'Navigate to address selection...', [
+      { text: 'OK', onPress: () => router.push('/(tabs)') }
+    ]);
   };
 
   const renderRequestStep = () => (
     <View style={styles.stepContainer}>
       <ThemedView style={styles.card}>
         <View style={styles.cardHeaderRow}>
-          <IconSymbol name="pabili" size={22} color="#f78734" />
-          <ThemedText style={styles.cardTitle}>Shopping List</ThemedText>
+          <IconSymbol name="government" size={22} color="#1565C0" />
+          <ThemedText style={styles.cardTitle}>Application Form</ThemedText>
         </View>
-        <ThemedText style={styles.cardSubtitle}>List exactly what you need us to buy</ThemedText>
+        <ThemedText style={styles.cardSubtitle}>Please provide all required business details.</ThemedText>
         
         <View style={styles.divider} />
 
-        {items.map((item, index) => (
-          <View key={index} style={styles.inputWrapper}>
-             <View style={styles.bulletPoint} />
-             <TextInput
-                style={styles.inputItem}
-                placeholder={`Item ${index + 1} (e.g. 1kg Rice)`}
-                placeholderTextColor="#A0AAB5"
-                value={item}
-                onChangeText={(text) => updateItem(text, index)}
-             />
-             {items.length > 1 && (
-               <TouchableOpacity style={styles.removeBtn} onPress={() => removeItem(index)}>
-                 <IconSymbol name="trash.fill" size={18} color="#FF5252" />
-               </TouchableOpacity>
-             )}
-          </View>
-        ))}
-
-        <TouchableOpacity style={styles.addButton} onPress={addItem}>
-            <View style={styles.addIconCircle}>
-              <IconSymbol name="add" size={16} color="#f78734" />
-            </View>
-            <ThemedText style={styles.addButtonText}>Add another item</ThemedText>
-        </TouchableOpacity>
-      </ThemedView>
-
-      <ThemedView style={styles.card}>
-         <View style={styles.cardHeaderRow}>
-            <IconSymbol name="cart" size={22} color="#f78734" />
-            <ThemedText style={styles.cardTitle}>Estimated Budget</ThemedText>
-         </View>
-         <ThemedText style={styles.cardSubtitle}>This helps our riders prepare enough cash.</ThemedText>
-         
-         <View style={styles.priceInputContainer}>
-            <ThemedText style={styles.currencySymbol}>₱</ThemedText>
+        <View style={styles.inputWrapper}>
+            <ThemedText style={styles.label}>1. Company Name <ThemedText style={styles.asterisk}>*</ThemedText></ThemedText>
             <TextInput
-              style={styles.priceInput}
-              placeholder="0.00"
-              placeholderTextColor="#A0AAB5"
-              keyboardType="numeric"
-              value={estimatedPrice}
-              onChangeText={setEstimatedPrice}
+            style={styles.inputItem}
+            placeholder="e.g. Hatod Delivery"
+            placeholderTextColor="#A0AAB5"
+            value={companyName}
+            onChangeText={setCompanyName}
             />
-         </View>
-         
-         {/* Read-only Service Fee field initially */}
-         <View style={styles.feeInfoBox}>
-            <IconSymbol name="government" size={16} color="#78909C" />
-            <ThemedText style={styles.feeInfoText}>Service Fee will be calculated by our admin after reviewing your request.</ThemedText>
-         </View>
+        </View>
+
+        <View style={styles.inputWrapper}>
+            <ThemedText style={styles.label}>2. BIN Permit No. <ThemedText style={styles.asterisk}>*</ThemedText></ThemedText>
+            <TextInput
+            style={styles.inputItem}
+            placeholder="e.g. 1234-5678"
+            placeholderTextColor="#A0AAB5"
+            value={binPermitNo}
+            onChangeText={setBinPermitNo}
+            />
+        </View>
+
+        <View style={styles.inputWrapper}>
+            <ThemedText style={styles.label}>3. Renewal / New (DTI or Business Name) <ThemedText style={styles.asterisk}>*</ThemedText></ThemedText>
+            <TextInput
+            style={styles.inputItem}
+            placeholder="e.g. New - Hatod Delivery"
+            placeholderTextColor="#A0AAB5"
+            value={renewalOrNew}
+            onChangeText={setRenewalOrNew}
+            />
+        </View>
+
+        <View style={styles.inputWrapper}>
+            <ThemedText style={styles.label}>4. Government LGU <ThemedText style={styles.asterisk}>*</ThemedText></ThemedText>
+            <TextInput
+            style={styles.inputItem}
+            placeholder="e.g. Claver BPLO"
+            placeholderTextColor="#A0AAB5"
+            value={lgu}
+            onChangeText={setLgu}
+            />
+        </View>
+
+        <View style={styles.feeInfoBox}>
+            <IconSymbol name="info.circle.fill" size={16} color="#78909C" />
+            <ThemedText style={styles.feeInfoText}>Service Fee will properly be calculated by our admin after reviewing your requirements.</ThemedText>
+        </View>
       </ThemedView>
 
       <TouchableOpacity style={styles.primaryButton} onPress={handleSubmit} activeOpacity={0.8} disabled={isSubmitting}>
@@ -138,8 +137,8 @@ export default function PabiliScreen() {
               <ActivityIndicator size="small" color="#FFF" />
           ) : (
              <>
-                 <ThemedText style={styles.primaryButtonText}>Submit Request</ThemedText>
-                 <IconSymbol name="chevron.right" size={20} color="#FFF" />
+                 <ThemedText style={styles.primaryButtonText}>Submit Application</ThemedText>
+                 <IconSymbol name="paperplane.fill" size={18} color="#FFF" />
              </>
           )}
       </TouchableOpacity>
@@ -150,42 +149,39 @@ export default function PabiliScreen() {
     <View style={styles.stepContainer}>
       <ThemedView style={styles.waitingCard}>
           <View style={styles.spinnerWrapper}>
-             <ActivityIndicator size="large" color="#f78734" />
+             <ActivityIndicator size="large" color="#1565C0" />
           </View>
-          <ThemedText style={styles.waitingTitle}>Request Submitted 🎉</ThemedText>
+          <ThemedText style={styles.waitingTitle}>Application Submitted</ThemedText>
           <ThemedText style={styles.waitingSubtitle}>
-            Please wait while our admin reviews your list to calculate the precise service fee.
+            Please wait while our admin reviews your business permit details. We will calculate your processing fee shortly.
           </ThemedText>
           
           <View style={styles.waitingTipBox}>
-             <IconSymbol name="phone" size={20} color="#f78734" />
-             <ThemedText style={styles.waitingTipText}>We may call you if we need clarification. Keep your app open.</ThemedText>
+             <IconSymbol name="phone" size={20} color="#1565C0" />
+             <ThemedText style={styles.waitingTipText}>We will call you if we need clarification. Keep your app open.</ThemedText>
           </View>
       </ThemedView>
     </View>
   );
 
   const renderReviewStep = () => {
-    const estTotal = parseFloat(estimatedPrice) || 0;
-    const finalTotal = estTotal + serviceFee;
-
     return (
         <View style={styles.stepContainer}>
             <ThemedView style={styles.receiptCard}>
                 <View style={styles.receiptHeader}>
-                   <IconSymbol name="pabili" size={28} color="#f78734" />
-                   <ThemedText style={styles.receiptTitle}>Order Summary</ThemedText>
-                   <ThemedText style={styles.receiptId}>ORDER #{(Math.random() * 100000).toFixed(0)}</ThemedText>
+                   <IconSymbol name="government" size={28} color="#1565C0" />
+                   <ThemedText style={styles.receiptTitle}>Document Summary</ThemedText>
+                   <ThemedText style={styles.receiptId}>APP-{(Math.random() * 100000).toFixed(0)}</ThemedText>
                 </View>
 
                 <View style={styles.dottedDivider} />
                 
                 <View style={styles.receiptRow}>
-                    <ThemedText style={styles.receiptLabel}>Estimated Item Cost</ThemedText>
-                    <ThemedText style={styles.receiptValue}>₱{estTotal.toFixed(2)}</ThemedText>
+                    <ThemedText style={styles.receiptLabel}>Processing Fee (Permit)</ThemedText>
+                    <ThemedText style={styles.receiptValue}>TBD</ThemedText>
                 </View>
                 <View style={styles.receiptRow}>
-                    <ThemedText style={styles.receiptLabel}>Service Fee</ThemedText>
+                    <ThemedText style={styles.receiptLabel}>Our Service Fee</ThemedText>
                     <View style={styles.feeHighlight}>
                        <ThemedText style={styles.feeHighlightText}>₱{serviceFee.toFixed(2)}</ThemedText>
                     </View>
@@ -194,8 +190,8 @@ export default function PabiliScreen() {
                 <View style={styles.dottedDivider} />
 
                 <View style={[styles.receiptRow, { marginBottom: 0 }]}>
-                    <ThemedText style={styles.totalText}>Total Estimate</ThemedText>
-                    <ThemedText style={styles.totalAmount}>₱{finalTotal.toFixed(2)}</ThemedText>
+                    <ThemedText style={styles.totalText}>Amount to Pay Now</ThemedText>
+                    <ThemedText style={styles.totalAmount}>₱{serviceFee.toFixed(2)}</ThemedText>
                 </View>
             </ThemedView>
 
@@ -214,7 +210,7 @@ export default function PabiliScreen() {
         
         <ThemedView style={styles.header}>
             <Image 
-              source={{ uri: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=800' }} 
+              source={{ uri: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=800' }} 
               style={styles.headerImage} 
             />
             <View style={styles.headerOverlay} />
@@ -225,8 +221,8 @@ export default function PabiliScreen() {
               </TouchableOpacity>
               
               <View style={styles.headerTextContainer}>
-                <ThemedText style={styles.headerTitle}>We Buy For You</ThemedText>
-                <ThemedText style={styles.headerSubtitle}>Your personal shopper for anything you need.</ThemedText>
+                <ThemedText style={styles.headerTitle}>Business Permits</ThemedText>
+                <ThemedText style={styles.headerSubtitle}>Fast-track your business document processing.</ThemedText>
               </View>
             </View>
         </ThemedView>
@@ -248,7 +244,7 @@ const styles = StyleSheet.create({
   header: {
     height: 180,
     position: 'relative',
-    backgroundColor: '#f78734',
+    backgroundColor: '#1565C0',
   },
   headerImage: {
     ...StyleSheet.absoluteFillObject,
@@ -257,7 +253,7 @@ const styles = StyleSheet.create({
   },
   headerOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(245, 124, 0, 0.8)', // Orange vibrant overlay
+    backgroundColor: 'rgba(21, 101, 192, 0.85)',
   },
   headerSafeArea: {
     paddingTop: 50,
@@ -284,9 +280,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   headerSubtitle: {
-    fontSize: 15,
+    fontSize: 14,
     color: 'rgba(255,255,255,0.95)',
-    marginTop: 6,
+    marginTop: 4,
     fontWeight: '500',
   },
   stepContainer: {
@@ -327,72 +323,28 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  bulletPoint: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#f78734',
-    marginRight: 12,
+  label: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  asterisk: {
+    color: '#5c6cc9',
   },
   inputItem: {
-    flex: 1,
     backgroundColor: '#F5F7F9',
     borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
     fontSize: 14,
     color: '#2A3037',
     fontWeight: '500',
-  },
-  removeBtn: {
-    padding: 10,
-    marginLeft: 4,
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    marginTop: 8,
-    alignSelf: 'flex-start',
-  },
-  addIconCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#FFF3E0',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  addButtonText: {
-    color: '#f78734',
-    fontWeight: '700',
-    fontSize: 15,
-  },
-  priceInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5F7F9',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    marginBottom: 16,
-  },
-  currencySymbol: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#2A3037',
-    marginRight: 8,
-  },
-  priceInput: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#2A3037',
-    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   feeInfoBox: {
     flexDirection: 'row',
@@ -400,6 +352,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
+    marginTop: 10,
   },
   feeInfoText: {
     flex: 1,
@@ -409,14 +362,14 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   primaryButton: {
-    backgroundColor: '#f78734',
+    backgroundColor: '#1565C0',
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 14,
     paddingVertical: 14,
     marginTop: 10,
-    shadowColor: '#f78734',
+    shadowColor: '#1565C0',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -444,7 +397,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#FFF3E0',
+    backgroundColor: '#E3F2FD',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
@@ -464,7 +417,7 @@ const styles = StyleSheet.create({
   },
   waitingTipBox: {
     flexDirection: 'row',
-    backgroundColor: '#FFF9C4',
+    backgroundColor: '#E3F2FD',
     padding: 16,
     borderRadius: 16,
     alignItems: 'center',
@@ -472,7 +425,7 @@ const styles = StyleSheet.create({
   waitingTipText: {
     flex: 1,
     fontSize: 14,
-    color: '#f78734',
+    color: '#1565C0',
     fontWeight: '600',
     marginLeft: 12,
     lineHeight: 20,
@@ -480,7 +433,7 @@ const styles = StyleSheet.create({
   totalAmount: {
     fontSize: 20,
     fontWeight: '900',
-    color: '#f78734',
+    color: '#1565C0',
   },
   receiptCard: {
     backgroundColor: '#FFF',
@@ -536,13 +489,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   feeHighlight: {
-    backgroundColor: '#EBEFFF',
+    backgroundColor: '#E3F2FD',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
   },
   feeHighlightText: {
-    color: '#5c6cc9',
+    color: '#1565C0',
     fontWeight: '800',
     fontSize: 16,
   },

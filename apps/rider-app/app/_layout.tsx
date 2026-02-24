@@ -4,6 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { StatusBar } from 'expo-status-bar';
+import { registerLogoutCallback } from '@/api/client';
 import Mapbox from '@rnmapbox/maps';
 import 'react-native-reanimated';
 
@@ -15,6 +16,10 @@ export default function RootLayout() {
   const router = useRouter();
 
   useEffect(() => {
+    registerLogoutCallback(() => {
+       router.replace('/(auth)/login');
+    });
+
     // fast check for token
     SecureStore.getItemAsync('authToken').then(token => {
       if (!token) {

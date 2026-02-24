@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { getProfile as fetchProfile } from '@/api/services';
-import { logout } from '@/api/client';
+import { logout, registerLogoutCallback } from '@/api/client';
 import { useRouter } from 'expo-router';
 
 // Define the shape of our User data
@@ -56,8 +56,12 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
   // Initial load
   useEffect(() => {
+    registerLogoutCallback(() => {
+      setUser(null);
+      router.replace('/login');
+    });
     refreshProfile();
-  }, [refreshProfile]);
+  }, [refreshProfile, router]);
 
   const updateUserLocal = (updates: Partial<UserProfile>) => {
     setUser(prev => prev ? { ...prev, ...updates } : null);

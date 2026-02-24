@@ -131,7 +131,7 @@ export default function RestaurantDetailScreen() {
       <ThemedView style={styles.container}>
         <Stack.Screen options={{ headerShown: false }} />
         <ThemedView style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#C2185B" />
+          <ActivityIndicator size="large" color="#5c6cc9" />
           <ThemedText style={styles.loadingText}>Loading restaurant...</ThemedText>
         </ThemedView>
       </ThemedView>
@@ -247,7 +247,7 @@ export default function RestaurantDetailScreen() {
 
             {merchant.address && (
               <ThemedView style={styles.addressCard}>
-                <IconSymbol size={14} name="location.fill" color="#C2185B" />
+                <IconSymbol size={14} name="location.fill" color="#5c6cc9" />
                 <ThemedText style={styles.addressText}>{merchant.address}</ThemedText>
               </ThemedView>
             )}
@@ -318,11 +318,11 @@ export default function RestaurantDetailScreen() {
                           disabled={addingItemId === item.id || items.some(ci => ci.menuItemId === item.id)}
                         >
                           {addingItemId === item.id ? (
-                            <ActivityIndicator size="small" color={items.some(ci => ci.menuItemId === item.id) ? "#4CAF50" : "#C2185B"} />
+                            <ActivityIndicator size="small" color={items.some(ci => ci.menuItemId === item.id) ? "#4CAF50" : "#5c6cc9"} />
                           ) : items.some(ci => ci.menuItemId === item.id) ? (
                             <IconSymbol size={22} name="checkmark" color="#4CAF50" />
                           ) : (
-                            <IconSymbol size={22} name="add" color="#C2185B" />
+                            <IconSymbol size={22} name="add" color="#5c6cc9" />
                           )}
                         </TouchableOpacity>
                       )}
@@ -373,7 +373,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
     paddingHorizontal: 24,
     paddingVertical: 12,
-    backgroundColor: '#C2185B',
+    backgroundColor: '#5c6cc9',
     borderRadius: 8,
   },
   backButtonText: {
@@ -567,7 +567,7 @@ const styles = StyleSheet.create({
   },
   activeTab: {
     borderBottomWidth: 2,
-    borderBottomColor: '#C2185B',
+    borderBottomColor: '#5c6cc9',
   },
   tabText: {
     fontSize: 14,
@@ -575,7 +575,7 @@ const styles = StyleSheet.create({
     color: '#999',
   },
   activeTabText: {
-    color: '#C2185B',
+    color: '#5c6cc9',
     fontWeight: '800',
   },
   menuSection: {
@@ -678,7 +678,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 10,
     right: 10,
-    backgroundColor: '#C2185B',
+    backgroundColor: '#5c6cc9',
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 30,

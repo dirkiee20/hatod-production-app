@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   submitBtn: {
-    backgroundColor: '#C2185B',
+    backgroundColor: '#5c6cc9',
     paddingHorizontal: 20,
     height: 50,
     borderRadius: 12,

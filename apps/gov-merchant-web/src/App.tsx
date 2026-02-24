@@ -6,27 +6,54 @@ interface Application {
   id: string;
   applicant: string;
   type: string;
-  status: 'PENDING' | 'PROCESSING' | 'READY' | 'COMPLETED';
+  status: 'PENDING' | 'PENDING_REVIEW' | 'PROCESSING' | 'READY' | 'COMPLETED' | 'QUOTED' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED';
   date: string;
   priority: 'NORMAL' | 'URGENT';
 }
 
-const MOCK_DATA: Application[] = [
-  { id: 'APP-001', applicant: 'Juan Dela Cruz', type: 'Business Permit Renewal', status: 'PENDING', date: 'Oct 24, 2026', priority: 'URGENT' },
-  { id: 'APP-002', applicant: 'Maria Clara', type: 'Cedula Request', status: 'PROCESSING', date: 'Oct 23, 2026', priority: 'NORMAL' },
-  { id: 'APP-003', applicant: 'Jose Rizal', type: 'NBI Clearance', status: 'READY', date: 'Oct 22, 2026', priority: 'NORMAL' },
-  { id: 'APP-004', applicant: 'Andres Bonifacio', type: 'Mayor\'s Permit', status: 'COMPLETED', date: 'Oct 20, 2026', priority: 'URGENT' },
-  { id: 'APP-005', applicant: 'Gabriela Silang', type: 'Health Certificate', status: 'PENDING', date: 'Oct 24, 2026', priority: 'NORMAL' },
-];
-
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filteredApps = MOCK_DATA.filter(app => 
+  React.useEffect(() => {
+    fetch('http://localhost:3000/api/pabili-requests/gov')
+      .then(res => res.json())
+      .then(data => {
+         const mapped = data.map((req: any) => {
+            const isGov = req.items && Array.isArray(req.items) && req.items[0]?.includes('Permit');
+            const typeText = isGov ? req.items[0].replace('Service: ', '') : 'Pabili Request';
+            const applicantName = req.customer?.firstName 
+               ? `${req.customer.firstName} ${req.customer.lastName}`
+               : 'Customer App User';
+
+            return {
+               id: req.id.substring(0, 8).toUpperCase(),
+               applicant: applicantName,
+               type: typeText,
+               status: req.status,
+               date: new Date(req.createdAt).toLocaleDateString(),
+               priority: isGov ? 'URGENT' : 'NORMAL'
+            };
+         });
+         setApplications(mapped);
+         setLoading(false);
+      })
+      .catch((err) => {
+         console.error(err);
+         setApplications([]);
+         setLoading(false);
+      });
+  }, []);
+
+  const searchedApps = applications.filter(app => 
     app.applicant.toLowerCase().includes(searchQuery.toLowerCase()) || 
     app.id.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const activeApps = searchedApps.filter(app => !['COMPLETED', 'REJECTED', 'CANCELLED'].includes(app.status));
+  const historyApps = searchedApps.filter(app => ['COMPLETED', 'REJECTED', 'CANCELLED'].includes(app.status));
 
   return (
     <div className="dashboard-layout">
@@ -48,7 +75,7 @@ export default function App() {
           <button className={`nav-item ${activeTab === 'applications' ? 'active' : ''}`} onClick={() => setActiveTab('applications')}>
             <FileText size={20} />
             <span>Applications</span>
-            <span className="badge">12</span>
+            {activeApps.length > 0 && <span className="badge">{activeApps.length}</span>}
           </button>
           <button className={`nav-item ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>
             <CheckCircle size={20} />
@@ -101,79 +128,276 @@ export default function App() {
 
         {/* Dynamic Content */}
         <div className="content-area">
-          <div className="page-header">
-            <h1>Application Queue</h1>
-            <div className="header-actions">
-              <button className="btn-secondary">
-                <Filter size={16} /> Filter
-              </button>
-              <button className="btn-primary">
-                + New Application
-              </button>
-            </div>
-          </div>
+          
+          {/* DASHBOARD TAB */}
+          {activeTab === 'dashboard' && (
+            <>
+              <div className="page-header">
+                <h1>Dashboard Overview</h1>
+              </div>
 
-          <div className="stats-grid">
-            <div className="stat-card">
-              <h3>Pending</h3>
-              <div className="value">24</div>
-              <div className="trend up">+12% today</div>
-            </div>
-            <div className="stat-card">
-              <h3>Processing</h3>
-              <div className="value">8</div>
-              <div className="trend flat">Steady</div>
-            </div>
-            <div className="stat-card success">
-              <h3>Ready for Pickup</h3>
-              <div className="value">15</div>
-              <div className="trend up">+5% today</div>
-            </div>
-          </div>
+              <div className="stats-grid">
+                <div className="stat-card">
+                  <h3>Pending / Needs Review</h3>
+                  <div className="value">{applications.filter(a => a.status.includes('PENDING')).length}</div>
+                  <div className="trend flat">Awaiting quotation</div>
+                </div>
+                <div className="stat-card">
+                  <h3>Quoted / Processing</h3>
+                  <div className="value">{applications.filter(a => a.status === 'QUOTED' || a.status === 'ACCEPTED').length}</div>
+                  <div className="trend flat">Waiting for user</div>
+                </div>
+                <div className="stat-card success">
+                  <h3>Completed</h3>
+                  <div className="value">{applications.filter(a => a.status === 'COMPLETED').length}</div>
+                  <div className="trend up">+Recent</div>
+                </div>
+              </div>
 
-          <div className="data-table-container">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Application ID</th>
-                  <th>Applicant</th>
-                  <th>Type</th>
-                  <th>Date</th>
-                  <th>Priority</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredApps.map((app) => (
-                  <tr key={app.id}>
-                    <td className="fw-bold">{app.id}</td>
-                    <td>
-                      <div className="applicant-cell">
-                        <div className="avatar-sm">{app.applicant.charAt(0)}</div>
-                        <span>{app.applicant}</span>
+              <div className="page-header" style={{ marginTop: '40px' }}>
+                <h2>Recent Applications</h2>
+              </div>
+              <div className="data-table-container">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Application ID</th>
+                      <th>Applicant</th>
+                      <th>Type</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {applications.slice(0, 3).map((app) => (
+                      <tr key={app.id}>
+                        <td className="fw-bold">{app.id}</td>
+                        <td>
+                          <div className="applicant-cell">
+                            <div className="avatar-sm">{app.applicant.charAt(0)}</div>
+                            <span>{app.applicant}</span>
+                          </div>
+                        </td>
+                        <td>{app.type}</td>
+                        <td>
+                          <span className={`status-pill ${app.status.toLowerCase().replace('_', '-')}`}>
+                            {app.status.replace('_', ' ')}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {applications.length === 0 && !loading && (
+                      <tr>
+                        <td colSpan={4} style={{ textAlign: 'center', padding: '30px' }}>No recent applications</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
+          {/* APPLICATIONS TAB */}
+          {activeTab === 'applications' && (
+            <>
+              <div className="page-header">
+                <h1>Application Queue</h1>
+                <div className="header-actions">
+                  <button className="btn-secondary">
+                    <Filter size={16} /> Filter
+                  </button>
+                  <button className="btn-primary">
+                    + New Application
+                  </button>
+                </div>
+              </div>
+
+              <div className="data-table-container">
+                {loading ? (
+                   <div style={{ padding: '40px', textAlign: 'center', color: '#888' }}>Loading applications...</div>
+                ) : (
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Application ID</th>
+                        <th>Applicant</th>
+                        <th>Type</th>
+                        <th>Date</th>
+                        <th>Priority</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activeApps.map((app) => (
+                        <tr key={app.id}>
+                          <td className="fw-bold">{app.id}</td>
+                          <td>
+                            <div className="applicant-cell">
+                              <div className="avatar-sm">{app.applicant.charAt(0)}</div>
+                              <span>{app.applicant}</span>
+                            </div>
+                          </td>
+                          <td>{app.type}</td>
+                          <td className="text-mute">{app.date}</td>
+                          <td>
+                            <span className={`badge-pill ${app.priority.toLowerCase()}`}>
+                              {app.priority}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={`status-pill ${app.status.toLowerCase().replace('_', '-')}`}>
+                              {app.status.replace('_', ' ')}
+                            </span>
+                          </td>
+                          <td>
+                            <button className="btn-sm">View Details</button>
+                          </td>
+                        </tr>
+                      ))}
+                      {activeApps.length === 0 && (
+                        <tr>
+                          <td colSpan={7} style={{ textAlign: 'center', padding: '40px' }}>No applications found.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* HISTORY TAB */}
+          {activeTab === 'history' && (
+            <>
+              <div className="page-header">
+                <h1>Application History</h1>
+                <div className="header-actions">
+                  <button className="btn-secondary">
+                    <Filter size={16} /> Filter
+                  </button>
+                </div>
+              </div>
+
+              <div className="data-table-container">
+                {loading ? (
+                   <div style={{ padding: '40px', textAlign: 'center', color: '#888' }}>Loading history...</div>
+                ) : (
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Application ID</th>
+                        <th>Applicant</th>
+                        <th>Type</th>
+                        <th>Date</th>
+                        <th>Priority</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historyApps.map((app) => (
+                        <tr key={app.id}>
+                          <td className="fw-bold">{app.id}</td>
+                          <td>
+                            <div className="applicant-cell">
+                              <div className="avatar-sm">{app.applicant.charAt(0)}</div>
+                              <span>{app.applicant}</span>
+                            </div>
+                          </td>
+                          <td>{app.type}</td>
+                          <td className="text-mute">{app.date}</td>
+                          <td>
+                            <span className={`badge-pill ${app.priority.toLowerCase()}`}>
+                              {app.priority}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={`status-pill ${app.status.toLowerCase().replace('_', '-')}`}>
+                              {app.status.replace('_', ' ')}
+                            </span>
+                          </td>
+                          <td>
+                            <button className="btn-sm">View Record</button>
+                          </td>
+                        </tr>
+                      ))}
+                      {historyApps.length === 0 && (
+                        <tr>
+                          <td colSpan={7} style={{ textAlign: 'center', padding: '40px' }}>No completed or rejected applications found.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* SETTINGS TAB */}
+          {activeTab === 'settings' && (
+            <>
+              <div className="page-header">
+                <h1>Settings</h1>
+                <div className="header-actions">
+                  <button className="btn-primary">
+                    Save Changes
+                  </button>
+                </div>
+              </div>
+
+              <div className="settings-grid">
+                
+                {/* Profile Settings */}
+                <div className="settings-section">
+                  <h3>Profile Information</h3>
+                  <div className="settings-form">
+                    <div className="form-group">
+                      <label>Department Name</label>
+                      <input type="text" defaultValue="City Hall Desk" readOnly className="input-field" />
+                    </div>
+                    <div className="form-group">
+                      <label>Admin User</label>
+                      <input type="text" defaultValue="City Hall Clerk" readOnly className="input-field" />
+                    </div>
+                    <div className="form-group">
+                      <label>Email Address</label>
+                      <input type="email" defaultValue="admin@hatodgov.ph" readOnly className="input-field" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Notifications Settings */}
+                <div className="settings-section">
+                  <h3>Preferences</h3>
+                  <div className="settings-form">
+                    <div className="toggle-row">
+                      <div className="toggle-info">
+                        <strong>Email Notifications</strong>
+                        <p>Receive emails when new applications are submitted</p>
                       </div>
-                    </td>
-                    <td>{app.type}</td>
-                    <td className="text-mute">{app.date}</td>
-                    <td>
-                      <span className={`badge-pill ${app.priority.toLowerCase()}`}>
-                        {app.priority}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`status-pill ${app.status.toLowerCase()}`}>
-                        {app.status}
-                      </span>
-                    </td>
-                    <td>
-                      <button className="btn-sm">View Details</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      <label className="switch">
+                        <input type="checkbox" defaultChecked />
+                        <span className="slider round"></span>
+                      </label>
+                    </div>
+                    
+                    <div className="toggle-row">
+                      <div className="toggle-info">
+                        <strong>SMS Alerts</strong>
+                        <p>Receive text alerts for URGENT priority docs</p>
+                      </div>
+                      <label className="switch">
+                        <input type="checkbox" defaultChecked />
+                        <span className="slider round"></span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </>
+          )}
+
         </div>
       </main>
     </div>

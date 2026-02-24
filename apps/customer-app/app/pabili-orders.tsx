@@ -46,7 +46,7 @@ export default function PabiliOrdersScreen() {
   const pastRequests = requests.filter(r => ['COMPLETED', 'REJECTED', 'CANCELED'].includes(r.status));
 
   const renderRequestCard = (req: any, isPast: boolean) => {
-    const statusColor = req.status === 'PENDING_REVIEW' ? '#F57C00' :
+    const statusColor = req.status === 'PENDING_REVIEW' ? '#f78734' :
                         req.status === 'QUOTED' ? '#1976D2' : 
                         req.status === 'ACCEPTED' ? '#388E3C' : '#888';
 
@@ -59,16 +59,16 @@ export default function PabiliOrdersScreen() {
         key={req.id} 
         style={styles.card} 
         onPress={() => {
-            if (req.status === 'QUOTED') {
+            if (req.status === 'QUOTED' || req.status === 'ACCEPTED') {
                 router.push({ pathname: '/checkout', params: { pabiliRequestId: req.id } })
             }
         }}
-        disabled={req.status !== 'QUOTED'}
+        disabled={req.status !== 'QUOTED' && req.status !== 'ACCEPTED'}
     >
         <View style={styles.cardHeader}>
             <View style={styles.restaurantRow}>
                 <View style={[styles.iconBox, { backgroundColor: '#FFF3E0' }]}>
-                   <IconSymbol size={20} name="bag.fill" color="#F57C00" />
+                   <IconSymbol size={20} name="bag.fill" color="#f78734" />
                 </View>
                 <View>
                     <ThemedText style={styles.restaurantName}>We Buy For You</ThemedText>
@@ -89,18 +89,18 @@ export default function PabiliOrdersScreen() {
         <View style={styles.cardFooter}>
             <ThemedText style={styles.totalText}>Est: ₱{req.estimatedItemCost}</ThemedText>
             
-            {req.status === 'QUOTED' && !isPast && (
+            {(req.status === 'QUOTED' || req.status === 'ACCEPTED') && !isPast && (
                  <TouchableOpacity 
                     style={styles.trackBtn} 
                     onPress={() => router.push({ pathname: '/checkout', params: { pabiliRequestId: req.id } })}
                  >
-                    <ThemedText style={styles.trackText}>View Quote</ThemedText>
+                    <ThemedText style={styles.trackText}>Checkout</ThemedText>
                 </TouchableOpacity>
             )}
 
             {req.status === 'PENDING_REVIEW' && !isPast && (
                  <View style={styles.waitingBtn}>
-                    <ActivityIndicator size="small" color="#F57C00" style={{marginRight: 4}} />
+                    <ActivityIndicator size="small" color="#f78734" style={{marginRight: 4}} />
                     <ThemedText style={styles.waitingText}>Reviewing</ThemedText>
                 </View>
             )}
@@ -140,7 +140,7 @@ export default function PabiliOrdersScreen() {
 
       {loading && !refreshing && requests.length === 0 ? (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-              <ActivityIndicator size="large" color="#F57C00" />
+              <ActivityIndicator size="large" color="#f78734" />
           </View>
       ) : (
           <ScrollView 
@@ -194,7 +194,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   activeTab: {
-    backgroundColor: '#F57C00',
+    backgroundColor: '#f78734',
   },
   tabText: {
     fontSize: 14,
@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
   waitingText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#F57C00',
+    color: '#f78734',
   },
   emptyState: {
     alignItems: 'center',

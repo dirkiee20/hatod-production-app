@@ -134,7 +134,7 @@ export default function ItemDetailScreen() {
     return (
       <ThemedView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <Stack.Screen options={{ headerShown: false }} />
-        <ActivityIndicator size="large" color="#C2185B" />
+        <ActivityIndicator size="large" color="#5c6cc9" />
       </ThemedView>
     );
   }
@@ -329,7 +329,7 @@ const styles = StyleSheet.create({
 
   categoryRow: { marginTop: 6, backgroundColor: 'transparent' },
   itemCategory: {
-    fontSize: 12, fontWeight: '700', color: '#C2185B', textTransform: 'uppercase',
+    fontSize: 12, fontWeight: '700', color: '#5c6cc9', textTransform: 'uppercase',
   },
 
   itemDescription: { fontSize: 14, color: '#777', marginTop: 10, lineHeight: 20 },
@@ -359,9 +359,9 @@ const styles = StyleSheet.create({
   },
   radio: { borderRadius: 11 },
   checkbox: { borderRadius: 5 },
-  selectorActive: { borderColor: '#C2185B' },
-  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#C2185B' },
-  checkmark: { fontSize: 13, color: '#C2185B', fontWeight: '900', lineHeight: 15 },
+  selectorActive: { borderColor: '#5c6cc9' },
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#5c6cc9' },
+  checkmark: { fontSize: 13, color: '#5c6cc9', fontWeight: '900', lineHeight: 15 },
   choiceName: { fontSize: 14, color: '#444', fontWeight: '600' },
   choicePrice: { fontSize: 13, color: '#888' },
 
@@ -389,7 +389,7 @@ const styles = StyleSheet.create({
   qtyValue: { fontSize: 16, fontWeight: '800', marginHorizontal: 14 },
 
   addToCartBtn: {
-    flex: 1, backgroundColor: '#C2185B', height: 50,
+    flex: 1, backgroundColor: '#5c6cc9', height: 50,
     borderRadius: 12, justifyContent: 'center', alignItems: 'center',
   },
   addToCartBtnDisabled: {

@@ -150,7 +150,7 @@ export default function CheckoutScreen() {
           </ThemedView>
           <ThemedView style={styles.addressCard}>
              <ThemedView style={styles.addressIconBox}>
-                <IconSymbol size={18} name="house.fill" color="#C2185B" />
+                <IconSymbol size={18} name="house.fill" color="#5c6cc9" />
              </ThemedView>
              <ThemedView style={styles.addressInfo}>
                 <ThemedText style={styles.addressLabel}>{deliveryAddress ? deliveryAddress.label : 'Select Address'}</ThemedText>
@@ -193,7 +193,7 @@ export default function CheckoutScreen() {
             >
               <ThemedView style={styles.methodMain}>
                 <ThemedView style={styles.methodIcon}>
-                   <IconSymbol size={16} name={method.icon as any} color={selectedPayment === method.id ? '#C2185B' : '#888'} />
+                   <IconSymbol size={16} name={method.icon as any} color={selectedPayment === method.id ? '#5c6cc9' : '#888'} />
                 </ThemedView>
                 <View>
                    <ThemedText style={[styles.methodName, selectedPayment === method.id && styles.methodNameActive]}>{method.name}</ThemedText>
@@ -210,7 +210,7 @@ export default function CheckoutScreen() {
         {/* Voucher Section */}
         <TouchableOpacity style={styles.voucherRow}>
            <ThemedView style={styles.voucherLead}>
-              <IconSymbol size={18} name="filter" color="#C2185B" />
+              <IconSymbol size={18} name="filter" color="#5c6cc9" />
               <ThemedText style={styles.voucherText}>Apply a voucher</ThemedText>
            </ThemedView>
            <IconSymbol size={16} name="chevron.right" color="#DDD" />
@@ -278,7 +278,7 @@ const styles = StyleSheet.create({
   },
   editBtn: {
     fontSize: 12,
-    color: '#C2185B',
+    color: '#5c6cc9',
     fontWeight: '700',
   },
   addressCard: {
@@ -294,7 +294,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#FCE4EC',
+    backgroundColor: '#EBEFFF',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -325,8 +325,8 @@ const styles = StyleSheet.create({
     borderColor: '#EEE',
   },
   paymentRowActive: {
-    borderColor: '#C2185B',
-    backgroundColor: '#FFF9FB',
+    borderColor: '#5c6cc9',
+    backgroundColor: '#F8FAFF',
   },
   methodMain: {
     flexDirection: 'row',
@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
     color: '#444',
   },
   methodNameActive: {
-    color: '#C2185B',
+    color: '#5c6cc9',
   },
   methodSub: {
     fontSize: 10,
@@ -362,13 +362,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   radioActive: {
-    borderColor: '#C2185B',
+    borderColor: '#5c6cc9',
   },
   radioInner: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#C2185B',
+    backgroundColor: '#5c6cc9',
   },
   voucherRow: {
     flexDirection: 'row',
@@ -433,7 +433,7 @@ const styles = StyleSheet.create({
   totalValue: {
     fontSize: 18,
     fontWeight: '900',
-    color: '#C2185B',
+    color: '#5c6cc9',
   },
   footer: {
     position: 'absolute',
@@ -447,7 +447,7 @@ const styles = StyleSheet.create({
     borderColor: '#EEE',
   },
   placeOrderBtn: {
-    backgroundColor: '#C2185B',
+    backgroundColor: '#5c6cc9',
     height: 50,
     borderRadius: 12,
     justifyContent: 'center',
@@ -478,7 +478,7 @@ const styles = StyleSheet.create({
   },
   itemQty: {
     fontWeight: '800',
-    color: '#C2185B',
+    color: '#5c6cc9',
     marginRight: 10,
     width: 25,
   },

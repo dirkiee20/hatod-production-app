@@ -118,7 +118,7 @@ export default function AddressManagerScreen() {
         
         <ThemedView style={styles.searchSection}>
           <ThemedView style={styles.searchBar}>
-            <IconSymbol size={18} name="location" color="#C2185B" />
+            <IconSymbol size={18} name="location" color="#5c6cc9" />
             <TextInput 
               placeholder="Search or detect location..."
               style={styles.searchInput}
@@ -138,7 +138,7 @@ export default function AddressManagerScreen() {
                   setAddressText(address);
               }
           }}>
-             <IconSymbol size={16} name="paperplane.fill" color="#C2185B" />
+             <IconSymbol size={16} name="paperplane.fill" color="#5c6cc9" />
              <ThemedText style={styles.currentLocationText}>Use current location</ThemedText>
           </TouchableOpacity>
         </ThemedView>
@@ -160,7 +160,7 @@ export default function AddressManagerScreen() {
               >
                 <ThemedView style={styles.itemMain}>
                    <ThemedView style={[styles.iconContainer, selectedId === item.id && styles.iconActive]}>
-                      <IconSymbol size={20} name={item.label.toLowerCase() === 'home' ? 'house.fill' : 'person'} color={selectedId === item.id ? '#FFF' : '#C2185B'} />
+                      <IconSymbol size={20} name={item.label.toLowerCase() === 'home' ? 'house.fill' : 'person'} color={selectedId === item.id ? '#FFF' : '#5c6cc9'} />
                    </ThemedView>
                    <ThemedView style={styles.addressDetails}>
                       <ThemedText style={styles.label}>{item.label}</ThemedText>
@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 13,
     fontWeight: '700',
-    color: '#C2185B',
+    color: '#5c6cc9',
   },
   sectionDivider: {
     paddingHorizontal: 16,
@@ -281,7 +281,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
   },
   addressItemActive: {
-    backgroundColor: '#FFF9FB',
+    backgroundColor: '#F8FAFF',
   },
   itemMain: {
     flexDirection: 'row',
@@ -293,12 +293,12 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#FCE4EC',
+    backgroundColor: '#EBEFFF',
     justifyContent: 'center',
     alignItems: 'center',
   },
   iconActive: {
-    backgroundColor: '#C2185B',
+    backgroundColor: '#5c6cc9',
   },
   addressDetails: {
     marginLeft: 15,
@@ -331,13 +331,13 @@ const styles = StyleSheet.create({
     marginLeft: 15,
   },
   radioActive: {
-    borderColor: '#C2185B',
+    borderColor: '#5c6cc9',
   },
   radioInner: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#C2185B',
+    backgroundColor: '#5c6cc9',
   },
   addNewBtn: {
     flexDirection: 'row',
@@ -351,13 +351,13 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: '#C2185B',
+    borderColor: '#5c6cc9',
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
   },
   plusText: {
-    color: '#C2185B',
+    color: '#5c6cc9',
     fontSize: 18,
     fontWeight: '500',
     marginTop: -2,
@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     fontSize: 14,
     fontWeight: '700',
-    color: '#C2185B',
+    color: '#5c6cc9',
   },
   footer: {
     position: 'absolute',
@@ -380,7 +380,7 @@ const styles = StyleSheet.create({
     borderColor: '#EEE',
   },
   confirmBtn: {
-    backgroundColor: '#C2185B',
+    backgroundColor: '#5c6cc9',
     height: 50,
     borderRadius: 12,
     justifyContent: 'center',

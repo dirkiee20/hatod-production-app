@@ -207,7 +207,7 @@ export default function OrderTrackingScreen() {
   if (loading) {
       return (
           <ThemedView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-              <ActivityIndicator size="large" color="#C2185B" />
+              <ActivityIndicator size="large" color="#5c6cc9" />
           </ThemedView>
       );
   }
@@ -277,7 +277,7 @@ export default function OrderTrackingScreen() {
 
             {/* Customer Location */}
             <Mapbox.PointAnnotation id="customer" coordinate={customerCoords}>
-                <IconSymbol size={40} name="location.fill" color="#C2185B" />
+                <IconSymbol size={40} name="location.fill" color="#5c6cc9" />
             </Mapbox.PointAnnotation>
 
             {/* Route Line */}
@@ -286,7 +286,7 @@ export default function OrderTrackingScreen() {
                 <Mapbox.LineLayer
                   id="routeFill"
                   style={{
-                    lineColor: '#C2185B',
+                    lineColor: '#5c6cc9',
                     lineWidth: 4,
                     lineCap: 'round',
                     lineJoin: 'round',
@@ -380,7 +380,7 @@ export default function OrderTrackingScreen() {
                 ) : (
                     <View style={styles.actionButtons}>
                         <TouchableOpacity style={styles.messageBtn}>
-                            <IconSymbol size={20} name="message.fill" color="#C2185B" />
+                            <IconSymbol size={20} name="message.fill" color="#5c6cc9" />
                             <ThemedText style={styles.messageText}>Message</ThemedText>
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.callBtn}>
@@ -503,7 +503,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#C2185B',
+    backgroundColor: '#5c6cc9',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
@@ -578,11 +578,11 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#C2185B',
+    backgroundColor: '#5c6cc9',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 40,
-    shadowColor: '#C2185B',
+    shadowColor: '#5c6cc9',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.3,
     shadowRadius: 20,
@@ -629,7 +629,7 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   plateBadge: {
-    backgroundColor: '#FCE4EC',
+    backgroundColor: '#EBEFFF',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
@@ -637,7 +637,7 @@ const styles = StyleSheet.create({
   plateText: {
     fontSize: 13,
     fontWeight: '900',
-    color: '#C2185B',
+    color: '#5c6cc9',
   },
   divider: {
     width: '100%',
@@ -665,7 +665,7 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#C2185B',
+    backgroundColor: '#5c6cc9',
     marginTop: 4,
   },
   timelineDotInactive: {
@@ -699,14 +699,14 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 44,
     borderRadius: 12,
-    backgroundColor: '#FCE4EC',
+    backgroundColor: '#EBEFFF',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   messageText: {
-    color: '#C2185B',
+    color: '#5c6cc9',
     fontWeight: '800',
     fontSize: 14,
   },
@@ -714,7 +714,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 44,
     borderRadius: 12,
-    backgroundColor: '#C2185B',
+    backgroundColor: '#5c6cc9',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -729,7 +729,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 48,
     borderRadius: 12,
-    backgroundColor: '#C2185B',
+    backgroundColor: '#5c6cc9',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -790,7 +790,7 @@ const styles = StyleSheet.create({
     flex: 1, 
     padding: 14, 
     borderRadius: 12, 
-    backgroundColor: '#C2185B', 
+    backgroundColor: '#5c6cc9', 
     alignItems: 'center' 
   },
 });

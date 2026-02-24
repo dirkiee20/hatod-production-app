@@ -61,6 +61,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // ... (existing imports and constants)
 
 let authToken: string | null = null;
+let logoutCallback: (() => void) | null = null;
+
+export const registerLogoutCallback = (callback: () => void) => {
+  logoutCallback = callback;
+};
 
 export const getAuthToken = async () => {
   if (authToken) return authToken;
@@ -133,6 +138,7 @@ export const register = async (data: any) => {
 export const logout = async () => {
   authToken = null;
   await AsyncStorage.removeItem('auth_token');
+  if (logoutCallback) logoutCallback();
 };
 
 export const authenticatedFetch = async (endpoint: string, options: RequestInit = {}) => {
@@ -148,6 +154,11 @@ export const authenticatedFetch = async (endpoint: string, options: RequestInit 
     ...options,
     headers,
   });
+
+  if (res.status === 401) {
+      console.log('Merchant API Received 401. Logging out...');
+      await logout();
+  }
   
   return res;
 };
