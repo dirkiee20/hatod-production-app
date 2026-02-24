@@ -63,6 +63,15 @@ export class PabiliRequestsService {
     return this.prisma.pabiliRequest.findMany({
       where: { customerId: customer.id },
       orderBy: { createdAt: 'desc' },
+      include: {
+        order: {
+          select: {
+            id: true,
+            status: true,
+            riderId: true,
+          },
+        },
+      },
     });
   }
 
@@ -76,6 +85,13 @@ export class PabiliRequestsService {
             firstName: true,
             lastName: true,
             user: { select: { phone: true, email: true } },
+          },
+        },
+        order: {
+          select: {
+            id: true,
+            status: true,
+            riderId: true,
           },
         },
       },

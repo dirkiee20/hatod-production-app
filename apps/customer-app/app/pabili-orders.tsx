@@ -55,15 +55,17 @@ export default function PabiliOrdersScreen() {
                      req.status === 'ACCEPTED' ? '#E8F5E9' : '#EEE';
 
     return (
-    <TouchableOpacity 
+    <TouchableOpacity
         key={req.id} 
         style={styles.card} 
         onPress={() => {
-            if (req.status === 'QUOTED' || req.status === 'ACCEPTED') {
+            if (req.status === 'QUOTED') {
                 router.push({ pathname: '/checkout', params: { pabiliRequestId: req.id } })
+            } else if (req.status === 'ACCEPTED' && req.order?.id) {
+                router.push({ pathname: '/order-tracking', params: { id: req.order.id } });
             }
         }}
-        disabled={req.status !== 'QUOTED' && req.status !== 'ACCEPTED'}
+        disabled={req.status !== 'QUOTED' && !(req.status === 'ACCEPTED' && req.order?.id)}
     >
         <View style={styles.cardHeader}>
             <View style={styles.restaurantRow}>
@@ -88,8 +90,8 @@ export default function PabiliOrdersScreen() {
 
         <View style={styles.cardFooter}>
             <ThemedText style={styles.totalText}>Est: ₱{req.estimatedItemCost}</ThemedText>
-            
-            {(req.status === 'QUOTED' || req.status === 'ACCEPTED') && !isPast && (
+
+            {req.status === 'QUOTED' && !isPast && (
                  <TouchableOpacity 
                     style={styles.trackBtn} 
                     onPress={() => router.push({ pathname: '/checkout', params: { pabiliRequestId: req.id } })}

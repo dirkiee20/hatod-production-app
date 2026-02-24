@@ -67,7 +67,17 @@ export default function PabiliScreen() {
   };
 
   const handleCheckout = () => {
-    Alert.alert('Proceed to Checkout', 'Navigate to address selection...');
+    if (!requestId) {
+      Alert.alert('Missing Request', 'Please wait for your request to load, then try again.');
+      return;
+    }
+
+    Alert.alert('Proceed to Checkout', 'Tap OK to continue to checkout.', [
+      {
+        text: 'OK',
+        onPress: () => router.push({ pathname: '/checkout', params: { pabiliRequestId: requestId } }),
+      },
+    ]);
   };
 
   const renderRequestStep = () => (
