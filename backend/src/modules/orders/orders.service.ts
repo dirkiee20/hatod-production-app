@@ -101,6 +101,7 @@ export class OrdersService {
             quantity: item.quantity,
             price: menuItem.price,
             notes: item.notes,
+            options: (item as any).options ?? null,
           });
         }
 

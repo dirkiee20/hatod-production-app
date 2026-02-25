@@ -1,4 +1,4 @@
-import { IsString, IsArray, ValidateNested, IsNumber, IsOptional, IsUUID } from 'class-validator';
+import { IsString, IsArray, ValidateNested, IsNumber, IsOptional, IsUUID, IsObject } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -15,6 +15,11 @@ class OrderItemDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiProperty({ type: 'object', required: false })
+  @IsOptional()
+  @IsObject()
+  options?: Record<string, unknown>;
 }
 
 export class CreateOrderDto {

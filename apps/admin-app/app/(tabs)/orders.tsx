@@ -139,10 +139,19 @@ export default function OrdersScreen() {
 
   const statusTabs = ['All', 'Pending', 'In Progress', 'Delivered', 'Cancelled'];
 
-  const GOV_MERCHANT_ID = '57d3838e-0678-4908-ba98-322960675688';
+  // Determine government orders by merchant.type when available.
+  // Fallback: some gov requests are represented as items starting with 'Service:' (business permit flow).
+  const standardOrders = orders.filter(o => {
+    const isGovByType = o.merchant?.type === 'GOVERNMENT';
+    const isGovByItems = Array.isArray((o as any).items) && typeof (o as any).items[0] === 'string' && (o as any).items[0].trim().startsWith('Service:');
+    return !(isGovByType || isGovByItems);
+  });
 
-  const standardOrders = orders.filter(o => o.merchantId !== GOV_MERCHANT_ID);
-  const govOrders = orders.filter(o => o.merchantId === GOV_MERCHANT_ID);
+  const govOrders = orders.filter(o => {
+    const isGovByType = o.merchant?.type === 'GOVERNMENT';
+    const isGovByItems = Array.isArray((o as any).items) && typeof (o as any).items[0] === 'string' && (o as any).items[0].trim().startsWith('Service:');
+    return isGovByType || isGovByItems;
+  });
 
   const filteredOrders = activeTab === 'All' 
     ? standardOrders 
@@ -244,6 +253,15 @@ export default function OrdersScreen() {
                 <View style={styles.orderDetails}>
                   <ThemedText style={styles.customerName}>{order.customer?.name || 'Guest'}</ThemedText>
                   <ThemedText style={styles.restaurantName}>{order.merchant?.name || 'Access Denied'}</ThemedText>
+                  {(() => {
+                    const firstOptions = (order as any)?.items?.find((it: any) => it?.options)?.options;
+                    if (firstOptions) {
+                      return (
+                        <ThemedText style={{fontSize: 12, color: '#666'}}>Permit: {firstOptions.companyName || 'Business Permit'}</ThemedText>
+                      );
+                    }
+                    return null;
+                  })()}
                 </View>
                 
                 <View style={styles.orderFooter}>

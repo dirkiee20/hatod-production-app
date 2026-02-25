@@ -86,7 +86,7 @@ export const getMenuItemById = async (id: string): Promise<MenuItem | null> => {
 export const createOrder = async (orderData: {
   merchantId: string;
   addressId: string;
-  items: { menuItemId: string; quantity: number; notes?: string }[];
+  items: { menuItemId: string; quantity: number; notes?: string; options?: any }[];
   specialInstructions?: string;
 }): Promise<Order | null> => {
   try {

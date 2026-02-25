@@ -161,7 +161,18 @@ export default function OrderDetailsScreen() {
                 </View>
                 <View style={styles.itemDetails}>
                   <ThemedText style={styles.itemName}>{item.name}</ThemedText>
-                  <ThemedText style={styles.itemOptions}>{item.options}</ThemedText>
+                  {item.options && typeof item.options === 'string' && (
+                    <ThemedText style={styles.itemOptions}>{item.options}</ThemedText>
+                  )}
+                  {item.options && typeof item.options === 'object' && (
+                    <View style={{ marginTop: 4 }}>
+                      {Object.entries(item.options).map(([key, value]) => (
+                        <ThemedText key={key} style={styles.itemOptions}>
+                          {key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase())}: {String(value)}
+                        </ThemedText>
+                      ))}
+                    </View>
+                  )}
                 </View>
                 <ThemedText style={styles.itemPrice}>₱{item.price}</ThemedText>
               </View>

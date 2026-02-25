@@ -8,7 +8,7 @@ import { HistoryTab } from './tabs/HistoryTab';
 import { SettingsTab } from './tabs/SettingsTab';
 import { ApplicationDetailsModal } from './tabs/ApplicationDetailsModal';
 import { AuthPage } from './tabs/AuthPage';
-import { getAuthToken, clearAuthToken, getProfile } from './api/client';
+import { getAuthToken, clearAuthToken, getProfile, authenticatedFetch } from './api/client';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(!!getAuthToken());
@@ -45,6 +45,46 @@ export default function App() {
         setAppError(`Failed to load profile: ${err.message}`);
       });
   }, [isAuthenticated]);
+
+  // If authenticated and merchant profile exists, fetch merchant orders (so gov merchants receive orders)
+  useEffect(() => {
+    const fetchMerchantOrders = async () => {
+      if (!isAuthenticated) return;
+      if (!userInfo?.merchant) return;
+
+      try {
+        const res = await authenticatedFetch('/orders');
+        if (!res.ok) {
+          console.warn('[App] Failed to fetch merchant orders:', res.status);
+          return;
+        }
+        const orders = await res.json();
+        // Map orders to Application shape expected by the dashboard
+        const mappedFromOrders: Application[] = (orders as any[]).map((ord) => {
+          const items: string[] = Array.isArray(ord.items) ? ord.items.map((it: any) => it.menuItem?.name || it.name || '') : [];
+          const isGov = ord.merchant?.type === 'GOVERNMENT' || (items[0] || '').includes('Permit');
+          return {
+            id: (ord.id as string).substring(0,8).toUpperCase(),
+            requestId: ord.id,
+            applicant: ord.customer?.firstName ? `${ord.customer.firstName} ${ord.customer.lastName}` : ord.customer?.name || 'Customer',
+            type: items[0] ? items[0].replace('Service: ', '') : 'Order',
+            status: ord.status,
+            date: new Date(ord.createdAt).toLocaleDateString(),
+            priority: isGov ? 'URGENT' : 'NORMAL',
+            rawItems: items,
+            isGov,
+          };
+        });
+
+        // Prepend merchant orders so they show on top
+        setApplications(prev => [...mappedFromOrders, ...prev]);
+      } catch (err) {
+        console.error('[App] Error fetching merchant orders:', err);
+      }
+    };
+
+    fetchMerchantOrders();
+  }, [isAuthenticated, userInfo]);
 
   const handleLogout = () => {
     clearAuthToken();

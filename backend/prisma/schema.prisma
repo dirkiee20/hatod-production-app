@@ -309,6 +309,7 @@ model OrderItem {
   quantity   Int
   price      Float    // Price at time of order
   notes      String?  // Special requests
+  options    Json?    // Structured item options (e.g., permit form fields)
   createdAt  DateTime @default(now())
   
   order    Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
