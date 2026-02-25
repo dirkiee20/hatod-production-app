@@ -1,10 +1,10 @@
 import { StyleSheet, View, TouchableOpacity, Image, Animated, Easing, Platform, ActivityIndicator, Alert, Modal, TextInput, KeyboardAvoidingView, ScrollView } from 'react-native';
-import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
+import { useRouter, Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import Mapbox from '@rnmapbox/maps';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { getOrderById, getRoute, createReview } from '@/api/services';
 import { resolveImageUrl } from '@/api/client';
 import { useSocket } from '@/context/SocketContext';
@@ -140,29 +140,64 @@ export default function OrderTrackingScreen() {
     if (!order || !order.rider) return;
 
     const fetchRoute = async () => {
-        const riderLoc = [order.rider.currentLongitude || 120.9842, order.rider.currentLatitude || 14.5995];
-        const merchantLoc = [order.merchant?.longitude, order.merchant?.latitude];
-        const customerLoc = [order.address?.longitude, order.address?.latitude];
+      const isPabiliOrder = !!order.pabiliRequestId;
 
-        // Ensure valid coords
-        if (!merchantLoc[0] || !customerLoc[0]) return;
+      // Only draw routes when the rider is actually in motion or preparing
+      const shouldDraw =
+        isPabiliOrder
+          ? ['PICKED_UP', 'DELIVERING'].includes(order.status)
+          : ['PREPARING', 'READY_FOR_PICKUP', 'PICKED_UP', 'DELIVERING', 'ON_THE_WAY'].includes(order.status);
 
-        let start: [number, number] = [riderLoc[0], riderLoc[1]];
-        let end: [number, number] = [customerLoc[0], customerLoc[1]];
+      if (!shouldDraw) return;
 
-        // If picking up, go to merchant
-        if (order.status === 'READY_FOR_PICKUP' || order.status === 'PREPARING') {
-            end = [merchantLoc[0], merchantLoc[1]];
+      const customerLoc: [number, number] = [
+        order.address?.longitude ?? 120.9850,
+        order.address?.latitude ?? 14.6010,
+      ];
+
+      const riderLoc: [number, number] = [
+        order.rider.currentLongitude ?? customerLoc[0],
+        order.rider.currentLatitude ?? customerLoc[1],
+      ];
+
+      let start: [number, number] = riderLoc;
+      let end: [number, number] = customerLoc;
+
+      // For non-pabili orders, when rider is going to the merchant, route rider -> merchant
+      if (!isPabiliOrder) {
+        const merchantLng = order.merchant?.longitude;
+        const merchantLat = order.merchant?.latitude;
+        if (merchantLng != null && merchantLat != null) {
+          const merchantLoc: [number, number] = [merchantLng, merchantLat];
+          if (order.status === 'READY_FOR_PICKUP' || order.status === 'PREPARING') {
+            end = merchantLoc;
+          }
         }
+      }
 
-        const route = await getRoute(start, end);
-        if (route) {
-            setRouteGeoJSON(route);
-        }
+      const route = await getRoute(start, end);
+      if (route) {
+        setRouteGeoJSON(route);
+      }
     };
 
     fetchRoute();
   }, [order]);
+
+  // For Pabili orders: when a rider gets assigned, shift camera to rider (or fallback to customer)
+  useEffect(() => {
+    if (!order || !order.pabiliRequestId || !order.rider) return;
+
+    const lng = order.rider.currentLongitude || order.address?.longitude;
+    const lat = order.rider.currentLatitude || order.address?.latitude;
+    if (lng == null || lat == null) return;
+
+    cameraRef.current?.setCamera({
+      centerCoordinate: [lng, lat],
+      zoomLevel: 15,
+      animationDuration: 1000,
+    });
+  }, [order?.riderId, order?.pabiliRequestId]);
 
   const fetchOrder = async () => {
       try {
@@ -204,6 +239,14 @@ export default function OrderTrackingScreen() {
       }
   };
 
+  // When screen regains focus (e.g. app returns from background), refetch latest order state
+  useFocusEffect(
+    useCallback(() => {
+      if (!id) return;
+      fetchOrder();
+    }, [id])
+  );
+
   if (loading) {
       return (
           <ThemedView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -214,12 +257,18 @@ export default function OrderTrackingScreen() {
 
   if (!order) return null;
 
+  const isPabili = !!order.pabiliRequestId;
+
   const isRiderAssigned = !!order.rider;
   const showRider = isRiderAssigned && ['PREPARING', 'READY_FOR_PICKUP', 'PICKED_UP', 'DELIVERING', 'ON_THE_WAY'].includes(order.status);
 
   // Coordinates
-  const merchantCoords = [order.merchant?.longitude || 120.9842, order.merchant?.latitude || 14.5995];
   const customerCoords = [order.address?.longitude || 120.9850, order.address?.latitude || 14.6010]; 
+  const merchantCoords = [
+    order.merchant?.longitude ?? customerCoords[0],
+    order.merchant?.latitude ?? customerCoords[1],
+  ];
+  const initialCenterCoords = isPabili ? customerCoords : merchantCoords;
   // Rider Coords: Real app would stream this via socket. 
   // For now using static or null.
   const riderCoords = order.rider ? [order.rider.currentLongitude || 120.9842, order.rider.currentLatitude || 14.5995] : null;
@@ -270,7 +319,7 @@ export default function OrderTrackingScreen() {
             <Mapbox.Camera
                 ref={cameraRef}
                 zoomLevel={15}
-                centerCoordinate={merchantCoords} 
+                centerCoordinate={initialCenterCoords} 
                 animationMode={'flyTo'}
                 animationDuration={2000}
             />
@@ -306,12 +355,14 @@ export default function OrderTrackingScreen() {
             )}
 
             {/* Restaurant Location (Store Logo) */}
-            <Mapbox.MarkerView id="restaurant" coordinate={merchantCoords}>
-                <Image
-                    source={{ uri: resolveImageUrl(order.merchant?.logo) || undefined }}
-                    style={styles.restaurantLogoMarker}
-                />
-            </Mapbox.MarkerView>
+            {!isPabili && (
+              <Mapbox.MarkerView id="restaurant" coordinate={merchantCoords}>
+                  <Image
+                      source={{ uri: resolveImageUrl(order.merchant?.logo) || undefined }}
+                      style={styles.restaurantLogoMarker}
+                  />
+              </Mapbox.MarkerView>
+            )}
         </Mapbox.MapView>
 
         {/* Back Button */}

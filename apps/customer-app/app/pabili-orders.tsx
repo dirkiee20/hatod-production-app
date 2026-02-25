@@ -42,30 +42,49 @@ export default function PabiliOrdersScreen() {
     setRefreshing(false);
   }, []);
 
-  const activeRequests = requests.filter(r => ['PENDING_REVIEW', 'QUOTED', 'ACCEPTED'].includes(r.status));
-  const pastRequests = requests.filter(r => ['COMPLETED', 'REJECTED', 'CANCELED'].includes(r.status));
+  const activeRequests = requests.filter(r => {
+    const isDeliveredOrder = r.order?.status === 'DELIVERED';
+    return !isDeliveredOrder && ['PENDING_REVIEW', 'QUOTED', 'ACCEPTED'].includes(r.status);
+  });
+
+  const pastRequests = requests.filter(r => {
+    const isDeliveredOrder = r.order?.status === 'DELIVERED';
+    return isDeliveredOrder || ['COMPLETED', 'REJECTED', 'CANCELED'].includes(r.status);
+  });
 
   const renderRequestCard = (req: any, isPast: boolean) => {
-    const statusColor = req.status === 'PENDING_REVIEW' ? '#f78734' :
-                        req.status === 'QUOTED' ? '#1976D2' : 
-                        req.status === 'ACCEPTED' ? '#388E3C' : '#888';
+    const isDeliveredOrder = req.order?.status === 'DELIVERED';
 
-    const statusBg = req.status === 'PENDING_REVIEW' ? '#FFF3E0' :
-                     req.status === 'QUOTED' ? '#E3F2FD' : 
-                     req.status === 'ACCEPTED' ? '#E8F5E9' : '#EEE';
+    const effectiveStatus = isDeliveredOrder
+      ? 'DELIVERED'
+      : (req.status === 'COMPLETED' ? 'DELIVERED' : req.status);
+
+    const statusColor = effectiveStatus === 'PENDING_REVIEW' ? '#f78734' :
+                        effectiveStatus === 'QUOTED' ? '#1976D2' : 
+                        effectiveStatus === 'ACCEPTED' ? '#388E3C' :
+                        effectiveStatus === 'DELIVERED' ? '#388E3C' : '#888';
+
+    const statusBg = effectiveStatus === 'PENDING_REVIEW' ? '#FFF3E0' :
+                     effectiveStatus === 'QUOTED' ? '#E3F2FD' : 
+                     effectiveStatus === 'ACCEPTED' ? '#E8F5E9' :
+                     effectiveStatus === 'DELIVERED' ? '#E8F5E9' : '#EEE';
 
     return (
     <TouchableOpacity
         key={req.id} 
         style={styles.card} 
         onPress={() => {
+            if (isPast) return;
             if (req.status === 'QUOTED') {
                 router.push({ pathname: '/checkout', params: { pabiliRequestId: req.id } })
             } else if (req.status === 'ACCEPTED' && req.order?.id) {
                 router.push({ pathname: '/order-tracking', params: { id: req.order.id } });
             }
         }}
-        disabled={req.status !== 'QUOTED' && !(req.status === 'ACCEPTED' && req.order?.id)}
+        disabled={
+          isPast ||
+          (req.status !== 'QUOTED' && !(req.status === 'ACCEPTED' && req.order?.id))
+        }
     >
         <View style={styles.cardHeader}>
             <View style={styles.restaurantRow}>
@@ -78,7 +97,9 @@ export default function PabiliOrdersScreen() {
                 </View>
             </View>
             <View style={[styles.statusBadge, { backgroundColor: statusBg }]}>
-                <ThemedText style={[styles.statusText, { color: statusColor }]}>{req.status.replace('_', ' ')}</ThemedText>
+                <ThemedText style={[styles.statusText, { color: statusColor }]}>
+                  {effectiveStatus.replace('_', ' ')}
+                </ThemedText>
             </View>
         </View>
         
@@ -115,7 +136,7 @@ export default function PabiliOrdersScreen() {
     <ThemedView style={styles.container}>
        <Stack.Screen options={{ 
         headerShown: true, 
-        title: 'Custom Requests',
+        title: 'Pabili Requests',
         headerTitleStyle: { fontWeight: '900', fontSize: 16 },
         headerLeft: () => (
           <TouchableOpacity onPress={() => router.back()}>

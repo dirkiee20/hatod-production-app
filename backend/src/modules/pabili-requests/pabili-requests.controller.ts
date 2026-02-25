@@ -44,6 +44,15 @@ export class PabiliRequestsController {
     return this.pabiliRequestsService.findOne(id);
   }
 
+  // Simple status update for Gov Merchant Web (no auth for now; rely on network-level protection)
+  @Patch('gov/:id/status')
+  updateStatusForGov(@Param('id') id: string, @Body('status') status: string) {
+    return this.pabiliRequestsService.updateStatusForGov(
+      id,
+      status as 'PENDING_REVIEW' | 'QUOTED' | 'ACCEPTED' | 'REJECTED' | 'COMPLETED',
+    );
+  }
+
   @Patch(':id/quote')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)

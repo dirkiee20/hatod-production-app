@@ -21,7 +21,7 @@ export default function AccountScreen() {
     { icon: 'person', label: 'Profile Information', color: '#f78734' },
     { icon: 'cart', label: 'My Food Orders', color: '#5856D6' },
     { icon: 'grocery', label: 'My Grocery Orders', color: '#4CAF50' },
-    { icon: 'bag.fill', label: 'My Custom Requests', color: '#f78734' },
+    { icon: 'bag.fill', label: 'My Pabili Requests', color: '#f78734' },
     { icon: 'government', label: 'Government Transcripts', color: '#4CD964' },
     { icon: 'paperplane.fill', label: 'Support & Feedback', color: '#FF9500' },
   ];
@@ -97,7 +97,7 @@ export default function AccountScreen() {
                 router.push('/food-orders');
               } else if (item.label === 'My Grocery Orders') {
                 router.push('/grocery-orders');
-              } else if (item.label === 'My Custom Requests') {
+              } else if (item.label === 'My Pabili Requests') {
                 router.push('/pabili-orders');
               } else if (item.label === 'Government Transcripts') {
                 router.push('/government-transcripts');

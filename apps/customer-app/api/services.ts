@@ -15,6 +15,19 @@ export const getMerchants = async (): Promise<Merchant[]> => {
   }
 };
 
+export const getGovMerchant = async (): Promise<Merchant | null> => {
+  try {
+    const response = await publicFetch('/merchants/gov/services');
+    if (!response.ok) {
+      throw new Error('Failed to fetch gov merchant');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching gov merchant:', error);
+    return null;
+  }
+};
+
 // User Profile API
 export const getProfile = async () => {
   try {

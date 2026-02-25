@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SocketGateway } from '../socket/socket.gateway';
 import { CreatePabiliRequestDto } from './dto/create-pabili-request.dto';
@@ -120,5 +120,20 @@ export class PabiliRequestsService {
     }
 
     return updatedRequest;
+  }
+
+  // Lightweight status update path for the Gov Merchant Web portal
+  async updateStatusForGov(id: string, status: 'PENDING_REVIEW' | 'QUOTED' | 'ACCEPTED' | 'REJECTED' | 'COMPLETED') {
+    const allowed: string[] = ['PENDING_REVIEW', 'QUOTED', 'ACCEPTED', 'REJECTED', 'COMPLETED'];
+    if (!allowed.includes(status)) {
+      throw new BadRequestException('Invalid status value');
+    }
+
+    const updated = await this.prisma.pabiliRequest.update({
+      where: { id },
+      data: { status },
+    });
+
+    return updated;
   }
 }

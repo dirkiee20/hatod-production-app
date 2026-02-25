@@ -128,10 +128,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   // Calculate delivery fee when address or items change
   useEffect(() => {
     const calculateFee = async () => {
-      // If cart is completely empty or subtotal is empty, fee is absolutely 0.
+      // If cart is completely empty, fee is absolutely 0.
       const localCartTotal = items.reduce((sum, item) => sum + item.totalPrice, 0);
 
-      if (items.length === 0 || localCartTotal === 0) {
+      if (items.length === 0) {
         setDeliveryFee(0);
         return;
       }

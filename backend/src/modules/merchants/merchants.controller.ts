@@ -36,6 +36,12 @@ export class MerchantsController {
     return this.merchantsService.findAll();
   }
 
+  @Get('gov/services')
+  @ApiOperation({ summary: 'Get government services merchant' })
+  getGovMerchant() {
+    return this.merchantsService.getGovMerchant();
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get merchant details and menu' })
   findOne(@Param('id') id: string) {

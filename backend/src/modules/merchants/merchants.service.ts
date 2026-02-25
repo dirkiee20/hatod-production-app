@@ -23,6 +23,33 @@ export class MerchantsService {
     });
   }
 
+  async getGovMerchant() {
+    const merchant = await this.prisma.merchant.findFirst({
+      where: {
+        user: {
+          email: 'gov@hatod.com',
+        },
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+          },
+        },
+        categories: {
+          include: { menuItems: { where: { isAvailable: true, isApproved: true } } },
+        },
+      },
+    });
+
+    if (!merchant) {
+      throw new NotFoundException('Government services merchant not found');
+    }
+
+    return merchant;
+  }
+
   async findAllAdmin() {
     return this.prisma.merchant.findMany({
       include: {

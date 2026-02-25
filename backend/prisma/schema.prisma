@@ -51,6 +51,7 @@ enum MerchantType {
   RESTAURANT
   GROCERY
   PHARMACY
+  GOVERNMENT
 }
 
 model User {

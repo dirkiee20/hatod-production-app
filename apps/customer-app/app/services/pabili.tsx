@@ -1,10 +1,10 @@
 import { StyleSheet, ScrollView, TextInput, TouchableOpacity, View, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Image } from 'react-native';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter, Stack, useFocusEffect } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useState, useEffect } from 'react';
-import { createPabiliRequest } from '../../api/services';
+import { useState, useEffect, useCallback } from 'react';
+import { createPabiliRequest, getPabiliRequestById, getMyPabiliRequests } from '../../api/services';
 import { useSocket } from '@/context/SocketContext';
 
 type Step = 'request' | 'waiting' | 'review';
@@ -33,6 +33,65 @@ export default function PabiliScreen() {
        socket.off('pabili_request_quoted', handleQuote);
     };
   }, [socket, requestId]);
+
+  // When the screen regains focus (user returns to app or page),
+  // fetch the latest status for the current request in case we missed socket events.
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      const syncLatestStatus = async () => {
+        try {
+          // If we already know which request we're tracking, refresh just that one
+          if (requestId) {
+            const latest = await getPabiliRequestById(requestId);
+            if (!isActive || !latest) return;
+
+            if (latest.status === 'QUOTED') {
+              setServiceFee(latest.serviceFee || 0);
+              // Also sync estimated price from server in case app was restarted
+              if (typeof latest.estimatedItemCost === 'number') {
+                setEstimatedPrice(String(latest.estimatedItemCost));
+              }
+              setStep('review');
+            } else if (latest.status === 'PENDING_REVIEW') {
+              setStep('waiting');
+            }
+            return;
+          }
+
+          // If we lost local state (app was killed), try to recover the latest active request
+          const all = await getMyPabiliRequests();
+          if (!isActive || !Array.isArray(all) || all.length === 0) return;
+
+          const latestActive = all.find((r: any) =>
+            r && (r.status === 'PENDING_REVIEW' || r.status === 'QUOTED')
+          );
+          if (!latestActive) return;
+
+          setRequestId(latestActive.id);
+          if (typeof latestActive.estimatedItemCost === 'number') {
+            setEstimatedPrice(String(latestActive.estimatedItemCost));
+          }
+
+          if (latestActive.status === 'QUOTED') {
+            setServiceFee(latestActive.serviceFee || 0);
+            setStep('review');
+          } else if (latestActive.status === 'PENDING_REVIEW') {
+            setStep('waiting');
+          }
+        } catch (e) {
+          console.error('Failed to refresh pabili request status:', e);
+        }
+      };
+
+      syncLatestStatus();
+
+      return () => {
+        isActive = false;
+      };
+    }, [requestId])
+  );
 
   const addItem = () => setItems([...items, '']);
   const updateItem = (text: string, index: number) => {

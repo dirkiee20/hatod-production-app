@@ -275,6 +275,21 @@ export class OrdersService {
       },
     });
 
+    // Keep related Pabili Request in sync with order lifecycle
+    if (updatedOrder.pabiliRequestId) {
+      if (status === OrderStatus.DELIVERED) {
+        await this.prisma.pabiliRequest.update({
+          where: { id: updatedOrder.pabiliRequestId },
+          data: { status: 'COMPLETED' },
+        });
+      } else if (status === OrderStatus.CANCELLED) {
+        await this.prisma.pabiliRequest.update({
+          where: { id: updatedOrder.pabiliRequestId },
+          data: { status: 'REJECTED' },
+        });
+      }
+    }
+
     // Automatically set Rider back to AVAILABLE if order is completed
     if ((status === OrderStatus.DELIVERED || status === OrderStatus.CANCELLED) && updatedOrder.riderId) {
        await this.prisma.rider.update({

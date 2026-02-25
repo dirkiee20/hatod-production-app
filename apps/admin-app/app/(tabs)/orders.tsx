@@ -14,15 +14,15 @@ export default function OrdersScreen() {
   const router = useRouter();
   const { socket } = useSocket();
 
-  // Top Level Tab: Standard Orders vs Custom Requests
-  const [mainTab, setMainTab] = useState<'Standard' | 'Custom'>('Standard');
+  // Top Level Tab: Regular Orders vs Pabili Requests vs Gov Requests
+  const [mainTab, setMainTab] = useState<'Standard' | 'Pabili' | 'Gov'>('Standard');
 
   // Standard Orders State
   const [activeTab, setActiveTab] = useState('All');
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
 
-  // Custom Requests State
+  // Pabili Requests State
   const [requests, setRequests] = useState<any[]>([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
@@ -139,11 +139,26 @@ export default function OrdersScreen() {
 
   const statusTabs = ['All', 'Pending', 'In Progress', 'Delivered', 'Cancelled'];
 
+  const GOV_MERCHANT_ID = '57d3838e-0678-4908-ba98-322960675688';
+
+  const standardOrders = orders.filter(o => o.merchantId !== GOV_MERCHANT_ID);
+  const govOrders = orders.filter(o => o.merchantId === GOV_MERCHANT_ID);
+
   const filteredOrders = activeTab === 'All' 
-    ? orders 
-    : orders.filter(o => {
+    ? standardOrders 
+    : standardOrders.filter(o => {
         if (activeTab === 'Pending') return o.status === 'PENDING';
-        if (activeTab === 'In Progress') return ['CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP'].includes(o.status);
+        if (activeTab === 'In Progress') return ['CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'READY_FOR_PICKUP', 'DELIVERING'].includes(o.status);
+        if (activeTab === 'Delivered') return o.status === 'DELIVERED';
+        if (activeTab === 'Cancelled') return o.status === 'CANCELLED';
+        return true;
+      });
+
+  const filteredGovOrders = activeTab === 'All' 
+    ? govOrders 
+    : govOrders.filter(o => {
+        if (activeTab === 'Pending') return o.status === 'PENDING';
+        if (activeTab === 'In Progress') return ['CONFIRMED', 'PREPARING', 'READY', 'PICKED_UP', 'READY_FOR_PICKUP', 'DELIVERING'].includes(o.status);
         if (activeTab === 'Delivered') return o.status === 'DELIVERED';
         if (activeTab === 'Cancelled') return o.status === 'CANCELLED';
         return true;
@@ -151,19 +166,17 @@ export default function OrdersScreen() {
 
   const customStatusTabs = ['All', 'Pending Review', 'Quoted', 'Placed', 'Preparing', 'In Delivery', 'Delivered'];
 
-  const filteredRequests = customActiveTab === 'All'
-    ? requests
-    : requests.filter((r: any) => {
-        if (customActiveTab === 'Pending Review') return r.status === 'PENDING_REVIEW';
-        if (customActiveTab === 'Quoted') return r.status === 'QUOTED';
-        if (customActiveTab === 'Placed') return r.status === 'ACCEPTED' && (!r.order || r.order.status === 'PENDING');
-        if (customActiveTab === 'Preparing') return r.status === 'ACCEPTED' && r.order?.status === 'PREPARING';
-        if (customActiveTab === 'In Delivery') return r.status === 'ACCEPTED' && ['READY_FOR_PICKUP', 'PICKED_UP', 'DELIVERING'].includes(r.order?.status || '');
-        if (customActiveTab === 'Delivered') return r.status === 'COMPLETED' || r.order?.status === 'DELIVERED';
-        return true;
-      });
+  // Split requests into Pabili vs Government
+  // Government requests are submitted as structured form lines, starting with "Service: ..."
+  const isGovRequest = (r: any) =>
+    Array.isArray(r?.items) &&
+    typeof r.items[0] === 'string' &&
+    r.items[0].trim().startsWith('Service:');
 
-  const renderStandardOrders = () => {
+  const govRequests = requests.filter(isGovRequest);
+  const pabiliRequestsOnly = requests.filter((r: any) => !isGovRequest(r));
+
+  const renderStandardOrders = (ordersToRender: Order[]) => {
     if (loadingOrders) {
       return (
         <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
@@ -193,12 +206,12 @@ export default function OrdersScreen() {
           contentContainerStyle={styles.scrollContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
-          {filteredOrders.length === 0 ? (
+          {ordersToRender.length === 0 ? (
              <View style={{alignItems: 'center', marginTop: 50}}>
                 <ThemedText style={{color: '#888', fontStyle: 'italic'}}>No orders found</ThemedText>
              </View>
           ) : (
-            filteredOrders.map((order) => (
+            ordersToRender.map((order) => (
               <TouchableOpacity 
                 key={order.id} 
                 style={styles.orderCard}
@@ -245,7 +258,7 @@ export default function OrdersScreen() {
     );
   };
 
-  const renderCustomRequests = () => {
+  const renderCustomRequests = (source: any[]) => {
     if (loadingRequests) {
       return (
         <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
@@ -275,12 +288,36 @@ export default function OrdersScreen() {
           contentContainerStyle={[styles.scrollContent, { marginTop: 10 }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
-          {filteredRequests.length === 0 ? (
+          {(
+            customActiveTab === 'All'
+              ? source
+              : source.filter((r: any) => {
+                  if (customActiveTab === 'Pending Review') return r.status === 'PENDING_REVIEW';
+                  if (customActiveTab === 'Quoted') return r.status === 'QUOTED';
+                  if (customActiveTab === 'Placed') return r.status === 'ACCEPTED' && (!r.order || r.order.status === 'PENDING');
+                  if (customActiveTab === 'Preparing') return r.status === 'ACCEPTED' && r.order?.status === 'PREPARING';
+                  if (customActiveTab === 'In Delivery') return r.status === 'ACCEPTED' && ['READY_FOR_PICKUP', 'PICKED_UP', 'DELIVERING'].includes(r.order?.status || '');
+                  if (customActiveTab === 'Delivered') return r.status === 'COMPLETED' || r.order?.status === 'DELIVERED';
+                  return true;
+                })
+          ).length === 0 ? (
              <View style={{alignItems: 'center', marginTop: 50}}>
                 <ThemedText style={{color: '#888', fontStyle: 'italic'}}>No requests found</ThemedText>
              </View>
           ) : (
-            filteredRequests.map((req: any) => {
+            (
+              customActiveTab === 'All'
+                ? source
+                : source.filter((r: any) => {
+                    if (customActiveTab === 'Pending Review') return r.status === 'PENDING_REVIEW';
+                    if (customActiveTab === 'Quoted') return r.status === 'QUOTED';
+                    if (customActiveTab === 'Placed') return r.status === 'ACCEPTED' && (!r.order || r.order.status === 'PENDING');
+                    if (customActiveTab === 'Preparing') return r.status === 'ACCEPTED' && r.order?.status === 'PREPARING';
+                    if (customActiveTab === 'In Delivery') return r.status === 'ACCEPTED' && ['READY_FOR_PICKUP', 'PICKED_UP', 'DELIVERING'].includes(r.order?.status || '');
+                    if (customActiveTab === 'Delivered') return r.status === 'COMPLETED' || r.order?.status === 'DELIVERED';
+                    return true;
+                  })
+            ).map((req: any) => {
               const statusColor = req.status === 'PENDING_REVIEW' ? '#F57C00' :
                                   req.status === 'QUOTED' ? '#1976D2' : 
                                   req.status === 'ACCEPTED' ? '#388E3C' : '#888';
@@ -471,17 +508,25 @@ export default function OrdersScreen() {
             style={[styles.mainTabBtn, mainTab === 'Standard' && styles.mainTabBtnActive]} 
             onPress={() => setMainTab('Standard')}
          >
-            <ThemedText style={[styles.mainTabBtnText, mainTab === 'Standard' && styles.mainTabBtnTextActive]}>Regular Orders</ThemedText>
+            <ThemedText style={[styles.mainTabBtnText, mainTab === 'Standard' && styles.mainTabBtnTextActive]}>Regular</ThemedText>
          </TouchableOpacity>
          <TouchableOpacity 
-            style={[styles.mainTabBtn, mainTab === 'Custom' && styles.mainTabBtnActive]} 
-            onPress={() => setMainTab('Custom')}
+            style={[styles.mainTabBtn, mainTab === 'Pabili' && styles.mainTabBtnActive]} 
+            onPress={() => setMainTab('Pabili')}
          >
-            <ThemedText style={[styles.mainTabBtnText, mainTab === 'Custom' && styles.mainTabBtnTextActive]}>Custom Requests</ThemedText>
+            <ThemedText style={[styles.mainTabBtnText, mainTab === 'Pabili' && styles.mainTabBtnTextActive]}>Pabili</ThemedText>
+         </TouchableOpacity>
+         <TouchableOpacity 
+            style={[styles.mainTabBtn, mainTab === 'Gov' && styles.mainTabBtnActive]} 
+            onPress={() => setMainTab('Gov')}
+         >
+            <ThemedText style={[styles.mainTabBtnText, mainTab === 'Gov' && styles.mainTabBtnTextActive]}>Government</ThemedText>
          </TouchableOpacity>
       </View>
 
-      {mainTab === 'Standard' ? renderStandardOrders() : renderCustomRequests()}
+      {mainTab === 'Standard' && renderStandardOrders(filteredOrders)}
+      {mainTab === 'Pabili' && renderCustomRequests(pabiliRequestsOnly)}
+      {mainTab === 'Gov' && renderStandardOrders(filteredGovOrders)}
       
     </ThemedView>
   );

@@ -4,18 +4,16 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useState, useEffect } from 'react';
-import { createPabiliRequest } from '../../api/services';
-import { useSocket } from '@/context/SocketContext';
-
-type Step = 'request' | 'waiting' | 'review';
+import { useCart } from '@/context/CartContext';
+import { getGovMerchant } from '@/api/services';
 
 export default function BusinessPermitScreen() {
   const router = useRouter();
-  const { socket } = useSocket();
-  const [step, setStep] = useState<Step>('request');
-  const [serviceFee, setServiceFee] = useState(0);
-  const [requestId, setRequestId] = useState<string | null>(null);
+  const { addToCart } = useCart();
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [govMerchantId, setGovMerchantId] = useState<string | null>(null);
+  const [govMenuItemId, setGovMenuItemId] = useState<string | null>(null);
 
   // Form Fields
   const [companyName, setCompanyName] = useState('');
@@ -23,184 +21,66 @@ export default function BusinessPermitScreen() {
   const [renewalOrNew, setRenewalOrNew] = useState('');
   const [lgu, setLgu] = useState('Claver BPLO');
 
+  // Fetch gov merchant on mount
   useEffect(() => {
-    if (!socket) return;
-    const handleQuote = (updatedRequest: any) => {
-      if (updatedRequest.id === requestId) {
-        setServiceFee(updatedRequest.serviceFee);
-        setStep('review');
+    const fetchGovMerchant = async () => {
+      try {
+        const merchant = await getGovMerchant();
+        if (merchant) {
+          setGovMerchantId(merchant.id);
+          // Look for a Business Permit menu item
+          const permitItem = merchant.categories?.[0]?.menuItems?.find(
+            (item: any) => item.name.toLowerCase().includes('permit') || item.name.toLowerCase().includes('business')
+          );
+          if (permitItem) {
+            setGovMenuItemId(permitItem.id);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch gov merchant:', error);
+        Alert.alert('Error', 'Unable to load government services. Please try again later.');
       }
     };
-    
-    socket.on('pabili_request_quoted', handleQuote);
-    return () => {
-       socket.off('pabili_request_quoted', handleQuote);
-    };
-  }, [socket, requestId]);
+    fetchGovMerchant();
+  }, []);
 
   const handleSubmit = async () => {
     if (!companyName.trim() || !binPermitNo.trim() || !renewalOrNew.trim() || !lgu.trim()) {
       Alert.alert('Missing Info', 'Please fill up all required fields.');
       return;
     }
+
+    if (!govMerchantId || !govMenuItemId) {
+      Alert.alert('Error', 'Government services are not available. Please try again later.');
+      return;
+    }
     
     setIsSubmitting(true);
     try {
-       const formArr = [
-         `Service: Business Permit`,
-         `Company Name: ${companyName}`,
-         `BIN Permit No.: ${binPermitNo}`,
-         `Renewal/New (DTI/Business Name): ${renewalOrNew}`,
-         `LGU: ${lgu}`
-       ];
-       // Since it's a permit, estimated item cost might be 0 or small base fee, lets use 0
-       const req = await createPabiliRequest(formArr, 0); 
-       setRequestId(req.id);
-       setStep('waiting');
+       const options = {
+         'Company Name': companyName,
+         'BIN Permit No.': binPermitNo,
+         'Renewal/New': renewalOrNew,
+         'LGU': lgu
+       };
+
+       await addToCart({
+         id: Date.now().toString(),
+         menuItemId: govMenuItemId,
+         merchantId: govMerchantId,
+         name: 'Business Permit',
+         price: 0,
+         quantity: 1,
+         options: options,
+         totalPrice: 0,
+       });
+
+       router.push('/(tabs)/cart');
     } catch (error) {
-       Alert.alert('Error', 'Failed to submit application. Please try again.');
+       Alert.alert('Error', 'Failed to add to cart. Please try again.');
     } finally {
        setIsSubmitting(false);
     }
-  };
-
-  const handleCheckout = () => {
-    // Navigating back or specific receipt page for now we just alert
-    Alert.alert('Proceed to Checkout', 'Navigate to address selection...', [
-      { text: 'OK', onPress: () => router.push('/(tabs)') }
-    ]);
-  };
-
-  const renderRequestStep = () => (
-    <View style={styles.stepContainer}>
-      <ThemedView style={styles.card}>
-        <View style={styles.cardHeaderRow}>
-          <IconSymbol name="government" size={22} color="#1565C0" />
-          <ThemedText style={styles.cardTitle}>Application Form</ThemedText>
-        </View>
-        <ThemedText style={styles.cardSubtitle}>Please provide all required business details.</ThemedText>
-        
-        <View style={styles.divider} />
-
-        <View style={styles.inputWrapper}>
-            <ThemedText style={styles.label}>1. Company Name <ThemedText style={styles.asterisk}>*</ThemedText></ThemedText>
-            <TextInput
-            style={styles.inputItem}
-            placeholder="e.g. Hatod Delivery"
-            placeholderTextColor="#A0AAB5"
-            value={companyName}
-            onChangeText={setCompanyName}
-            />
-        </View>
-
-        <View style={styles.inputWrapper}>
-            <ThemedText style={styles.label}>2. BIN Permit No. <ThemedText style={styles.asterisk}>*</ThemedText></ThemedText>
-            <TextInput
-            style={styles.inputItem}
-            placeholder="e.g. 1234-5678"
-            placeholderTextColor="#A0AAB5"
-            value={binPermitNo}
-            onChangeText={setBinPermitNo}
-            />
-        </View>
-
-        <View style={styles.inputWrapper}>
-            <ThemedText style={styles.label}>3. Renewal / New (DTI or Business Name) <ThemedText style={styles.asterisk}>*</ThemedText></ThemedText>
-            <TextInput
-            style={styles.inputItem}
-            placeholder="e.g. New - Hatod Delivery"
-            placeholderTextColor="#A0AAB5"
-            value={renewalOrNew}
-            onChangeText={setRenewalOrNew}
-            />
-        </View>
-
-        <View style={styles.inputWrapper}>
-            <ThemedText style={styles.label}>4. Government LGU <ThemedText style={styles.asterisk}>*</ThemedText></ThemedText>
-            <TextInput
-            style={styles.inputItem}
-            placeholder="e.g. Claver BPLO"
-            placeholderTextColor="#A0AAB5"
-            value={lgu}
-            onChangeText={setLgu}
-            />
-        </View>
-
-        <View style={styles.feeInfoBox}>
-            <IconSymbol name="info.circle.fill" size={16} color="#78909C" />
-            <ThemedText style={styles.feeInfoText}>Service Fee will properly be calculated by our admin after reviewing your requirements.</ThemedText>
-        </View>
-      </ThemedView>
-
-      <TouchableOpacity style={styles.primaryButton} onPress={handleSubmit} activeOpacity={0.8} disabled={isSubmitting}>
-          {isSubmitting ? (
-              <ActivityIndicator size="small" color="#FFF" />
-          ) : (
-             <>
-                 <ThemedText style={styles.primaryButtonText}>Submit Application</ThemedText>
-                 <IconSymbol name="paperplane.fill" size={18} color="#FFF" />
-             </>
-          )}
-      </TouchableOpacity>
-    </View>
-  );
-
-  const renderWaitingStep = () => (
-    <View style={styles.stepContainer}>
-      <ThemedView style={styles.waitingCard}>
-          <View style={styles.spinnerWrapper}>
-             <ActivityIndicator size="large" color="#1565C0" />
-          </View>
-          <ThemedText style={styles.waitingTitle}>Application Submitted</ThemedText>
-          <ThemedText style={styles.waitingSubtitle}>
-            Please wait while our admin reviews your business permit details. We will calculate your processing fee shortly.
-          </ThemedText>
-          
-          <View style={styles.waitingTipBox}>
-             <IconSymbol name="phone" size={20} color="#1565C0" />
-             <ThemedText style={styles.waitingTipText}>We will call you if we need clarification. Keep your app open.</ThemedText>
-          </View>
-      </ThemedView>
-    </View>
-  );
-
-  const renderReviewStep = () => {
-    return (
-        <View style={styles.stepContainer}>
-            <ThemedView style={styles.receiptCard}>
-                <View style={styles.receiptHeader}>
-                   <IconSymbol name="government" size={28} color="#1565C0" />
-                   <ThemedText style={styles.receiptTitle}>Document Summary</ThemedText>
-                   <ThemedText style={styles.receiptId}>APP-{(Math.random() * 100000).toFixed(0)}</ThemedText>
-                </View>
-
-                <View style={styles.dottedDivider} />
-                
-                <View style={styles.receiptRow}>
-                    <ThemedText style={styles.receiptLabel}>Processing Fee (Permit)</ThemedText>
-                    <ThemedText style={styles.receiptValue}>TBD</ThemedText>
-                </View>
-                <View style={styles.receiptRow}>
-                    <ThemedText style={styles.receiptLabel}>Our Service Fee</ThemedText>
-                    <View style={styles.feeHighlight}>
-                       <ThemedText style={styles.feeHighlightText}>₱{serviceFee.toFixed(2)}</ThemedText>
-                    </View>
-                </View>
-
-                <View style={styles.dottedDivider} />
-
-                <View style={[styles.receiptRow, { marginBottom: 0 }]}>
-                    <ThemedText style={styles.totalText}>Amount to Pay Now</ThemedText>
-                    <ThemedText style={styles.totalAmount}>₱{serviceFee.toFixed(2)}</ThemedText>
-                </View>
-            </ThemedView>
-
-            <TouchableOpacity style={styles.primaryButton} onPress={handleCheckout} activeOpacity={0.8}>
-                <ThemedText style={styles.primaryButtonText}>Proceed to Checkout</ThemedText>
-                <IconSymbol name="chevron.right" size={20} color="#FFF" />
-            </TouchableOpacity>
-        </View>
-    );
   };
 
   return (
@@ -227,9 +107,77 @@ export default function BusinessPermitScreen() {
             </View>
         </ThemedView>
 
-        {step === 'request' && renderRequestStep()}
-        {step === 'waiting' && renderWaitingStep()}
-        {step === 'review' && renderReviewStep()}
+        <View style={styles.stepContainer}>
+          <ThemedView style={styles.card}>
+            <View style={styles.cardHeaderRow}>
+              <IconSymbol name="government" size={22} color="#1565C0" />
+              <ThemedText style={styles.cardTitle}>Application Form</ThemedText>
+            </View>
+            <ThemedText style={styles.cardSubtitle}>Please provide all required business details.</ThemedText>
+            
+            <View style={styles.divider} />
+
+            <View style={styles.inputWrapper}>
+                <ThemedText style={styles.label}>1. Company Name <ThemedText style={styles.asterisk}>*</ThemedText></ThemedText>
+                <TextInput
+                style={styles.inputItem}
+                placeholder="e.g. Hatod Delivery"
+                placeholderTextColor="#A0AAB5"
+                value={companyName}
+                onChangeText={setCompanyName}
+                />
+            </View>
+
+            <View style={styles.inputWrapper}>
+                <ThemedText style={styles.label}>2. BIN Permit No. <ThemedText style={styles.asterisk}>*</ThemedText></ThemedText>
+                <TextInput
+                style={styles.inputItem}
+                placeholder="e.g. 1234-5678"
+                placeholderTextColor="#A0AAB5"
+                value={binPermitNo}
+                onChangeText={setBinPermitNo}
+                />
+            </View>
+
+            <View style={styles.inputWrapper}>
+                <ThemedText style={styles.label}>3. Renewal / New (DTI or Business Name) <ThemedText style={styles.asterisk}>*</ThemedText></ThemedText>
+                <TextInput
+                style={styles.inputItem}
+                placeholder="e.g. New - Hatod Delivery"
+                placeholderTextColor="#A0AAB5"
+                value={renewalOrNew}
+                onChangeText={setRenewalOrNew}
+                />
+            </View>
+
+            <View style={styles.inputWrapper}>
+                <ThemedText style={styles.label}>4. Government LGU <ThemedText style={styles.asterisk}>*</ThemedText></ThemedText>
+                <TextInput
+                style={styles.inputItem}
+                placeholder="e.g. Claver BPLO"
+                placeholderTextColor="#A0AAB5"
+                value={lgu}
+                onChangeText={setLgu}
+                />
+            </View>
+
+            <View style={styles.feeInfoBox}>
+                <IconSymbol name="info.circle.fill" size={16} color="#78909C" />
+                <ThemedText style={styles.feeInfoText}>Our service fee will be calculated based on your delivery distance automatically upon checkout.</ThemedText>
+            </View>
+          </ThemedView>
+
+          <TouchableOpacity style={styles.primaryButton} onPress={handleSubmit} activeOpacity={0.8} disabled={isSubmitting}>
+              {isSubmitting ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                 <>
+                     <ThemedText style={styles.primaryButtonText}>Continue to Checkout</ThemedText>
+                     <IconSymbol name="chevron.right" size={18} color="#FFF" />
+                 </>
+              )}
+          </TouchableOpacity>
+        </View>
 
       </ScrollView>
     </KeyboardAvoidingView>
@@ -380,128 +328,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     marginRight: 8,
-  },
-  waitingCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 3,
-    marginTop: 16,
-  },
-  spinnerWrapper: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#E3F2FD',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  waitingTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#2A3037',
-    marginBottom: 8,
-  },
-  waitingSubtitle: {
-    fontSize: 14,
-    color: '#546E7A',
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 20,
-  },
-  waitingTipBox: {
-    flexDirection: 'row',
-    backgroundColor: '#E3F2FD',
-    padding: 16,
-    borderRadius: 16,
-    alignItems: 'center',
-  },
-  waitingTipText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#1565C0',
-    fontWeight: '600',
-    marginLeft: 12,
-    lineHeight: 20,
-  },
-  totalAmount: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#1565C0',
-  },
-  receiptCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  receiptHeader: {
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  receiptTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#2A3037',
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  receiptId: {
-    fontSize: 12,
-    color: '#A0AAB5',
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-  dottedDivider: {
-    height: 1,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderStyle: 'dashed',
-    borderRadius: 1,
-    width: '100%',
-    marginVertical: 20,
-  },
-  receiptRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  receiptLabel: {
-    fontSize: 14,
-    color: '#546E7A',
-    fontWeight: '500',
-  },
-  receiptValue: {
-    fontSize: 15,
-    color: '#2A3037',
-    fontWeight: 'bold',
-  },
-  feeHighlight: {
-    backgroundColor: '#E3F2FD',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  feeHighlightText: {
-    color: '#1565C0',
-    fontWeight: '800',
-    fontSize: 16,
-  },
-  totalText: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#2A3037',
   }
 });
+
