@@ -16,7 +16,7 @@ class OrderItemDto {
   @IsString()
   notes?: string;
 
-  @ApiProperty({ type: 'object' })
+  @ApiProperty({ description: 'Item options (e.g., permit fields)', required: false })
   @IsOptional()
   @IsObject()
   options?: Record<string, unknown>;
