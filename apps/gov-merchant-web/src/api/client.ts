@@ -1,7 +1,7 @@
 // API client for gov merchant web
 const API_URL =
-  (import.meta as any).env?.VITE_API_URL ||
-  (import.meta as any).env?.REACT_APP_API_URL ||
+  (import.meta.env?.VITE_API_URL as string | undefined) ||
+  (import.meta.env?.REACT_APP_API_URL as string | undefined) ||
   'http://localhost:3000/api';
 
 let authToken: string | null = localStorage.getItem('gov_merchant_token');
@@ -89,7 +89,7 @@ export const getProfile = async () => {
   return response.json();
 };
 
-export const updateMerchant = async (merchantId: string, data: any) => {
+export const updateMerchant = async (merchantId: string, data: Record<string, unknown>) => {
   const response = await authenticatedFetch(`/merchants/${merchantId}`, {
     method: 'PUT',
     body: JSON.stringify(data),

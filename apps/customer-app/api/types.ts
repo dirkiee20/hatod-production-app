@@ -20,7 +20,9 @@ export interface Merchant {
   updatedAt: string;
   latitude?: number;
   longitude?: number;
-  type?: 'RESTAURANT' | 'GROCERY' | 'PHARMACY';
+  type?: 'RESTAURANT' | 'GROCERY' | 'PHARMACY' | 'GOVERNMENT';
+  categories?: MenuCategory[];
+  user?: { id: string; email: string };
 }
 
 export interface MenuItem {

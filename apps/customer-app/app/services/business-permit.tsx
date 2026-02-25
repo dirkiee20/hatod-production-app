@@ -6,6 +6,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useState, useEffect } from 'react';
 import { useCart } from '@/context/CartContext';
 import { getGovMerchant } from '@/api/services';
+import type { Merchant } from '@/api/types';
 
 export default function BusinessPermitScreen() {
   const router = useRouter();
@@ -25,19 +26,24 @@ export default function BusinessPermitScreen() {
   useEffect(() => {
     const fetchGovMerchant = async () => {
       try {
-        const merchant = await getGovMerchant();
+        const merchant: Merchant | null = await getGovMerchant();
         if (merchant) {
           setGovMerchantId(merchant.id);
-          // Look for a Business Permit menu item
-          const permitItem = merchant.categories?.[0]?.menuItems?.find(
-            (item: any) => item.name.toLowerCase().includes('permit') || item.name.toLowerCase().includes('business')
-          );
-          if (permitItem) {
-            setGovMenuItemId(permitItem.id);
+          // Look for a Business Permit menu item in the categories
+          if (merchant.categories && merchant.categories.length > 0) {
+            for (const category of merchant.categories) {
+              const permitItem = (category as any).menuItems?.find(
+                (item: any) => item.name.toLowerCase().includes('permit') || item.name.toLowerCase().includes('business')
+              );
+              if (permitItem) {
+                setGovMenuItemId(permitItem.id);
+                break;
+              }
+            }
           }
         }
-      } catch (error) {
-        console.error('Failed to fetch gov merchant:', error);
+      } catch (err) {
+        console.error('Failed to fetch gov merchant:', err);
         Alert.alert('Error', 'Unable to load government services. Please try again later.');
       }
     };
@@ -76,7 +82,8 @@ export default function BusinessPermitScreen() {
        });
 
        router.push('/(tabs)/cart');
-    } catch (error) {
+    } catch (err) {
+       console.error('Failed to add to cart:', err);
        Alert.alert('Error', 'Failed to add to cart. Please try again.');
     } finally {
        setIsSubmitting(false);

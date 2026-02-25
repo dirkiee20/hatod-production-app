@@ -38,8 +38,9 @@ export function AuthPage({ onLoginSuccess }: AuthPageProps) {
       const data = await login(loginPhone, loginPassword);
       setAuthToken(data.access_token);
       onLoginSuccess();
-    } catch (err: any) {
-      setError(err.message || 'Login failed');
+    } catch (err: Error | unknown) {
+      const errorMsg = err instanceof Error ? err.message : 'Login failed';
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -69,8 +70,9 @@ export function AuthPage({ onLoginSuccess }: AuthPageProps) {
       const data = await login(signupPhone, signupPassword);
       setAuthToken(data.access_token);
       onLoginSuccess();
-    } catch (err: any) {
-      setError(err.message || 'Signup failed');
+    } catch (err: Error | unknown) {
+      const errorMsg = err instanceof Error ? err.message : 'Signup failed';
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }

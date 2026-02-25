@@ -26,9 +26,7 @@ export class MerchantsService {
   async getGovMerchant() {
     const merchant = await this.prisma.merchant.findFirst({
       where: {
-        user: {
-          email: 'gov@hatod.com',
-        },
+        type: 'GOVERNMENT',
       },
       include: {
         user: {
@@ -44,7 +42,7 @@ export class MerchantsService {
     });
 
     if (!merchant) {
-      throw new NotFoundException('Government services merchant not found');
+      throw new NotFoundException('Government services merchant not found. Please contact administrator.');
     }
 
     return merchant;

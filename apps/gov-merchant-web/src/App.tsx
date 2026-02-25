@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Home, FileText, CheckCircle, Settings, LogOut, Bell, Search, User } from 'lucide-react';
 import './Dashboard.css';
 import type { Application, ApplicationStatus } from './types';
@@ -17,38 +17,33 @@ export default function App() {
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
-  const [userInfo, setUserInfo] = useState<any>(null);
+  const [userInfo, setUserInfo] = useState<{ merchant?: { name: string }; firstName?: string } | null>(null);
   const [appError, setAppError] = useState<string | null>(null);
 
   // Configurable API base URL (env first, fallback to localhost for dev)
   const API_URL =
-    (import.meta as any).env?.VITE_API_URL ||
-    (import.meta as any).env?.REACT_APP_API_URL ||
+    (import.meta.env?.VITE_API_URL as string | undefined) ||
+    (import.meta.env?.REACT_APP_API_URL as string | undefined) ||
     'http://localhost:3000/api';
 
   // Fetch user profile on mount if authenticated
   useEffect(() => {
-    if (isAuthenticated) {
-      try {
-        getProfile()
-          .then(data => {
-            console.log('[App] Profile fetched:', data);
-            if (data?.merchant) {
-              setUserInfo(data);
-            } else {
-              console.warn('[App] No merchant found in profile');
-              setUserInfo({ merchant: { name: 'Government Services' }, firstName: 'Admin' });
-            }
-          })
-          .catch(err => {
-            console.error('[App] Failed to fetch profile:', err);
-            setAppError(`Failed to load profile: ${err.message}`);
-          });
-      } catch (err: any) {
-        console.error('[App] Profile fetch error:', err);
-        setAppError(`Error: ${err.message}`);
-      }
-    }
+    if (!isAuthenticated) return;
+    
+    getProfile()
+      .then(data => {
+        console.log('[App] Profile fetched:', data);
+        if (data?.merchant) {
+          setUserInfo(data);
+        } else {
+          console.warn('[App] No merchant found in profile');
+          setUserInfo({ merchant: { name: 'Government Services' }, firstName: 'Admin' });
+        }
+      })
+      .catch((err: Error) => {
+        console.error('[App] Failed to fetch profile:', err);
+        setAppError(`Failed to load profile: ${err.message}`);
+      });
   }, [isAuthenticated]);
 
   const handleLogout = () => {
@@ -57,6 +52,59 @@ export default function App() {
     setUserInfo(null);
     setAppError(null);
   };
+
+  // Fetch pabili requests
+  useEffect(() => {
+    const fetchRequests = async () => {
+      setLoading(true);
+      console.log('[App] Fetching pabili requests from:', `${API_URL}/pabili-requests/gov`);
+      try {
+        const res = await fetch(`${API_URL}/pabili-requests/gov`);
+        console.log('[App] Pabili response status:', res.status);
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        const data = await res.json();
+        console.log('[App] Pabili requests fetched:', data.length, 'items');
+        const mapped: Application[] = (data as Record<string, unknown>[]).map((req: Record<string, unknown>) => {
+          const items: string[] = Array.isArray(req.items) ? (req.items as string[]) : [];
+          const isGov = items[0]?.includes('Permit');
+          const typeText = isGov ? items[0].replace('Service: ', '') : 'Pabili Request';
+          const customer = req.customer as Record<string, string> | undefined;
+          const applicantName = customer?.firstName
+            ? `${customer.firstName} ${customer.lastName}`
+            : 'Customer App User';
+
+          return {
+            id: (req.id as string).substring(0, 8).toUpperCase(),
+            requestId: req.id as string,
+            applicant: applicantName,
+            type: typeText,
+            status: req.status as ApplicationStatus,
+            date: new Date(req.createdAt as string).toLocaleDateString(),
+            priority: isGov ? 'URGENT' : 'NORMAL',
+            rawItems: items,
+            isGov,
+          };
+        });
+        setApplications(mapped);
+      } catch (err) {
+        console.error('[App] Failed to fetch pabili requests:', err);
+        setApplications([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchRequests();
+  }, [API_URL]);
+
+  const searchedApps = applications.filter(app =>
+    app.applicant.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    app.id.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const activeApps = searchedApps.filter(app => !['COMPLETED', 'REJECTED', 'CANCELLED'].includes(app.status));
+  const historyApps = searchedApps.filter(app => ['COMPLETED', 'REJECTED', 'CANCELLED'].includes(app.status));
 
   // Show auth page if not authenticated
   if (!isAuthenticated) {
@@ -84,57 +132,6 @@ export default function App() {
 
   const userName = userInfo?.merchant?.name || userInfo?.firstName || 'Merchant';
   const userRole = 'Government Services';
-
-  React.useEffect(() => {
-    setLoading(true);
-    console.log('[App] Fetching pabili requests from:', `${API_URL}/pabili-requests/gov`);
-    fetch(`${API_URL}/pabili-requests/gov`)
-      .then(res => {
-        console.log('[App] Pabili response status:', res.status);
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
-        }
-        return res.json();
-      })
-      .then(data => {
-        console.log('[App] Pabili requests fetched:', data.length, 'items');
-        const mapped: Application[] = data.map((req: any) => {
-          const items: string[] = Array.isArray(req.items) ? req.items : [];
-          const isGov = items[0]?.includes('Permit');
-          const typeText = isGov ? items[0].replace('Service: ', '') : 'Pabili Request';
-          const applicantName = req.customer?.firstName
-            ? `${req.customer.firstName} ${req.customer.lastName}`
-            : 'Customer App User';
-
-          return {
-            id: req.id.substring(0, 8).toUpperCase(),
-            requestId: req.id,
-            applicant: applicantName,
-            type: typeText,
-            status: req.status,
-            date: new Date(req.createdAt).toLocaleDateString(),
-            priority: isGov ? 'URGENT' : 'NORMAL',
-            rawItems: items,
-            isGov,
-          };
-        });
-        setApplications(mapped);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error('[App] Failed to fetch pabili requests:', err);
-        setApplications([]);
-        setLoading(false);
-      });
-  }, [API_URL]);
-
-  const searchedApps = applications.filter(app =>
-    app.applicant.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    app.id.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const activeApps = searchedApps.filter(app => !['COMPLETED', 'REJECTED', 'CANCELLED'].includes(app.status));
-  const historyApps = searchedApps.filter(app => ['COMPLETED', 'REJECTED', 'CANCELLED'].includes(app.status));
 
   const handleUpdateStatus = async (app: Application, newStatus: ApplicationStatus) => {
     try {
