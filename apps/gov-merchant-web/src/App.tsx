@@ -18,6 +18,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
   const [userInfo, setUserInfo] = useState<any>(null);
+  const [appError, setAppError] = useState<string | null>(null);
 
   // Configurable API base URL (env first, fallback to localhost for dev)
   const API_URL =
@@ -28,13 +29,25 @@ export default function App() {
   // Fetch user profile on mount if authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      getProfile()
-        .then(data => setUserInfo(data))
-        .catch(err => {
-          console.error('Failed to fetch profile:', err);
-          clearAuthToken();
-          setIsAuthenticated(false);
-        });
+      try {
+        getProfile()
+          .then(data => {
+            console.log('[App] Profile fetched:', data);
+            if (data?.merchant) {
+              setUserInfo(data);
+            } else {
+              console.warn('[App] No merchant found in profile');
+              setUserInfo({ merchant: { name: 'Government Services' }, firstName: 'Admin' });
+            }
+          })
+          .catch(err => {
+            console.error('[App] Failed to fetch profile:', err);
+            setAppError(`Failed to load profile: ${err.message}`);
+          });
+      } catch (err: any) {
+        console.error('[App] Profile fetch error:', err);
+        setAppError(`Error: ${err.message}`);
+      }
     }
   }, [isAuthenticated]);
 
@@ -42,20 +55,49 @@ export default function App() {
     clearAuthToken();
     setIsAuthenticated(false);
     setUserInfo(null);
+    setAppError(null);
   };
 
   // Show auth page if not authenticated
   if (!isAuthenticated) {
-    return <AuthPage onLoginSuccess={() => setIsAuthenticated(true)} />;
+    return <AuthPage onLoginSuccess={() => {
+      setIsAuthenticated(true);
+      setAppError(null);
+    }} />;
+  }
+
+  // Show error if app fails
+  if (appError) {
+    return (
+      <div style={{ padding: '20px', textAlign: 'center', backgroundColor: '#fee', color: '#c33' }}>
+        <h2>Error</h2>
+        <p>{appError}</p>
+        <button onClick={() => {
+          setAppError(null);
+          handleLogout();
+        }} style={{ padding: '10px 20px', marginTop: '10px', cursor: 'pointer' }}>
+          Logout & Try Again
+        </button>
+      </div>
+    );
   }
 
   const userName = userInfo?.merchant?.name || userInfo?.firstName || 'Merchant';
   const userRole = 'Government Services';
 
   React.useEffect(() => {
+    setLoading(true);
+    console.log('[App] Fetching pabili requests from:', `${API_URL}/pabili-requests/gov`);
     fetch(`${API_URL}/pabili-requests/gov`)
-      .then(res => res.json())
+      .then(res => {
+        console.log('[App] Pabili response status:', res.status);
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        return res.json();
+      })
       .then(data => {
+        console.log('[App] Pabili requests fetched:', data.length, 'items');
         const mapped: Application[] = data.map((req: any) => {
           const items: string[] = Array.isArray(req.items) ? req.items : [];
           const isGov = items[0]?.includes('Permit');
@@ -80,11 +122,11 @@ export default function App() {
         setLoading(false);
       })
       .catch((err) => {
-        console.error(err);
+        console.error('[App] Failed to fetch pabili requests:', err);
         setApplications([]);
         setLoading(false);
       });
-  }, []);
+  }, [API_URL]);
 
   const searchedApps = applications.filter(app =>
     app.applicant.toLowerCase().includes(searchQuery.toLowerCase()) ||
