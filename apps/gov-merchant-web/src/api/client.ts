@@ -20,7 +20,7 @@ export const clearAuthToken = () => {
   localStorage.removeItem('gov_merchant_token');
 };
 
-export const register = async (email: string, password: string, firstName: string, lastName: string, phone: string) => {
+export const register = async (email: string, password: string, firstName: string, lastName: string, phone: string, merchantName?: string) => {
   const response = await fetch(`${API_URL}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -30,6 +30,7 @@ export const register = async (email: string, password: string, firstName: strin
       firstName,
       lastName,
       phone,
+      merchantName,
       role: 'MERCHANT',
     }),
   });

@@ -23,6 +23,7 @@ export function AuthPage({ onLoginSuccess }: AuthPageProps) {
   const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [merchantName, setMerchantName] = useState('');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,7 +51,7 @@ export function AuthPage({ onLoginSuccess }: AuthPageProps) {
     setLoading(true);
 
     try {
-      if (!signupEmail || !signupPhone || !signupPassword || !firstName || !lastName) {
+      if (!signupEmail || !signupPhone || !signupPassword || !firstName || !lastName || !merchantName) {
         throw new Error('All fields are required');
       }
 
@@ -62,7 +63,7 @@ export function AuthPage({ onLoginSuccess }: AuthPageProps) {
         throw new Error('Password must be at least 6 characters');
       }
 
-      await register(signupEmail, signupPassword, firstName, lastName, signupPhone);
+      await register(signupEmail, signupPassword, firstName, lastName, signupPhone, merchantName);
       
       // Auto-login after signup
       const data = await login(signupPhone, signupPassword);
@@ -148,6 +149,20 @@ export function AuthPage({ onLoginSuccess }: AuthPageProps) {
           </form>
         ) : (
           <form onSubmit={handleSignup} className="auth-form">
+            <div className="form-group">
+              <label>Business/Organization Name</label>
+              <div className="input-wrapper">
+                <User size={18} />
+                <input
+                  type="text"
+                  placeholder="e.g. City Hall Permits Office"
+                  value={merchantName}
+                  onChange={(e) => setMerchantName(e.target.value)}
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
             <div className="form-row">
               <div className="form-group">
                 <label>First Name</label>
