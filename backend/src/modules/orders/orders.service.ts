@@ -217,6 +217,67 @@ export class OrdersService {
     });
   }
 
+  /** Orders from the government merchant (Business Permit, etc.) for gov portal */
+  async findAllForGov() {
+    const govMerchant = await this.prisma.merchant.findFirst({
+      where: { type: 'GOVERNMENT' },
+    });
+    if (!govMerchant) return [];
+
+    return this.prisma.order.findMany({
+      where: { merchantId: govMerchant.id },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        customer: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            user: { select: { phone: true, email: true } },
+          },
+        },
+        items: {
+          include: { menuItem: true },
+        },
+      },
+    });
+  }
+
+  /** Gov portal status update (no auth; relies on network protection) */
+  async updateStatusForGov(orderId: string, status: string) {
+    const allowed: OrderStatus[] = [
+      OrderStatus.CONFIRMED,
+      OrderStatus.PREPARING,
+      OrderStatus.READY_FOR_PICKUP,
+      OrderStatus.CANCELLED,
+    ];
+    const s = status as OrderStatus;
+    if (!allowed.includes(s)) {
+      throw new BadRequestException('Invalid status for gov portal');
+    }
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { merchant: true },
+    });
+    if (!order) throw new NotFoundException('Order not found');
+    if (!order.merchant || order.merchant.type !== 'GOVERNMENT') {
+      throw new ForbiddenException('Not a government order');
+    }
+    const updateData: any = { status };
+    if (s === OrderStatus.CONFIRMED) updateData.confirmedAt = new Date();
+    if (s === OrderStatus.PREPARING) updateData.preparingAt = new Date();
+    if (s === OrderStatus.READY_FOR_PICKUP) updateData.readyAt = new Date();
+    if (s === OrderStatus.CANCELLED) updateData.cancelledAt = new Date();
+    return this.prisma.order.update({
+      where: { id: orderId },
+      data: updateData,
+      include: {
+        customer: true,
+        items: { include: { menuItem: true } },
+      },
+    });
+  }
+
   async findOne(id: string, userId: string, role: UserRole) {
     const order = await this.prisma.order.findUnique({
       where: { id },

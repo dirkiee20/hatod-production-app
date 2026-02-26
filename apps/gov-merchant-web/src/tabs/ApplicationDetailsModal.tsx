@@ -101,6 +101,8 @@ export const ApplicationDetailsModal: React.FC<ApplicationDetailsModalProps> = (
                 <option value="PENDING_REVIEW">PENDING REVIEW</option>
                 <option value="QUOTED">QUOTED</option>
                 <option value="ACCEPTED">ACCEPTED</option>
+                <option value="PROCESSING">PROCESSING</option>
+                <option value="READY">READY</option>
                 <option value="REJECTED">REJECTED</option>
                 <option value="COMPLETED">COMPLETED</option>
               </select>

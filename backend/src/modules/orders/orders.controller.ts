@@ -5,6 +5,7 @@ import { CreateOrderDto, UpdateOrderStatusDto } from './dto/order.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import { UserRole } from '@prisma/client';
 
 @ApiTags('orders')
@@ -35,6 +36,20 @@ export class OrdersController {
   getMerchantAnalytics(@Req() req: any, @Query('range') range: string) {
     const validRange = ['week', 'month', 'year'].includes(range) ? range as 'week' | 'month' | 'year' : 'week';
     return this.ordersService.getMerchantAnalytics(req.user.userId, validRange);
+  }
+
+  @Public()
+  @Get('gov')
+  @ApiOperation({ summary: 'Get gov merchant orders (Business Permit, etc.) for gov portal' })
+  findAllForGov() {
+    return this.ordersService.findAllForGov();
+  }
+
+  @Public()
+  @Patch('gov/:orderId/status')
+  @ApiOperation({ summary: 'Update gov order status (gov portal)' })
+  updateStatusForGov(@Param('orderId') orderId: string, @Body('status') status: string) {
+    return this.ordersService.updateStatusForGov(orderId, status);
   }
 
   @Post()

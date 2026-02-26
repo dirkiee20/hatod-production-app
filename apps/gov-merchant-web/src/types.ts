@@ -20,5 +20,6 @@ export interface Application {
   // Extra metadata for richer details view
   rawItems?: string[];
   isGov?: boolean;
+  source?: 'pabili' | 'order';  // pabili = PabiliRequest, order = gov merchant Order
 }
 

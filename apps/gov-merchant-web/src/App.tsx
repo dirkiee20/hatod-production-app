@@ -1,142 +1,132 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Home, FileText, CheckCircle, Settings, LogOut, Bell, Search, User } from 'lucide-react';
 import './Dashboard.css';
 import type { Application, ApplicationStatus } from './types';
-import { DashboardTab } from './tabs/DashboardTab';
+import { DashboardTab } from './tabs/DashboardTab'; 
 import { ApplicationsTab } from './tabs/ApplicationsTab';
 import { HistoryTab } from './tabs/HistoryTab';
 import { SettingsTab } from './tabs/SettingsTab';
 import { ApplicationDetailsModal } from './tabs/ApplicationDetailsModal';
 import { AuthPage } from './tabs/AuthPage';
-import { getAuthToken, clearAuthToken, getProfile, authenticatedFetch } from './api/client';
+import { getAuthToken, clearAuthToken, getProfile } from './api/client';
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(!!getAuthToken());
+  const [authState, setAuthState] = useState<'checking' | 'unauthenticated' | 'authenticated'>('checking');
   const [activeTab, setActiveTab] = useState<'dashboard' | 'applications' | 'history' | 'settings'>('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
-  const [userInfo, setUserInfo] = useState<{ merchant?: { name: string }; firstName?: string } | null>(null);
-  const [appError, setAppError] = useState<string | null>(null);
 
   // Configurable API base URL (env first, fallback to localhost for dev)
   const API_URL =
-    (import.meta.env?.VITE_API_URL as string | undefined) ||
-    (import.meta.env?.REACT_APP_API_URL as string | undefined) ||
+    (import.meta as any).env?.VITE_API_URL ||
+    (import.meta as any).env?.REACT_APP_API_URL ||
     'http://localhost:3000/api';
 
-  // Fetch user profile on mount if authenticated
+  // Auth check on mount
   useEffect(() => {
-    if (!isAuthenticated) return;
-    
+    const token = getAuthToken();
+    if (!token) {
+      setAuthState('unauthenticated');
+      return;
+    }
     getProfile()
-      .then(data => {
-        console.log('[App] Profile fetched:', data);
-        if (data?.merchant) {
-          setUserInfo(data);
-        } else {
-          console.warn('[App] No merchant found in profile');
-          setUserInfo({ merchant: { name: 'Government Services' }, firstName: 'Admin' });
-        }
-      })
-      .catch((err: Error) => {
-        console.error('[App] Failed to fetch profile:', err);
-        setAppError(`Failed to load profile: ${err.message}`);
+      .then(() => setAuthState('authenticated'))
+      .catch(() => {
+        clearAuthToken();
+        setAuthState('unauthenticated');
       });
-  }, [isAuthenticated]);
-
-  // If authenticated and merchant profile exists, fetch merchant orders (so gov merchants receive orders)
-  useEffect(() => {
-    const fetchMerchantOrders = async () => {
-      if (!isAuthenticated) return;
-      if (!userInfo?.merchant) return;
-
-      try {
-        const res = await authenticatedFetch('/orders');
-        if (!res.ok) {
-          console.warn('[App] Failed to fetch merchant orders:', res.status);
-          return;
-        }
-        const orders = await res.json();
-        // Map orders to Application shape expected by the dashboard
-        const mappedFromOrders: Application[] = (orders as any[]).map((ord) => {
-          const items: string[] = Array.isArray(ord.items) ? ord.items.map((it: any) => it.menuItem?.name || it.name || '') : [];
-          const isGov = ord.merchant?.type === 'GOVERNMENT' || (items[0] || '').includes('Permit');
-          return {
-            id: (ord.id as string).substring(0,8).toUpperCase(),
-            requestId: ord.id,
-            applicant: ord.customer?.firstName ? `${ord.customer.firstName} ${ord.customer.lastName}` : ord.customer?.name || 'Customer',
-            type: items[0] ? items[0].replace('Service: ', '') : 'Order',
-            status: ord.status,
-            date: new Date(ord.createdAt).toLocaleDateString(),
-            priority: isGov ? 'URGENT' : 'NORMAL',
-            rawItems: items,
-            isGov,
-          };
-        });
-
-        // Prepend merchant orders so they show on top
-        setApplications(prev => [...mappedFromOrders, ...prev]);
-      } catch (err) {
-        console.error('[App] Error fetching merchant orders:', err);
-      }
-    };
-
-    fetchMerchantOrders();
-  }, [isAuthenticated, userInfo]);
+  }, []);
 
   const handleLogout = () => {
     clearAuthToken();
-    setIsAuthenticated(false);
-    setUserInfo(null);
-    setAppError(null);
+    setAuthState('unauthenticated');
   };
 
-  // Fetch pabili requests
-  useEffect(() => {
-    const fetchRequests = async () => {
-      setLoading(true);
-      console.log('[App] Fetching pabili requests from:', `${API_URL}/pabili-requests/gov`);
-      try {
-        const res = await fetch(`${API_URL}/pabili-requests/gov`);
-        console.log('[App] Pabili response status:', res.status);
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
-        }
-        const data = await res.json();
-        console.log('[App] Pabili requests fetched:', data.length, 'items');
-        const mapped: Application[] = (data as Record<string, unknown>[]).map((req: Record<string, unknown>) => {
-          const items: string[] = Array.isArray(req.items) ? (req.items as string[]) : [];
+  React.useEffect(() => {
+    if (authState !== 'authenticated') return;
+    const api = API_URL;
+    Promise.all([
+      fetch(`${api}/pabili-requests/gov`).then((r) => r.json()),
+      fetch(`${api}/orders/gov`).then((r) => r.json()),
+    ])
+      .then(([pabiliData, ordersData]) => {
+        const pabiliApps: (Application & { _sortTs: number })[] = (pabiliData || []).map((req: any) => {
+          const items: string[] = Array.isArray(req.items) ? req.items : [];
           const isGov = items[0]?.includes('Permit');
           const typeText = isGov ? items[0].replace('Service: ', '') : 'Pabili Request';
-          const customer = req.customer as Record<string, string> | undefined;
-          const applicantName = customer?.firstName
-            ? `${customer.firstName} ${customer.lastName}`
+          const applicantName = req.customer?.firstName
+            ? `${req.customer.firstName} ${req.customer.lastName}`
             : 'Customer App User';
-
           return {
-            id: (req.id as string).substring(0, 8).toUpperCase(),
-            requestId: req.id as string,
+            id: req.id.substring(0, 8).toUpperCase(),
+            requestId: req.id,
             applicant: applicantName,
             type: typeText,
-            status: req.status as ApplicationStatus,
-            date: new Date(req.createdAt as string).toLocaleDateString(),
+            status: req.status,
+            date: new Date(req.createdAt).toLocaleDateString(),
             priority: isGov ? 'URGENT' : 'NORMAL',
             rawItems: items,
             isGov,
+            source: 'pabili' as const,
+            _sortTs: new Date(req.createdAt).getTime(),
           };
         });
-        setApplications(mapped);
-      } catch (err) {
-        console.error('[App] Failed to fetch pabili requests:', err);
-        setApplications([]);
-      } finally {
+
+        const orderStatusToAppStatus: Record<string, ApplicationStatus> = {
+          PENDING: 'PENDING_REVIEW',
+          CONFIRMED: 'ACCEPTED',
+          PREPARING: 'PROCESSING',
+          READY_FOR_PICKUP: 'READY',
+          PICKED_UP: 'READY',
+          DELIVERING: 'READY',
+          DELIVERED: 'COMPLETED',
+          CANCELLED: 'CANCELLED',
+        };
+
+        const orderApps: (Application & { _sortTs: number })[] = (ordersData || []).map((order: any) => {
+          const applicantName = order.customer?.firstName
+            ? `${order.customer.firstName} ${order.customer.lastName}`
+            : 'Customer App User';
+          const firstItem = order.items?.[0];
+          const menuName = firstItem?.menuItem?.name || 'Government Service';
+          const typeText = menuName;
+          const options = firstItem?.options;
+          const rawItems: string[] = [];
+          if (options && typeof options === 'object') {
+            for (const [k, v] of Object.entries(options)) {
+              rawItems.push(`${k}: ${v}`);
+              if (k === 'Renewal/New') rawItems.push(`Renewal/New (DTI/Business Name): ${v}`);
+            }
+          }
+          return {
+            id: order.id.substring(0, 8).toUpperCase(),
+            requestId: order.id,
+            applicant: applicantName,
+            type: typeText,
+            status: orderStatusToAppStatus[order.status] || 'PENDING_REVIEW',
+            date: new Date(order.createdAt).toLocaleDateString(),
+            priority: 'URGENT',
+            rawItems,
+            isGov: true,
+            source: 'order' as const,
+            _sortTs: new Date(order.createdAt).getTime(),
+          };
+        });
+
+        const merged: Application[] = [...pabiliApps, ...orderApps]
+          .sort((a, b) => b._sortTs - a._sortTs)
+          .map(({ _sortTs, ...app }) => app);
+        setApplications(merged);
         setLoading(false);
-      }
-    };
-    fetchRequests();
-  }, [API_URL]);
+      })
+      .catch((err) => {
+        console.error(err);
+        setApplications([]);
+        setLoading(false);
+      });
+  }, [authState, API_URL]);
 
   const searchedApps = applications.filter(app =>
     app.applicant.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -146,39 +136,29 @@ export default function App() {
   const activeApps = searchedApps.filter(app => !['COMPLETED', 'REJECTED', 'CANCELLED'].includes(app.status));
   const historyApps = searchedApps.filter(app => ['COMPLETED', 'REJECTED', 'CANCELLED'].includes(app.status));
 
-  // Show auth page if not authenticated
-  if (!isAuthenticated) {
-    return <AuthPage onLoginSuccess={() => {
-      setIsAuthenticated(true);
-      setAppError(null);
-    }} />;
-  }
-
-  // Show error if app fails
-  if (appError) {
-    return (
-      <div style={{ padding: '20px', textAlign: 'center', backgroundColor: '#fee', color: '#c33' }}>
-        <h2>Error</h2>
-        <p>{appError}</p>
-        <button onClick={() => {
-          setAppError(null);
-          handleLogout();
-        }} style={{ padding: '10px 20px', marginTop: '10px', cursor: 'pointer' }}>
-          Logout & Try Again
-        </button>
-      </div>
-    );
-  }
-
-  const userName = userInfo?.merchant?.name || userInfo?.firstName || 'Merchant';
-  const userRole = 'Government Services';
-
   const handleUpdateStatus = async (app: Application, newStatus: ApplicationStatus) => {
     try {
-      const res = await fetch(`${API_URL}/pabili-requests/gov/${app.requestId}/status`, {
+      let url: string;
+      let bodyStatus: string;
+      if (app.source === 'order') {
+        const appToOrderStatus: Record<string, string> = {
+          PENDING_REVIEW: 'CONFIRMED',
+          ACCEPTED: 'CONFIRMED',
+          PROCESSING: 'PREPARING',
+          READY: 'READY_FOR_PICKUP',
+          REJECTED: 'CANCELLED',
+          CANCELLED: 'CANCELLED',
+        };
+        bodyStatus = appToOrderStatus[newStatus] || newStatus;
+        url = `${API_URL}/orders/gov/${app.requestId}/status`;
+      } else {
+        bodyStatus = newStatus;
+        url = `${API_URL}/pabili-requests/gov/${app.requestId}/status`;
+      }
+      const res = await fetch(url, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({ status: bodyStatus }),
       });
       if (!res.ok) {
         console.error('Failed to update status', await res.text());
@@ -198,6 +178,18 @@ export default function App() {
       console.error('Error updating status', e);
     }
   };
+
+  if (authState === 'checking') {
+    return (
+      <div className="dashboard-layout" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+        <div style={{ color: 'var(--text-secondary)', fontSize: '1rem' }}>Loading...</div>
+      </div>
+    );
+  }
+
+  if (authState === 'unauthenticated') {
+    return <AuthPage onLoginSuccess={() => setAuthState('authenticated')} />;
+  }
 
   return (
     <div className="dashboard-layout">
@@ -263,8 +255,8 @@ export default function App() {
                 <User size={20} />
               </div>
               <div className="user-info">
-                <span className="name">{userName}</span>
-                <span className="role">{userRole}</span>
+                <span className="name">City Hall Clerk</span>
+                <span className="role">Admin</span>
               </div>
             </div>
           </div>
