@@ -15,6 +15,7 @@ export default function BusinessPermitScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [govMerchantId, setGovMerchantId] = useState<string | null>(null);
   const [govMenuItemId, setGovMenuItemId] = useState<string | null>(null);
+  const [govMenuItemPrice, setGovMenuItemPrice] = useState<number>(0);
 
   // Form Fields
   const [companyName, setCompanyName] = useState('');
@@ -37,6 +38,7 @@ export default function BusinessPermitScreen() {
               );
               if (permitItem) {
                 setGovMenuItemId(permitItem.id);
+                setGovMenuItemPrice(permitItem.price ?? 0);
                 break;
               }
             }
@@ -75,10 +77,10 @@ export default function BusinessPermitScreen() {
          menuItemId: govMenuItemId,
          merchantId: govMerchantId,
          name: 'Business Permit',
-         price: 0,
+         price: govMenuItemPrice,
          quantity: 1,
          options: options,
-         totalPrice: 0,
+         totalPrice: govMenuItemPrice,
        });
 
        router.push('/(tabs)/cart');

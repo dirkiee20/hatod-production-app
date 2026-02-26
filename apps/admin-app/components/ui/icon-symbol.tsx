@@ -40,6 +40,9 @@ const MAPPING = {
   'storefront': 'storefront',
   'bicycle': 'directions-bike',
   'bag.fill': 'shopping-bag',
+  'building.2.fill': 'account-balance',
+  'info.circle.fill': 'info',
+  'doc.badge.fill': 'assignment',
 } as const;
 
 type IconSymbolName = keyof typeof MAPPING;

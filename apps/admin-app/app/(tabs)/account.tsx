@@ -94,6 +94,17 @@ export default function AccountScreen() {
             <IconSymbol size={16} name="chevron.right" color="#CCC" />
           </TouchableOpacity>
 
+          <TouchableOpacity style={styles.menuRow} activeOpacity={0.7} onPress={() => router.push('/gov-pricing' as any)}>
+            <View style={[styles.menuIconBox, { backgroundColor: '#E3F2FD' }]}>
+              <IconSymbol size={18} name="building.2.fill" color="#1565C0" />
+            </View>
+            <View style={styles.menuTextBlock}>
+              <ThemedText style={styles.menuRowLabel}>Government Service Fees</ThemedText>
+              <ThemedText style={styles.menuRowSub}>Set prices for government services</ThemedText>
+            </View>
+            <IconSymbol size={16} name="chevron.right" color="#CCC" />
+          </TouchableOpacity>
+
           <TouchableOpacity style={styles.menuRow} activeOpacity={0.7}>
             <View style={styles.menuIconBox}>
               <IconSymbol size={18} name="doc.text" color={ACCENT} />

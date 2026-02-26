@@ -92,7 +92,16 @@ export default function App() {
           const firstItem = order.items?.[0];
           const menuName = firstItem?.menuItem?.name || 'Government Service';
           const typeText = menuName;
-          const options = firstItem?.options;
+          // Business permit form data is stored in notes (JSON) by checkout, not options
+          let options: Record<string, unknown> | null = firstItem?.options;
+          if ((!options || Object.keys(options).length === 0) && firstItem?.notes) {
+            try {
+              const parsed = JSON.parse(firstItem.notes);
+              if (parsed && typeof parsed === 'object') options = parsed;
+            } catch {
+              // ignore parse errors
+            }
+          }
           const rawItems: string[] = [];
           if (options && typeof options === 'object') {
             for (const [k, v] of Object.entries(options)) {

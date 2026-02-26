@@ -322,3 +322,41 @@ export const quotePabiliRequest = async (id: string, serviceFee: number): Promis
     throw error;
   }
 };
+
+// Government Services Pricing APIs
+export const getGovServiceItems = async (): Promise<any[]> => {
+  try {
+    const response = await authenticatedFetch('/merchants/gov/services');
+    if (!response.ok) throw new Error('Failed to fetch gov merchant');
+    const merchant = await response.json();
+    // Flatten all menu items from all categories
+    const items: any[] = [];
+    if (merchant.categories) {
+      for (const cat of merchant.categories) {
+        if (cat.menuItems) {
+          for (const item of cat.menuItems) {
+            items.push({ ...item, categoryName: cat.name });
+          }
+        }
+      }
+    }
+    // If no items in categories, merchant.menuItems might exist too
+    return items;
+  } catch (error) {
+    console.error('Error fetching gov service items:', error);
+    return [];
+  }
+};
+
+export const updateGovServicePrice = async (itemId: string, price: number): Promise<boolean> => {
+  try {
+    const response = await authenticatedFetch(`/menu/items/${itemId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ price }),
+    });
+    return response.ok;
+  } catch (error) {
+    console.error('Error updating gov service price:', error);
+    return false;
+  }
+};
