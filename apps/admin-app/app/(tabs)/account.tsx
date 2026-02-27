@@ -72,7 +72,7 @@ export default function AccountScreen() {
 
         <ThemedText style={styles.sectionLabel}>SYSTEM</ThemedText>
         <View style={styles.menuGroup}>
-          <TouchableOpacity style={styles.menuRow} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.menuRow} activeOpacity={0.7} onPress={() => router.push('/typhoon-mode' as any)}>
             <View style={styles.menuIconBox}>
               <IconSymbol size={18} name={'typhoon.fill' as any} color={ACCENT} />
             </View>

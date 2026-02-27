@@ -23,6 +23,11 @@ export const ApplicationDetailsModal: React.FC<ApplicationDetailsModalProps> = (
 }) => {
   const [statusDraft, setStatusDraft] = useState<ApplicationStatus>(application.status);
 
+  // Keep draft in sync if the parent swaps to a different application
+  React.useEffect(() => {
+    setStatusDraft(application.status);
+  }, [application.requestId, application.status]);
+
   const handleSubmitStatus = () => {
     if (statusDraft === application.status) return;
     onUpdateStatus(statusDraft);
@@ -97,14 +102,31 @@ export const ApplicationDetailsModal: React.FC<ApplicationDetailsModalProps> = (
                 className="details-status-select"
                 value={statusDraft}
                 onChange={(e) => setStatusDraft(e.target.value as ApplicationStatus)}
+                disabled={isUpdating}
               >
-                <option value="PENDING_REVIEW">PENDING REVIEW</option>
-                <option value="QUOTED">QUOTED</option>
-                <option value="ACCEPTED">ACCEPTED</option>
-                <option value="PROCESSING">PROCESSING</option>
-                <option value="READY">READY</option>
-                <option value="REJECTED">REJECTED</option>
-                <option value="COMPLETED">COMPLETED</option>
+                {application.source === 'order' ? (
+                  // Orders go through the gov order status endpoint
+                  // Backend accepts: CONFIRMED, PREPARING, READY_FOR_PICKUP, CANCELLED
+                  // We display user-friendly labels mapped from our ApplicationStatus
+                  <>
+                    <option value="PENDING_REVIEW">PENDING REVIEW</option>
+                    <option value="ACCEPTED">ACCEPTED (Confirm)</option>
+                    <option value="PROCESSING">PROCESSING</option>
+                    <option value="READY">READY FOR PICKUP</option>
+                    <option value="COMPLETED">COMPLETED</option>
+                    <option value="REJECTED">REJECTED / CANCEL</option>
+                  </>
+                ) : (
+                  // Pabili requests — backend accepts: PENDING_REVIEW, ACCEPTED, REJECTED, COMPLETED
+                  <>
+                    <option value="PENDING_REVIEW">PENDING REVIEW</option>
+                    <option value="ACCEPTED">ACCEPTED</option>
+                    <option value="PROCESSING">PROCESSING</option>
+                    <option value="READY">READY</option>
+                    <option value="COMPLETED">COMPLETED</option>
+                    <option value="REJECTED">REJECTED</option>
+                  </>
+                )}
               </select>
             </label>
           </div>

@@ -1,158 +1,221 @@
-import { StyleSheet, View, TouchableOpacity, ScrollView } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { getMyOrders } from '@/api/services';
+import { Order, OrderStatus } from '@/api/types';
+
+// Human-readable label for each backend order status
+const STATUS_LABELS: Record<string, string> = {
+  PENDING:          'Pending Review',
+  CONFIRMED:        'Accepted',
+  PREPARING:        'Processing',
+  READY_FOR_PICKUP: 'Ready for Pickup',
+  PICKED_UP:        'Picked Up',
+  DELIVERING:       'On the Way',
+  DELIVERED:        'Completed',
+  CANCELLED:        'Cancelled',
+};
+
+// Statuses considered "active" (still in progress)
+const ACTIVE_STATUSES: OrderStatus[] = [
+  OrderStatus.PENDING,
+  OrderStatus.CONFIRMED,
+  OrderStatus.PREPARING,
+  OrderStatus.READY_FOR_PICKUP,
+  OrderStatus.PICKED_UP,
+  OrderStatus.DELIVERING,
+];
+
+const HISTORY_STATUSES: OrderStatus[] = [
+  OrderStatus.DELIVERED,
+  OrderStatus.CANCELLED,
+];
+
+function isCompleted(status: OrderStatus) {
+  return status === OrderStatus.DELIVERED || status === OrderStatus.CANCELLED;
+}
 
 export default function GovernmentTranscriptsScreen() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'Active' | 'History'>('Active');
+  const [loading, setLoading] = useState(true);
+  const [govOrders, setGovOrders] = useState<Order[]>([]);
 
-  const activeRequests = [
-    {
-       id: 'DOC-9921',
-       agency: 'PSA - Birth Certificate',
-       status: 'Processing',
-       recipient: 'Juan Dela Cruz',
-       fee: 365,
-       date: 'Filed Today, 9:00 AM',
-       icon: 'government'
-    },
-    {
-       id: 'DOC-9925',
-       agency: 'NBI Clearance',
-       status: 'Rider is on the way to PSA',
-       recipient: 'Juan Dela Cruz',
-       fee: 150,
-       date: 'Filed Jan 24, 2:00 PM',
-       icon: 'government'
+  const fetchGovOrders = useCallback(async () => {
+    setLoading(true);
+    try {
+      const all = await getMyOrders();
+      // Filter to only orders placed with the GOVERNMENT merchant
+      const gov = all.filter((o) => o.merchant?.type === 'GOVERNMENT');
+      setGovOrders(gov);
+    } catch (err) {
+      console.error('Failed to fetch gov orders:', err);
+    } finally {
+      setLoading(false);
     }
-  ];
+  }, []);
 
-  const historyRequests = [
-    {
-       id: 'DOC-8800',
-       agency: 'Barangay Clearance',
-       status: 'Delivered',
-       recipient: 'Juan Dela Cruz',
-       fee: 120,
-       date: 'Jan 15, 10:30 AM',
-       icon: 'government'
-    },
-    {
-       id: 'DOC-7500',
-       agency: 'PSA - Marriage Certificate',
-       status: 'Completed',
-       recipient: 'Maria Dela Cruz',
-       fee: 365,
-       date: 'Dec 12, 2024',
-       icon: 'government'
-    }
-  ];
+  useEffect(() => {
+    fetchGovOrders();
+  }, [fetchGovOrders]);
 
-  const renderRequestCard = (request: any, isHistory: boolean) => (
-    <TouchableOpacity key={request.id} style={styles.card} onPress={() => {}}>
-        <View style={styles.cardHeader}>
-            <View style={styles.agencyRow}>
-                <View style={styles.iconBox}>
-                    <IconSymbol size={22} name={request.icon} color="#009688" />
-                </View>
-                <View>
-                    <ThemedText style={styles.agencyName}>{request.agency}</ThemedText>
-                    <ThemedText style={styles.refText}>Ref: {request.id}</ThemedText>
-                </View>
-            </View>
-            <View style={[styles.statusBadge, 
-                request.status === 'Delivered' || request.status === 'Completed' ? styles.statusSuccess : 
-                styles.statusInfo
-            ]}>
-                <ThemedText style={[styles.statusText,
-                     request.status === 'Delivered' || request.status === 'Completed' ? styles.statusTextSuccess : 
-                     styles.statusTextInfo
-                ]}>{request.status}</ThemedText>
-            </View>
-        </View>
-        
-        <View style={styles.divider} />
-        
-        <View style={styles.detailsContainer}>
-            <View style={styles.detailRow}>
-                <ThemedText style={styles.detailLabel}>Recipient:</ThemedText>
-                <ThemedText style={styles.detailValue}>{request.recipient}</ThemedText>
-            </View>
-            <View style={styles.detailRow}>
-                <ThemedText style={styles.detailLabel}>Total Fee:</ThemedText>
-                <ThemedText style={styles.detailValue}>₱{request.fee}</ThemedText>
-            </View>
-            <View style={styles.detailRow}>
-                <ThemedText style={styles.detailLabel}>Date:</ThemedText>
-                <ThemedText style={styles.detailValue}>{request.date}</ThemedText>
-            </View>
-        </View>
-
-        {!isHistory && (
-            <View style={styles.cardFooter}>
-                 <TouchableOpacity style={styles.trackBtn} onPress={() => router.push('/order-tracking')}>
-                    <ThemedText style={styles.trackText}>Track Application</ThemedText>
-                </TouchableOpacity>
-            </View>
-        )}
-        
-        {isHistory && (
-             <View style={styles.cardFooter}>
-                 <TouchableOpacity style={styles.viewBtn}>
-                    <ThemedText style={styles.viewText}>View Receipt</ThemedText>
-                </TouchableOpacity>
-            </View>
-        )}
-    </TouchableOpacity>
+  const activeOrders = govOrders.filter((o) =>
+    ACTIVE_STATUSES.includes(o.status as OrderStatus)
   );
+  const historyOrders = govOrders.filter((o) =>
+    HISTORY_STATUSES.includes(o.status as OrderStatus)
+  );
+
+  const displayList = activeTab === 'Active' ? activeOrders : historyOrders;
+
+  const renderRequestCard = (order: Order) => {
+    const isHistory = isCompleted(order.status as OrderStatus);
+    const statusLabel = STATUS_LABELS[order.status] ?? order.status;
+    const serviceName =
+      order.items?.[0]?.menuItem?.name ?? 'Government Service';
+    const shortId = order.id.substring(0, 8).toUpperCase();
+    const date = new Date(order.createdAt).toLocaleDateString('en-PH', {
+      month: 'short', day: 'numeric', year: 'numeric',
+    });
+    const total = order.total ?? 0;
+
+    return (
+      <TouchableOpacity key={order.id} style={styles.card} activeOpacity={0.8}>
+        <View style={styles.cardHeader}>
+          <View style={styles.agencyRow}>
+            <View style={styles.iconBox}>
+              <IconSymbol size={22} name="building.2.fill" color="#009688" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <ThemedText style={styles.agencyName} numberOfLines={1}>
+                {serviceName}
+              </ThemedText>
+              <ThemedText style={styles.refText}>Ref: {shortId}</ThemedText>
+            </View>
+          </View>
+          <View
+            style={[
+              styles.statusBadge,
+              isHistory ? styles.statusSuccess : styles.statusInfo,
+            ]}
+          >
+            <ThemedText
+              style={[
+                styles.statusText,
+                isHistory ? styles.statusTextSuccess : styles.statusTextInfo,
+              ]}
+            >
+              {statusLabel}
+            </ThemedText>
+          </View>
+        </View>
+
+        <View style={styles.divider} />
+
+        <View style={styles.detailsContainer}>
+          <View style={styles.detailRow}>
+            <ThemedText style={styles.detailLabel}>Total Fee:</ThemedText>
+            <ThemedText style={styles.detailValue}>₱{total.toFixed(2)}</ThemedText>
+          </View>
+          <View style={styles.detailRow}>
+            <ThemedText style={styles.detailLabel}>Date Filed:</ThemedText>
+            <ThemedText style={styles.detailValue}>{date}</ThemedText>
+          </View>
+        </View>
+
+        <View style={styles.cardFooter}>
+          {!isHistory ? (
+            <TouchableOpacity
+              style={styles.trackBtn}
+              onPress={() =>
+                router.push({ pathname: '/order-tracking', params: { id: order.id } })
+              }
+            >
+              <ThemedText style={styles.trackText}>Track Application</ThemedText>
+            </TouchableOpacity>
+          ) : (
+            <View style={[styles.trackBtn, { backgroundColor: '#F5F5F5' }]}>
+              <ThemedText style={[styles.trackText, { color: '#666' }]}>
+                {order.status === OrderStatus.CANCELLED ? 'Cancelled' : 'Completed'}
+              </ThemedText>
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <ThemedView style={styles.container}>
-       <Stack.Screen options={{ 
-        headerShown: true, 
-        title: 'Government Transcripts',
-        headerTitleStyle: { fontWeight: '900', fontSize: 16 },
-        headerLeft: () => (
-          <TouchableOpacity onPress={() => router.back()}>
-            <IconSymbol size={20} name="chevron.right" color="#000" style={{ transform: [{ rotate: '180deg' }] }} />
-          </TouchableOpacity>
-        ),
-      }} />
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: 'Government Transcripts',
+          headerTitleStyle: { fontWeight: '900', fontSize: 16 },
+          headerLeft: () => (
+            <TouchableOpacity onPress={() => router.back()}>
+              <IconSymbol
+                size={20}
+                name="chevron.right"
+                color="#000"
+                style={{ transform: [{ rotate: '180deg' }] }}
+              />
+            </TouchableOpacity>
+          ),
+        }}
+      />
 
       {/* Tabs */}
       <View style={styles.tabsContainer}>
-        <TouchableOpacity 
-            style={[styles.tab, activeTab === 'Active' && styles.activeTab]} 
-            onPress={() => setActiveTab('Active')}
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'Active' && styles.activeTab]}
+          onPress={() => setActiveTab('Active')}
         >
-            <ThemedText style={[styles.tabText, activeTab === 'Active' && styles.activeTabText]}>Active</ThemedText>
+          <ThemedText
+            style={[styles.tabText, activeTab === 'Active' && styles.activeTabText]}
+          >
+            Active{activeOrders.length > 0 ? ` (${activeOrders.length})` : ''}
+          </ThemedText>
         </TouchableOpacity>
-        <TouchableOpacity 
-            style={[styles.tab, activeTab === 'History' && styles.activeTab]} 
-            onPress={() => setActiveTab('History')}
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'History' && styles.activeTab]}
+          onPress={() => setActiveTab('History')}
         >
-            <ThemedText style={[styles.tabText, activeTab === 'History' && styles.activeTabText]}>History</ThemedText>
+          <ThemedText
+            style={[styles.tabText, activeTab === 'History' && styles.activeTabText]}
+          >
+            History
+          </ThemedText>
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.listContent}>
-         {activeTab === 'Active' ? (
-            activeRequests.length > 0 ? (
-                activeRequests.map(req => renderRequestCard(req, false))
-            ) : (
-                <View style={styles.emptyState}>
-                    <IconSymbol size={48} name="government" color="#DDD" />
-                    <ThemedText style={styles.emptyText}>No active requests</ThemedText>
-                </View>
-            )
-         ) : (
-            historyRequests.map(req => renderRequestCard(req, true))
-         )}
-      </ScrollView>
-
+      {loading ? (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color="#009688" />
+          <ThemedText style={styles.loadingText}>Loading your applications…</ThemedText>
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={styles.listContent}>
+          {displayList.length > 0 ? (
+            displayList.map((order) => renderRequestCard(order))
+          ) : (
+            <View style={styles.emptyState}>
+              <IconSymbol size={48} name="building.2.fill" color="#DDD" />
+              <ThemedText style={styles.emptyText}>
+                {activeTab === 'Active'
+                  ? 'No active government applications'
+                  : 'No past government applications'}
+              </ThemedText>
+              <ThemedText style={styles.emptySubText}>
+                Applications you submit via Government Services will appear here.
+              </ThemedText>
+            </View>
+          )}
+        </ScrollView>
+      )}
     </ThemedView>
   );
 }
@@ -161,6 +224,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FAFAFA',
+  },
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    color: '#999',
+    fontSize: 14,
   },
   tabsContainer: {
     flexDirection: 'row',
@@ -178,7 +251,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   activeTab: {
-    backgroundColor: '#009688', // Teal/Formal color for gov
+    backgroundColor: '#009688',
   },
   tabText: {
     fontSize: 14,
@@ -192,6 +265,7 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 16,
     paddingTop: 0,
+    paddingBottom: 32,
   },
   card: {
     backgroundColor: '#FFF',
@@ -216,6 +290,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    marginRight: 8,
   },
   iconBox: {
     width: 36,
@@ -240,6 +315,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
+    alignSelf: 'flex-start',
   },
   statusInfo: { backgroundColor: '#E0F7FA' },
   statusSuccess: { backgroundColor: '#E8F5E9' },
@@ -284,24 +360,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFF',
   },
-  viewBtn: {
-    backgroundColor: '#F5F5F5',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-  },
-  viewText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#666',
-  },
   emptyState: {
     alignItems: 'center',
     marginTop: 60,
-    gap: 12,
+    gap: 10,
+    paddingHorizontal: 32,
   },
   emptyText: {
-    color: '#999',
-    fontSize: 14,
+    color: '#777',
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  emptySubText: {
+    color: '#AAA',
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });

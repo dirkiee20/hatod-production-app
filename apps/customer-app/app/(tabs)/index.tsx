@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { getMerchants } from '@/api/services';
+import { getMerchants, getMyOrders } from '@/api/services';
 import { Merchant } from '@/api/types';
 import { resolveImageUrl } from '@/api/client';
 
@@ -36,6 +36,29 @@ export default function FoodScreen() {
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [recentItems, setRecentItems] = useState<Array<{
+    menuItemId: string;
+    name: string;
+    price: number;
+    image?: string;
+    merchantName: string;
+    merchantLogo?: string;
+    merchantRating?: number;
+    merchantId: string;
+    deliveryFee?: number;
+  }>>([]);
+
+  const FOOD_CATEGORIES = [
+    { label: 'Chicken',       image: 'https://images.unsplash.com/photo-1598103442097-8b74394b95c3?w=200&q=80' },
+    { label: 'Burgers',       image: 'https://images.unsplash.com/photo-1586190848861-99aa4a171e90?w=200&q=80' },
+    { label: 'Fried Chicken', image: 'https://images.unsplash.com/photo-1562967914-608f82629710?w=200&q=80' },
+    { label: 'Pizza',         image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=200&q=80' },
+    { label: 'Cake',          image: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=200&q=80' },
+    { label: 'Noodles',       image: 'https://images.unsplash.com/photo-1555126634-323283e090fa?w=200&q=80' },
+    { label: 'Seafood',       image: 'https://images.unsplash.com/photo-1559737558-2f5a35f4523b?w=200&q=80' },
+    { label: 'Rice Meals',    image: 'https://images.unsplash.com/photo-1603133872878-684f208fb84b?w=200&q=80' },
+  ];
   
   const { socket } = useSocket();
 
@@ -57,6 +80,32 @@ export default function FoodScreen() {
   useFocusEffect(
     useCallback(() => {
       loadMerchants();
+      // Load recent orders for the Order Again section
+      getMyOrders().then(orders => {
+        const seen = new Set<string>();
+        const items: typeof recentItems = [];
+        for (const order of orders) {
+          if (!order.merchant || (order.merchant.type && order.merchant.type !== 'RESTAURANT')) continue;
+          for (const item of (order.items ?? [])) {
+            if (!item.menuItem || seen.has(item.menuItemId)) continue;
+            seen.add(item.menuItemId);
+            items.push({
+              menuItemId: item.menuItemId,
+              name: item.menuItem.name,
+              price: item.price,
+              image: (item.menuItem as any).imageUrl || (item.menuItem as any).image,
+              merchantName: order.merchant.name,
+              merchantLogo: (order.merchant as any).logo,
+              merchantRating: order.merchant.rating,
+              merchantId: order.merchantId,
+              deliveryFee: order.deliveryFee,
+            });
+            if (items.length >= 5) break;
+          }
+          if (items.length >= 5) break;
+        }
+        setRecentItems(items);
+      }).catch(() => {});
     }, [])
   );
 
@@ -78,13 +127,17 @@ export default function FoodScreen() {
     }
   };
 
-  const filteredMerchants = merchants.filter(m => 
-    (!m.type || m.type === 'RESTAURANT') && 
-    m.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredMerchants = merchants.filter(m => {
+    if (!(!m.type || m.type === 'RESTAURANT')) return false;
+    if (!m.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    if (selectedCategory) {
+      const haystack = `${m.name} ${m.description ?? ''}`.toLowerCase();
+      return haystack.includes(selectedCategory.toLowerCase());
+    }
+    return true;
+  });
 
   // Group merchants into sections
-  const recentMerchants = filteredMerchants.slice(0, 4);
   const popularMerchants = filteredMerchants.slice(0, 6);
 
   const sections = [
@@ -158,6 +211,81 @@ export default function FoodScreen() {
     </TouchableOpacity>
   );};
 
+  // GrabFood-style horizontal list row for the All Restaurants section
+  const renderListCard = (merchant: Merchant) => {
+    const { isOpen, nextOpen } = isMerchantOpen(merchant);
+    const imgSize = 110;
+
+    return (
+      <TouchableOpacity
+        key={merchant.id}
+        style={styles.listCard}
+        activeOpacity={0.8}
+        onPress={() => router.push(`/restaurant/${merchant.id}`)}
+      >
+        {/* Left: Square image */}
+        <View style={[styles.listImageWrap, { width: imgSize, height: imgSize }]}>
+          <MerchantImage
+            uri={resolveImageUrl(merchant.coverImage)}
+            style={styles.listImage}
+            placeholder={PLACEHOLDER_BANNER}
+          />
+          {!isOpen && (
+            <View style={styles.listClosedOverlay}>
+              <ThemedText style={styles.listClosedText}>Closed</ThemedText>
+            </View>
+          )}
+        </View>
+
+        {/* Right: Info */}
+        <View style={styles.listInfo}>
+          {/* Name row */}
+          <View style={styles.listNameRow}>
+            <ThemedText style={styles.listName} numberOfLines={1}>
+              {merchant.name}
+            </ThemedText>
+          </View>
+
+          {/* Rating + cuisine */}
+          <View style={styles.listMetaRow}>
+            <ThemedText style={styles.listStar}>★</ThemedText>
+            <ThemedText style={styles.listRating}>
+              {merchant.rating ? merchant.rating.toFixed(1) : '—'}
+            </ThemedText>
+            {!!merchant.reviewCount && (
+              <ThemedText style={styles.listReviewCount}>
+                ({merchant.reviewCount})
+              </ThemedText>
+            )}
+            {!!merchant.description && (
+              <ThemedText style={styles.listCuisine} numberOfLines={1}>
+                {' · '}{merchant.description}
+              </ThemedText>
+            )}
+          </View>
+
+          {/* Delivery fee + ETA */}
+          <View style={styles.listDeliveryRow}>
+            <IconSymbol size={11} name="paperplane.fill" color="#888" />
+            <ThemedText style={styles.listDeliveryText}>
+              ₱{merchant.deliveryFee ?? 29}  ·  {merchant.deliveryTime || '15–30 min'}
+            </ThemedText>
+          </View>
+
+          {/* Address badge */}
+          {!!merchant.address && (
+            <View style={styles.listAddressBadge}>
+              <IconSymbol size={9} name="location.fill" color="#f78734" />
+              <ThemedText style={styles.listAddressText} numberOfLines={1}>
+                {merchant.address}
+              </ThemedText>
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false} bounces={false}>
       {/* Pink Header with Search */}
@@ -182,28 +310,109 @@ export default function FoodScreen() {
             <ActivityIndicator size="large" color="#5c6cc9" />
             <ThemedText style={styles.loadingText}>Loading restaurants...</ThemedText>
           </ThemedView>
-        ) : filteredMerchants.length === 0 ? (
+        ) : merchants.filter(m => !m.type || m.type === 'RESTAURANT').length === 0 ? (
           <ThemedView style={styles.emptyContainer}>
             <IconSymbol size={48} name="fork.knife" color="#CCC" />
-            <ThemedText style={styles.emptyText}>
-              {searchQuery ? 'No restaurants found' : 'Could not load restaurants'}
-            </ThemedText>
-            <ThemedText style={styles.emptySubtext}>
-              {searchQuery
-                ? 'Try a different search term'
-                : 'The server may be waking up. Tap to retry.'}
-            </ThemedText>
-            {!searchQuery && (
-              <TouchableOpacity
-                style={styles.retryBtn}
-                onPress={loadMerchants}
-              >
-                <ThemedText style={styles.retryText}>Retry</ThemedText>
-              </TouchableOpacity>
-            )}
+            <ThemedText style={styles.emptyText}>Could not load restaurants</ThemedText>
+            <ThemedText style={styles.emptySubtext}>The server may be waking up. Tap to retry.</ThemedText>
+            <TouchableOpacity style={styles.retryBtn} onPress={loadMerchants}>
+              <ThemedText style={styles.retryText}>Retry</ThemedText>
+            </TouchableOpacity>
           </ThemedView>
         ) : (
-          sections.map((section, sIndex) => (
+          <>
+          {/* ── Food Categories strip ── */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoriesScroll}
+          >
+            {FOOD_CATEGORIES.map((cat) => {
+              const active = selectedCategory === cat.label;
+              return (
+                <TouchableOpacity
+                  key={cat.label}
+                  style={styles.categoryItem}
+                  activeOpacity={0.75}
+                  onPress={() => setSelectedCategory(active ? null : cat.label)}
+                >
+                  <View style={[styles.categoryImgWrap, active && styles.categoryImgWrapActive]}>
+                    <Image
+                      source={{ uri: cat.image }}
+                      style={styles.categoryImg}
+                    />
+                  </View>
+                  <ThemedText style={[styles.categoryLabel, active && styles.categoryLabelActive]}>
+                    {cat.label}
+                  </ThemedText>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          {/* ── Order Again ── */}
+          {recentItems.length > 0 && (
+            <ThemedView style={styles.sectionContainer}>
+              <ThemedView style={styles.sectionHeader}>
+                <ThemedText style={styles.sectionTitle}>Order Again</ThemedText>
+              </ThemedView>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.orderAgainScroll}>
+                {recentItems.map((item) => (
+                  <TouchableOpacity
+                    key={item.menuItemId}
+                    style={styles.orderAgainCard}
+                    activeOpacity={0.82}
+                    onPress={() => router.push(`/restaurant/${item.merchantId}`)}
+                  >
+                    {/* Food image */}
+                    <MerchantImage
+                      uri={resolveImageUrl(item.image)}
+                      style={styles.orderAgainImg}
+                      placeholder={PLACEHOLDER_BANNER}
+                    />
+                    {/* Merchant row: logo + name + rating */}
+                    <View style={styles.orderAgainMerchantRow}>
+                      {item.merchantLogo ? (
+                        <Image
+                          source={{ uri: resolveImageUrl(item.merchantLogo) }}
+                          style={styles.orderAgainLogo}
+                        />
+                      ) : (
+                        <View style={[styles.orderAgainLogo, { backgroundColor: '#EEE' }]} />
+                      )}
+                      <ThemedText style={styles.orderAgainMerchantName} numberOfLines={1}>
+                        {item.merchantName}
+                      </ThemedText>
+                      {!!item.merchantRating && (
+                        <View style={styles.orderAgainRatingRow}>
+                          <ThemedText style={styles.orderAgainStar}>★</ThemedText>
+                          <ThemedText style={styles.orderAgainRatingVal}>
+                            {item.merchantRating.toFixed(1)}
+                          </ThemedText>
+                        </View>
+                      )}
+                    </View>
+                    {/* Item name */}
+                    <ThemedText style={styles.orderAgainItemName} numberOfLines={2}>
+                      {item.name}
+                    </ThemedText>
+                    {/* Price */}
+                    <ThemedText style={styles.orderAgainPrice}>
+                      ₱ {item.price.toFixed(2)}
+                    </ThemedText>
+                    {/* Delivery fee */}
+                    <View style={styles.orderAgainDeliveryRow}>
+                      <ThemedText style={styles.orderAgainDeliveryText}>
+                        🚴 ₱ {(item.deliveryFee ?? 29).toFixed(2)}
+                      </ThemedText>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </ThemedView>
+          )}
+
+          {sections.map((section, sIndex) => (
             section.items.length > 0 && (
               <ThemedView key={sIndex} style={styles.sectionContainer}>
                 <ThemedView style={styles.sectionHeader}>
@@ -213,16 +422,23 @@ export default function FoodScreen() {
                   </TouchableOpacity>
                 </ThemedView>
 
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
-                  {section.items.map(renderMerchantCard)}
-                </ScrollView>
+                {section.title === 'All Restaurants' ? (
+                  // Vertical GrabFood-style list
+                  <View style={styles.listSection}>
+                    {section.items.map(renderListCard)}
+                  </View>
+                ) : (
+                  // Horizontal scroll cards (Popular)
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
+                    {section.items.map(renderMerchantCard)}
+                  </ScrollView>
+                )}
               </ThemedView>
             )
-          ))
+          ))}
+          <ThemedView style={{ height: 100 }} />
+          </>
         )}
-        
-        {/* Placeholder for more content */}
-        <ThemedView style={{ height: 100 }} />
       </ThemedView>
     </ScrollView>
   );
@@ -444,5 +660,220 @@ const styles = StyleSheet.create({
     color: '#EEE',
     fontSize: 12,
     marginTop: 4,
+  },
+  // ── Food category strip ────────────────────────────────────
+  categoriesScroll: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 4,
+  },
+  categoryItem: {
+    alignItems: 'center',
+    marginHorizontal: 6,
+    width: 72,
+  },
+  categoryImgWrap: {
+    width: 68,
+    height: 68,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#F2F2F2',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  categoryImgWrapActive: {
+    borderColor: '#5c6cc9',
+  },
+  categoryImg: {
+    width: '100%',
+    height: '100%',
+  },
+  categoryLabel: {
+    marginTop: 6,
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#444',
+    textAlign: 'center',
+  },
+  categoryLabelActive: {
+    color: '#5c6cc9',
+    fontWeight: '800',
+  },
+  // ── All Restaurants list styles ──────────────────────────────
+  listSection: {
+    paddingHorizontal: 16,
+  },
+  listCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFF',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  listImageWrap: {
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: '#F0F0F0',
+    flexShrink: 0,
+  },
+  listImage: {
+    width: '100%',
+    height: '100%',
+  },
+  listClosedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 10,
+  },
+  listClosedText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  listInfo: {
+    flex: 1,
+    marginLeft: 12,
+    justifyContent: 'center',
+    gap: 4,
+  },
+  listNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  listName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1A1A1A',
+    flex: 1,
+  },
+  listMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  listStar: {
+    color: '#FFC107',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  listRating: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#333',
+    marginLeft: 2,
+  },
+  listReviewCount: {
+    fontSize: 11,
+    color: '#888',
+    marginLeft: 2,
+  },
+  listCuisine: {
+    fontSize: 12,
+    color: '#666',
+    flexShrink: 1,
+  },
+  listDeliveryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  listDeliveryText: {
+    fontSize: 12,
+    color: '#888',
+    marginLeft: 3,
+  },
+  listAddressBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FFF3E0',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  listAddressText: {
+    fontSize: 10,
+    color: '#E65100',
+    fontWeight: '600',
+    flexShrink: 1,
+  },
+  // ── Order Again styles ──────────────────────────────────────
+  orderAgainScroll: {
+    paddingHorizontal: 16,
+    paddingBottom: 4,
+    gap: 0,
+  },
+  orderAgainCard: {
+    width: 148,
+    marginRight: 12,
+    backgroundColor: '#FFF',
+  },
+  orderAgainImg: {
+    width: 148,
+    height: 148,
+    borderRadius: 14,
+    backgroundColor: '#F0F0F0',
+  },
+  orderAgainMerchantRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 4,
+  },
+  orderAgainLogo: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#DDD',
+    flexShrink: 0,
+  },
+  orderAgainMerchantName: {
+    fontSize: 11,
+    color: '#666',
+    flex: 1,
+    flexShrink: 1,
+  },
+  orderAgainRatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    flexShrink: 0,
+  },
+  orderAgainStar: {
+    color: '#FFC107',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  orderAgainRatingVal: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#333',
+  },
+  orderAgainItemName: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#1A1A1A',
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  orderAgainPrice: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#E91E8C',
+    marginTop: 4,
+  },
+  orderAgainDeliveryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  orderAgainDeliveryText: {
+    fontSize: 12,
+    color: '#888',
   },
 });

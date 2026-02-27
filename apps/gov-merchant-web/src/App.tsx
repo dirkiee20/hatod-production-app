@@ -17,6 +17,7 @@ export default function App() {
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   // Configurable API base URL (env first, fallback to localhost for dev)
   const API_URL =
@@ -146,6 +147,7 @@ export default function App() {
   const historyApps = searchedApps.filter(app => ['COMPLETED', 'REJECTED', 'CANCELLED'].includes(app.status));
 
   const handleUpdateStatus = async (app: Application, newStatus: ApplicationStatus) => {
+    setIsUpdating(true);
     try {
       let url: string;
       let bodyStatus: string;
@@ -155,6 +157,7 @@ export default function App() {
           ACCEPTED: 'CONFIRMED',
           PROCESSING: 'PREPARING',
           READY: 'READY_FOR_PICKUP',
+          COMPLETED: 'DELIVERED',
           REJECTED: 'CANCELLED',
           CANCELLED: 'CANCELLED',
         };
@@ -164,27 +167,40 @@ export default function App() {
         bodyStatus = newStatus;
         url = `${API_URL}/pabili-requests/gov/${app.requestId}/status`;
       }
+
+      const token = (window as any).__govToken__ ||
+        localStorage.getItem('gov_merchant_token') || '';
+
       const res = await fetch(url, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ status: bodyStatus }),
       });
+
       if (!res.ok) {
         console.error('Failed to update status', await res.text());
+        alert('Failed to update status. Please try again.');
         return;
       }
 
-      // Update local state
-      setApplications(prev =>
-        prev.map(a =>
+      // Update both the list and the currently open modal
+      setApplications(prev => {
+        const updated = prev.map(a =>
           a.requestId === app.requestId ? { ...a, status: newStatus } : a
-        )
-      );
-      setSelectedApplication(prev =>
-        prev && prev.requestId === app.requestId ? { ...prev, status: newStatus } : prev
-      );
+        );
+        // Refresh selectedApplication from the updated list
+        const refreshed = updated.find(a => a.requestId === app.requestId);
+        if (refreshed) setSelectedApplication(refreshed);
+        return updated;
+      });
     } catch (e) {
       console.error('Error updating status', e);
+      alert('Network error while updating status.');
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -303,6 +319,7 @@ export default function App() {
               application={selectedApplication}
               onUpdateStatus={(status) => handleUpdateStatus(selectedApplication, status)}
               onClose={() => setSelectedApplication(null)}
+              isUpdating={isUpdating}
             />
           )}
 

@@ -360,3 +360,40 @@ export const updateGovServicePrice = async (itemId: string, price: number): Prom
     return false;
   }
 };
+
+// ── Typhoon Mode ──────────────────────────────────────────────
+export interface TyphoonConfig {
+  enabled: boolean;
+  message: string;
+  activatedAt: string | null;
+  activatedBy: string | null;
+  level: 'SIGNAL_1' | 'SIGNAL_2' | 'SIGNAL_3' | 'SIGNAL_4';
+  suspendOrders: boolean;
+  suspendDeliveries: boolean;
+}
+
+export const getTyphoonMode = async (): Promise<TyphoonConfig | null> => {
+  try {
+    const res = await authenticatedFetch('/settings/typhoon');
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+};
+
+export const setTyphoonMode = async (
+  config: Partial<TyphoonConfig>,
+): Promise<TyphoonConfig | null> => {
+  try {
+    const res = await authenticatedFetch('/settings/typhoon', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+};

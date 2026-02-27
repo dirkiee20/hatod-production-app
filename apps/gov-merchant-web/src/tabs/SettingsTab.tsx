@@ -162,6 +162,34 @@ export const SettingsTab: React.FC = () => {
           </div>
         </div>
 
+        {/* Preferences */}
+        <div className="settings-section">
+          <h3>Preferences</h3>
+          <div className="settings-form">
+            <div className="toggle-row">
+              <div className="toggle-info">
+                <strong>Email Notifications</strong>
+                <p>Receive emails when new applications are submitted</p>
+              </div>
+              <label className="switch">
+                <input type="checkbox" defaultChecked />
+                <span className="slider round"></span>
+              </label>
+            </div>
+
+            <div className="toggle-row">
+              <div className="toggle-info">
+                <strong>SMS Alerts</strong>
+                <p>Receive text alerts for URGENT priority docs</p>
+              </div>
+              <label className="switch">
+                <input type="checkbox" defaultChecked />
+                <span className="slider round"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+
         {/* Location Pin */}
         <div className="settings-section" style={{ gridColumn: '1 / -1' }}>
           <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -324,33 +352,6 @@ export const SettingsTab: React.FC = () => {
           )}
         </div>
 
-        {/* Preferences */}
-        <div className="settings-section">
-          <h3>Preferences</h3>
-          <div className="settings-form">
-            <div className="toggle-row">
-              <div className="toggle-info">
-                <strong>Email Notifications</strong>
-                <p>Receive emails when new applications are submitted</p>
-              </div>
-              <label className="switch">
-                <input type="checkbox" defaultChecked />
-                <span className="slider round"></span>
-              </label>
-            </div>
-
-            <div className="toggle-row">
-              <div className="toggle-info">
-                <strong>SMS Alerts</strong>
-                <p>Receive text alerts for URGENT priority docs</p>
-              </div>
-              <label className="switch">
-                <input type="checkbox" defaultChecked />
-                <span className="slider round"></span>
-              </label>
-            </div>
-          </div>
-        </div>
       </div>
     </>
   );

@@ -156,44 +156,48 @@ export default function MapScreen() {
 
             {/* Restaurant Markers */}
             {shouldShowRestaurants && merchants.map((merchant) => {
-                const imageUrl = resolveImageUrl(merchant.logo || merchant.imageUrl || merchant.coverImage);
+                const imageUrl = resolveImageUrl(merchant.logo || (merchant as any).imageUrl || merchant.coverImage);
+                if (!merchant.latitude || !merchant.longitude) return null;
                 return (
-                    merchant.latitude && merchant.longitude && (
-                        <Mapbox.MarkerView 
-                            key={`merchant-${merchant.id}`} 
-                            id={`merchant-${merchant.id}`} 
-                            coordinate={[merchant.longitude, merchant.latitude]}
-                        >
-                             {imageUrl ? (
-                                 <Image
-                                    source={{ uri: imageUrl }}
-                                    style={styles.merchantLogoMarker}
-                                 />
-                             ) : (
-                                 <View style={[styles.merchantLogoMarker, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#F57C00' }]}>
-                                     <IconSymbol size={20} name="restaurants" color="#FFF" />
-                                 </View>
-                             )}
-                        </Mapbox.MarkerView>
-                    )
+                    <Mapbox.MarkerView 
+                        key={`merchant-${merchant.id}`} 
+                        id={`merchant-${merchant.id}`} 
+                        coordinate={[merchant.longitude, merchant.latitude]}
+                    >
+                         {imageUrl ? (
+                             <Image
+                                source={{ uri: imageUrl }}
+                                style={styles.merchantLogoMarker}
+                             />
+                         ) : (
+                             <View style={[styles.merchantLogoMarker, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#F57C00' }]}>
+                                 <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#FFF', opacity: 0.9 }} />
+                             </View>
+                         )}
+                    </Mapbox.MarkerView>
                 );
             })}
             
             {/* Active Rider Markers */}
-            {shouldShowRiders && getActiveRiders().map((rider) => (
-                rider.currentLatitude && rider.currentLongitude && (
+            {shouldShowRiders && getActiveRiders().map((rider) => {
+                if (!rider.currentLatitude || !rider.currentLongitude) return null;
+                return (
                     <Mapbox.PointAnnotation 
                         key={`rider-${rider.id}`} 
                         id={`rider-${rider.id}`} 
                         coordinate={[rider.currentLongitude, rider.currentLatitude]}
                     >
-                         <View style={styles.riderMarker}>
-                             <IconSymbol size={16} name="map" color="#FFF" /> 
+                         <View style={styles.riderMarkerWrap}>
+                             <View style={styles.riderMarker}>
+                                 <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#FFF' }} />
+                             </View>
+                             <ThemedText style={styles.riderMarkerLabel}>
+                                 {`${rider.firstName} ${rider.lastName}`}
+                             </ThemedText>
                          </View>
-                        <Mapbox.Callout title={`${rider.firstName} ${rider.lastName}`} />
                     </Mapbox.PointAnnotation>
-                )
-            ))}
+                );
+            })}
 
             <Mapbox.UserLocation 
                 visible={true} 
@@ -331,6 +335,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 4,
+  },
+  riderMarkerWrap: {
+    alignItems: 'center',
+  },
+  riderMarkerLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    marginTop: 2,
   },
   markerInfoContainer: {
     position: 'absolute',

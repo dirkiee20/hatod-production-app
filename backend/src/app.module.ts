@@ -21,6 +21,7 @@ import { AddressModule } from './modules/address/address.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { DeliveryFeeModule } from './modules/delivery-fee/delivery-fee.module';
 import { PabiliRequestsModule } from './modules/pabili-requests/pabili-requests.module';
+import { SettingsModule } from './modules/settings/settings.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { PabiliRequestsModule } from './modules/pabili-requests/pabili-requests.
     ReviewsModule,
     DeliveryFeeModule,
     PabiliRequestsModule,
+    SettingsModule,
   ],
 })
 export class AppModule {}
