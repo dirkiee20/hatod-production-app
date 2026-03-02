@@ -1,10 +1,12 @@
 import { StyleSheet, ScrollView, TouchableOpacity, Image, View, ActivityIndicator } from 'react-native';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useCart, CartItem } from '@/context/CartContext';
+import { useFocusEffect } from '@react-navigation/native';
+import { getTyphoonMode, TyphoonConfig } from '@/api/services';
 
 // Renders the selected variants/add-ons compactly under the item name
 function VariantSummary({ options }: { options: CartItem['options'] }) {
@@ -48,6 +50,13 @@ export default function CartScreen() {
   const router = useRouter();
   const { items, cartTotal, updateQuantity, removeFromCart, itemCount, deliveryFee } = useCart();
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
+  const [typhoon, setTyphoon] = useState<TyphoonConfig | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      getTyphoonMode().then(t => setTyphoon(t)).catch(() => {});
+    }, [])
+  );
 
   const handleRemove = async (itemId: string) => {
     setDeletingItemId(itemId);
@@ -70,6 +79,19 @@ export default function CartScreen() {
             {/* We could calculate unique stores if we want, but keeping it simple for now */}
         </ThemedText>
       </ThemedView>
+
+      {/* 🌀 Typhoon banner */}
+      {typhoon?.enabled && (
+        <ThemedView style={styles.typhoonBanner}>
+          <ThemedText style={styles.typhoonBannerIcon}>🌀</ThemedText>
+          <ThemedView style={{ flex: 1, backgroundColor: 'transparent' }}>
+            <ThemedText style={styles.typhoonBannerTitle}>Orders Suspended</ThemedText>
+            <ThemedText style={styles.typhoonBannerMsg} numberOfLines={2}>
+              {typhoon.message}
+            </ThemedText>
+          </ThemedView>
+        </ThemedView>
+      )}
 
       <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {items.length === 0 ? (
@@ -143,9 +165,15 @@ export default function CartScreen() {
           <ThemedText style={styles.footerTotalLabel}>Total to pay</ThemedText>
           <ThemedText style={styles.footerTotalValue}>₱{total}</ThemedText>
         </ThemedView>
-        <TouchableOpacity style={styles.checkoutButton} onPress={() => router.push('/checkout')}>
-          <ThemedText style={styles.checkoutText}>Review Payment</ThemedText>
-        </TouchableOpacity>
+        {typhoon?.enabled ? (
+          <ThemedView style={styles.checkoutButtonDisabled}>
+            <ThemedText style={styles.checkoutTextDisabled}>🌀 Orders Suspended</ThemedText>
+          </ThemedView>
+        ) : (
+          <TouchableOpacity style={styles.checkoutButton} onPress={() => router.push('/checkout')}>
+            <ThemedText style={styles.checkoutText}>Review Payment</ThemedText>
+          </TouchableOpacity>
+        )}
       </ThemedView>
     </ThemedView>
   );
@@ -328,4 +356,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
   },
+  checkoutButtonDisabled: {
+    backgroundColor: '#BDBDBD',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  checkoutTextDisabled: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  // ── Typhoon styles ──────────────────────────────────────────
+  typhoonBanner: {
+    backgroundColor: '#B71C1C',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  typhoonBannerIcon: { fontSize: 24 },
+  typhoonBannerTitle: { fontSize: 13, fontWeight: '900', color: '#FFF' },
+  typhoonBannerMsg: { fontSize: 11, color: 'rgba(255,255,255,0.85)', marginTop: 2 },
 });

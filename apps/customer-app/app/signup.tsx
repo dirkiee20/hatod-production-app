@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Image, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Image, KeyboardAvoidingView, Platform, ScrollView, View, Modal, Alert } from 'react-native';
 import { useRouter, Link } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { register } from '@/api/client'; // Assuming register function exists or I'll need to create it
@@ -15,11 +15,21 @@ export default function SignupScreen() {
   const [loading, setLoading] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
+  const [consentGiven, setConsentGiven] = useState(false);
+  const [consentError, setConsentError] = useState(false);
+  const [policyModal, setPolicyModal] = useState<'terms' | 'privacy' | null>(null);
 
   const handleSignup = async () => {
     // Clear previous errors
     setPasswordError('');
     setConfirmPasswordError('');
+    setConsentError(false);
+
+    if (!consentGiven) {
+      setConsentError(true);
+      Alert.alert('Consent Required', 'Please agree to our Terms of Service and Privacy Policy to continue.');
+      return;
+    }
 
     if (!firstName || !lastName || !phone || !password || !confirmPassword) {
       if (!password) {
@@ -180,11 +190,66 @@ export default function SignupScreen() {
               </Link>
             </View>
 
-            <View style={styles.termsContainer}>
-              <ThemedText style={styles.termsText}>
-                By continuing, you agree to our Terms of Service and Privacy Policy
-              </ThemedText>
-            </View>
+            {/* Consent Checkbox */}
+            <TouchableOpacity
+              style={[styles.consentRow, consentError && styles.consentRowError]}
+              onPress={() => { setConsentGiven(!consentGiven); setConsentError(false); }}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.consentCheckbox, consentGiven && styles.consentCheckboxChecked]}>
+                {consentGiven && <ThemedText style={styles.consentCheckmark}>✓</ThemedText>}
+              </View>
+              <View style={{ flex: 1 }}>
+                <ThemedText style={styles.consentText}>
+                  I have read and agree to the{' '}
+                  <ThemedText
+                    style={styles.consentLink}
+                    onPress={() => setPolicyModal('terms')}
+                  >Terms of Service</ThemedText>
+                  {' '}and{' '}
+                  <ThemedText
+                    style={styles.consentLink}
+                    onPress={() => setPolicyModal('privacy')}
+                  >Privacy Policy</ThemedText>
+                </ThemedText>
+                {consentError && (
+                  <ThemedText style={styles.consentErrorText}>⚠ You must agree to continue</ThemedText>
+                )}
+              </View>
+            </TouchableOpacity>
+
+            {/* Policy Modal */}
+            <Modal visible={!!policyModal} transparent animationType="slide" onRequestClose={() => setPolicyModal(null)}>
+              <View style={styles.policyOverlay}>
+                <View style={styles.policySheet}>
+                  <View style={styles.policyHeader}>
+                    <ThemedText style={styles.policyTitle}>
+                      {policyModal === 'terms' ? '📄 Terms of Service' : '🔒 Privacy Policy'}
+                    </ThemedText>
+                    <TouchableOpacity onPress={() => setPolicyModal(null)} style={styles.policyClose}>
+                      <ThemedText style={{ fontSize: 16, color: '#666', fontWeight: '700' }}>✕</ThemedText>
+                    </TouchableOpacity>
+                  </View>
+                  <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+                    {policyModal === 'terms' ? (
+                      <ThemedText style={styles.policyBody}>
+                        {`HATOD TERMS OF SERVICE\n\nEffective Date: February 2026\n\n1. ACCEPTANCE OF TERMS\nBy creating an account and using the HATOD app, you agree to be bound by these Terms of Service.\n\n2. USE OF SERVICE\nHATOD provides an on-demand delivery platform connecting customers with merchants and riders. You must be at least 18 years old to use this service.\n\n3. ACCOUNT RESPONSIBILITY\nYou are responsible for maintaining the confidentiality of your account credentials. You agree to notify us immediately of any unauthorized use.\n\n4. ORDERS AND PAYMENTS\nAll orders placed through HATOD are subject to merchant availability. Prices displayed are set by merchants and may vary.\n\n5. DELIVERY\nDelivery times are estimates and may vary based on demand, weather, and other factors. HATOD is not liable for delays outside its reasonable control.\n\n6. CANCELLATIONS\nOrders may be cancelled prior to merchant acceptance. Once accepted and being prepared, cancellations may not be possible.\n\n7. PROHIBITED CONDUCT\nYou agree not to misuse the platform, submit fraudulent orders, or engage in any conduct that disrupts the service.\n\n8. MODIFICATIONS\nHATOD reserves the right to modify these Terms at any time. Continued use of the service constitutes acceptance of the revised Terms.\n\n9. GOVERNING LAW\nThese Terms are governed by the laws of the Republic of the Philippines.\n\nFor questions, contact us at support@hatod.app`}
+                      </ThemedText>
+                    ) : (
+                      <ThemedText style={styles.policyBody}>
+                        {`HATOD PRIVACY POLICY\n\nEffective Date: February 2026\n\n1. INFORMATION WE COLLECT\nWe collect information you provide when registering: name, phone number, and delivery addresses. We also collect order history and usage data.\n\n2. HOW WE USE YOUR INFORMATION\n• To process and fulfill your orders\n• To communicate order status and updates\n• To improve our services\n• To comply with legal obligations\n\n3. DATA SHARING\nWe share your information with:\n• Merchants — to fulfill your orders\n• Riders — for delivery purposes (name and delivery address only)\n• Payment processors — for transaction processing\n\nWe do NOT sell your personal data to third parties.\n\n4. DATA RETENTION\nWe retain your data for as long as your account is active or as required by law.\n\n5. YOUR RIGHTS\nUnder the Philippine Data Privacy Act of 2012 (R.A. 10173), you have the right to:\n• Access your personal data\n• Correct inaccurate data\n• Request erasure of your data\n• Object to processing\n\n6. DATA SECURITY\nWe implement appropriate technical and organizational measures to protect your personal data against unauthorized access.\n\n7. CONTACT US\nFor privacy concerns, contact our Data Protection Officer at privacy@hatod.app`}
+                      </ThemedText>
+                    )}
+                  </ScrollView>
+                  <TouchableOpacity
+                    style={styles.policyAgreeBtn}
+                    onPress={() => { setConsentGiven(true); setConsentError(false); setPolicyModal(null); }}
+                  >
+                    <ThemedText style={styles.policyAgreeBtnText}>I Agree & Close</ThemedText>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </Modal>
 
           </View>
         </ScrollView>
@@ -292,23 +357,55 @@ const styles = StyleSheet.create({
     fontSize: 14,
     opacity: 0.9,
   },
-  termsContainer: {
-    marginTop: 20,
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  termsText: {
-    color: '#FFF',
-    fontSize: 11,
-    textAlign: 'center',
-    opacity: 0.8,
-  },
   errorText: {
     color: '#ffcccc',
     fontSize: 12,
     marginTop: -10,
     marginBottom: 5,
     marginLeft: 20,
-  }
+  },
+  // Consent
+  consentRow: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 12,
+    marginTop: 16, marginBottom: 8,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 14, padding: 14,
+    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)',
+  },
+  consentRowError: {
+    borderColor: '#FFB3B3',
+    backgroundColor: 'rgba(255,100,100,0.15)',
+  },
+  consentCheckbox: {
+    width: 22, height: 22, borderRadius: 6,
+    borderWidth: 2, borderColor: '#FFF',
+    backgroundColor: 'transparent',
+    justifyContent: 'center', alignItems: 'center',
+    marginTop: 1, flexShrink: 0,
+  },
+  consentCheckboxChecked: {
+    backgroundColor: '#f78734', borderColor: '#f78734',
+  },
+  consentCheckmark: { fontSize: 14, color: '#FFF', fontWeight: '900', lineHeight: 16 },
+  consentText: { fontSize: 13, color: 'rgba(255,255,255,0.9)', lineHeight: 20 },
+  consentLink: { fontSize: 13, color: '#FFD700', fontWeight: '800', textDecorationLine: 'underline' },
+  consentErrorText: { fontSize: 12, color: '#FFB3B3', marginTop: 6, fontWeight: '700' },
+  // Policy Modal
+  policyOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+  policySheet: {
+    backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: 24, maxHeight: '85%',
+  },
+  policyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  policyTitle: { fontSize: 18, fontWeight: '900', color: '#222', flex: 1 },
+  policyClose: {
+    width: 32, height: 32, borderRadius: 16, backgroundColor: '#F5F5F5',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  policyBody: { fontSize: 13, color: '#444', lineHeight: 22, paddingBottom: 20 },
+  policyAgreeBtn: {
+    backgroundColor: '#5c6cc9', borderRadius: 14, paddingVertical: 14,
+    alignItems: 'center', marginTop: 12,
+  },
+  policyAgreeBtnText: { color: '#FFF', fontSize: 15, fontWeight: '900' }
 });

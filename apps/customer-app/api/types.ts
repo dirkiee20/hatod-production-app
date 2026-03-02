@@ -95,3 +95,17 @@ export interface DeliveryFeeEstimate {
   distance: number; // in km
   duration: number; // in seconds
 }
+
+export interface Review {
+  id: string;
+  orderId: string;
+  customerId: string;
+  rating: number;
+  comment?: string;
+  createdAt: string;
+  customer?: {
+    firstName: string;
+    lastName: string;
+    avatar?: string;
+  };
+}

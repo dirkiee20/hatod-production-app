@@ -189,7 +189,7 @@ export default function OrdersScreen() {
     if (loadingOrders) {
       return (
         <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
-          <ActivityIndicator size="large" color="#C2185B" />
+          <ActivityIndicator size="large" color="#4f46e5" />
         </View>
       );
     }
@@ -280,7 +280,7 @@ export default function OrdersScreen() {
     if (loadingRequests) {
       return (
         <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
-          <ActivityIndicator size="large" color="#C2185B" />
+          <ActivityIndicator size="large" color="#4f46e5" />
         </View>
       );
     }
@@ -387,7 +387,7 @@ export default function OrdersScreen() {
                       {req.status !== 'PENDING_REVIEW' && req.serviceFee !== null && (
                           <View style={{alignItems: 'flex-end'}}>
                              <ThemedText style={{fontSize: 12, color: '#888'}}>Service Fee</ThemedText>
-                             <ThemedText style={{fontSize: 16, fontWeight: 'bold', color: '#C2185B'}}>₱{req.serviceFee?.toLocaleString()}</ThemedText>
+                             <ThemedText style={{fontSize: 16, fontWeight: 'bold', color: '#4f46e5'}}>₱{req.serviceFee?.toLocaleString()}</ThemedText>
                           </View>
                       )}
 
@@ -498,7 +498,7 @@ export default function OrdersScreen() {
                                         <ThemedText style={{fontSize: 12, color: '#666'}}>{rider.vehicleType} • {rider.plateNumber}</ThemedText>
                                     </View>
                                     {assigningRiderId === rider.id ? (
-                                        <ActivityIndicator size="small" color="#C2185B" />
+                                        <ActivityIndicator size="small" color="#4f46e5" />
                                     ) : (
                                         <View style={{backgroundColor: '#E8F5E9', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12}}>
                                             <ThemedText style={{fontSize: 12, color: '#388E3C', fontWeight: 'bold'}}>Assign</ThemedText>
@@ -578,7 +578,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   mainTabBtnActive: {
-    backgroundColor: '#C2185B',
+    backgroundColor: '#4f46e5',
   },
   mainTabBtnText: {
     fontWeight: '700',
@@ -604,8 +604,8 @@ const styles = StyleSheet.create({
     borderColor: '#EEE',
   },
   activeTab: {
-    backgroundColor: '#C2185B',
-    borderColor: '#C2185B',
+    backgroundColor: '#4f46e5',
+    borderColor: '#4f46e5',
     borderBottomWidth: 1,
   },
   tabText: {
@@ -684,7 +684,7 @@ const styles = StyleSheet.create({
   orderTotal: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#C2185B',
+    color: '#4f46e5',
   },
 
   // Custom Requests Styles
@@ -755,7 +755,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   reqQuoteButton: {
-    backgroundColor: '#C2185B',
+    backgroundColor: '#4f46e5',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,

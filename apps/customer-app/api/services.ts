@@ -308,6 +308,17 @@ export const createReview = async (orderId: string, rating: number, comment?: st
   }
 };
 
+export const getMerchantReviews = async (merchantId: string) => {
+  try {
+    const response = await publicFetch(`/reviews/merchant/${merchantId}`);
+    if (!response.ok) throw new Error('Failed to fetch reviews');
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching merchant reviews:', error);
+    return [];
+  }
+};
+
 export const getDeliveryFeeEstimate = async (origin: { lat: number, lng: number }, destination: { lat: number, lng: number }, subtotal: number): Promise<{ fee: number, distance: number, duration: number } | null> => {
   try {
     const params = new URLSearchParams({
@@ -361,6 +372,27 @@ export const getPabiliRequestById = async (id: string): Promise<any> => {
     return await response.json();
   } catch (error) {
     console.error('Error fetching pabili request:', error);
+    return null;
+  }
+};
+
+// ── Typhoon Mode (public read) ────────────────────────────────
+export interface TyphoonConfig {
+  enabled: boolean;
+  message: string;
+  activatedAt: string | null;
+  activatedBy: string | null;
+  level: 'SIGNAL_1' | 'SIGNAL_2' | 'SIGNAL_3' | 'SIGNAL_4';
+  suspendOrders: boolean;
+  suspendDeliveries: boolean;
+}
+
+export const getTyphoonMode = async (): Promise<TyphoonConfig | null> => {
+  try {
+    const res = await authenticatedFetch('/settings/typhoon');
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
     return null;
   }
 };

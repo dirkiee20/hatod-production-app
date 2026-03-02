@@ -132,19 +132,19 @@ export default function DashboardScreen() {
           <ThemedText style={styles.sectionTitle}>Quick Actions</ThemedText>
           <View style={styles.actionsGrid}>
             <TouchableOpacity style={styles.actionCard}>
-              <IconSymbol size={28} name="restaurants" color="#C2185B" />
+              <IconSymbol size={28} name="restaurants" color="#4f46e5" />
               <ThemedText style={styles.actionText}>Add Restaurant</ThemedText>
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionCard}>
-              <IconSymbol size={28} name="users" color="#C2185B" />
+              <IconSymbol size={28} name="users" color="#4f46e5" />
               <ThemedText style={styles.actionText}>Manage Users</ThemedText>
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionCard}>
-              <IconSymbol size={28} name="fees" color="#C2185B" />
+              <IconSymbol size={28} name="fees" color="#4f46e5" />
               <ThemedText style={styles.actionText}>Update Fees</ThemedText>
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionCard}>
-              <IconSymbol size={28} name="orders" color="#C2185B" />
+              <IconSymbol size={28} name="orders" color="#4f46e5" />
               <ThemedText style={styles.actionText}>View Reports</ThemedText>
             </TouchableOpacity>
           </View>
@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#C2185B',
+    backgroundColor: '#4f46e5',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
   seeAllText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#C2185B',
+    color: '#4f46e5',
   },
   activityCard: {
     flexDirection: 'row',

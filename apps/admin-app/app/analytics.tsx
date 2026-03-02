@@ -11,8 +11,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CHART_H = 130;
-const ACCENT = '#C2185B';
-const ACCENT_LIGHT = '#FCE4EC';
+const ACCENT = '#4f46e5';
+const ACCENT_LIGHT = '#EEF2FF';
 
 type Range = 'week' | 'month' | 'year';
 
@@ -290,7 +290,7 @@ const styles = StyleSheet.create({
   feesBanner: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: ACCENT_LIGHT, borderRadius: 14,
-    padding: 12, borderWidth: 1, borderColor: '#F8BBD0', gap: 10,
+    padding: 12, borderWidth: 1, borderColor: '#C7D2FE', gap: 10,
   },
   feesIcon: {
     width: 40, height: 40, borderRadius: 10,

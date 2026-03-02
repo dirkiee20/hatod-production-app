@@ -5,7 +5,7 @@ import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import React, { useState, useEffect } from 'react';
 import { useCart } from '@/context/CartContext';
-import { createOrder, createAddress, getPabiliRequestById } from '@/api/services';
+import { createOrder, createAddress, getPabiliRequestById, getTyphoonMode, TyphoonConfig } from '@/api/services';
 
 export default function CheckoutScreen() {
   const router = useRouter();
@@ -35,9 +35,24 @@ export default function CheckoutScreen() {
   const total = displaySubtotal + displayDeliveryFee + platformFee;
 
   const [loading, setLoading] = useState(false);
+  const [typhoon, setTyphoon] = useState<TyphoonConfig | null>(null);
+
+  useEffect(() => {
+    getTyphoonMode().then(t => setTyphoon(t)).catch(() => {});
+  }, []);
 
   const handlePlaceOrder = async () => {
     if (displayItems.length === 0) return;
+
+    // Block order placement during typhoon mode
+    if (typhoon?.enabled) {
+      Alert.alert(
+        '🌀 Orders Suspended',
+        typhoon.message || 'Service is temporarily suspended due to a typhoon. Please try again later.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
 
     setLoading(true);
     try {
@@ -137,6 +152,19 @@ export default function CheckoutScreen() {
           </TouchableOpacity>
         ),
       }} />
+
+      {/* 🌀 Typhoon Banner */}
+      {typhoon?.enabled && (
+        <ThemedView style={styles.typhoonBanner}>
+          <ThemedText style={styles.typhoonBannerIcon}>🌀</ThemedText>
+          <ThemedView style={{ flex: 1, backgroundColor: 'transparent' }}>
+            <ThemedText style={styles.typhoonBannerTitle}>Orders Suspended</ThemedText>
+            <ThemedText style={styles.typhoonBannerMsg} numberOfLines={2}>
+              {typhoon.message}
+            </ThemedText>
+          </ThemedView>
+        </ThemedView>
+      )}
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         
@@ -243,8 +271,14 @@ export default function CheckoutScreen() {
 
       {/* Place Order Footer */}
       <ThemedView style={styles.footer}>
-         <TouchableOpacity style={[styles.placeOrderBtn, (displayItems.length === 0 || loading) && styles.placeOrderBtnDisabled]} onPress={handlePlaceOrder} disabled={displayItems.length === 0 || loading}>
-            <ThemedText style={styles.placeOrderText}>{loading ? 'Placing Order...' : `Place Order — ₱${orderSummary.total}`}</ThemedText>
+         <TouchableOpacity
+           style={[styles.placeOrderBtn, (displayItems.length === 0 || loading || !!typhoon?.enabled) && styles.placeOrderBtnDisabled]}
+           onPress={handlePlaceOrder}
+           disabled={displayItems.length === 0 || loading || !!typhoon?.enabled}
+         >
+            <ThemedText style={styles.placeOrderText}>
+              {loading ? 'Placing Order...' : typhoon?.enabled ? '🌀 Orders Suspended' : `Place Order — ₱${orderSummary.total}`}
+            </ThemedText>
          </TouchableOpacity>
       </ThemedView>
     </ThemedView>
@@ -503,4 +537,16 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     padding: 20,
   },
+  // ── Typhoon styles ──────────────────────────────────────────
+  typhoonBanner: {
+    backgroundColor: '#B71C1C',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  typhoonBannerIcon: { fontSize: 24 },
+  typhoonBannerTitle: { fontSize: 13, fontWeight: '900', color: '#FFF' },
+  typhoonBannerMsg: { fontSize: 11, color: 'rgba(255,255,255,0.85)', marginTop: 2 },
 });

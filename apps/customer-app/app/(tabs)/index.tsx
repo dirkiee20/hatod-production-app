@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { getMerchants, getMyOrders } from '@/api/services';
+import { getMerchants, getMyOrders, getTyphoonMode, TyphoonConfig } from '@/api/services';
 import { Merchant } from '@/api/types';
 import { resolveImageUrl } from '@/api/client';
 
@@ -48,6 +48,7 @@ export default function FoodScreen() {
     merchantId: string;
     deliveryFee?: number;
   }>>([]);
+  const [typhoon, setTyphoon] = useState<TyphoonConfig | null>(null);
 
   const FOOD_CATEGORIES = [
     { label: 'Chicken',       image: 'https://images.unsplash.com/photo-1598103442097-8b74394b95c3?w=200&q=80' },
@@ -106,6 +107,8 @@ export default function FoodScreen() {
         }
         setRecentItems(items);
       }).catch(() => {});
+      // Fetch typhoon mode status
+      getTyphoonMode().then(t => setTyphoon(t)).catch(() => {});
     }, [])
   );
 
@@ -158,23 +161,30 @@ export default function FoodScreen() {
     <TouchableOpacity 
       key={merchant.id} 
       style={[styles.compactCard, { width: cardWidth }]}
-      onPress={() => router.push(`/restaurant/${merchant.id}`)}
+      disabled={!!typhoon?.enabled}
+      activeOpacity={typhoon?.enabled ? 1 : 0.7}
+      onPress={() => !typhoon?.enabled && router.push(`/restaurant/${merchant.id}`)}
     >
       <ThemedView style={[styles.imageContainer, { height: cardHeight }]}>
         <MerchantImage
           uri={resolveImageUrl(merchant.coverImage)}
-          style={styles.restaurantImage}
+          style={[styles.restaurantImage, typhoon?.enabled && { opacity: 0.45 }]}
           placeholder={PLACEHOLDER_BANNER}
         />
         <ThemedView style={styles.heartIcon}>
           <IconSymbol size={14} name="heart" color="#000" />
         </ThemedView>
-        {!isOpen && (
+        {typhoon?.enabled ? (
+          <ThemedView style={styles.typhoonCardOverlay}>
+            <ThemedText style={styles.typhoonCardIcon}>🌀</ThemedText>
+            <ThemedText style={styles.typhoonCardText}>Suspended</ThemedText>
+          </ThemedView>
+        ) : !isOpen ? (
              <ThemedView style={styles.closedOverlay}>
                 <ThemedText style={styles.closedText}>Closed</ThemedText>
                 <ThemedText style={styles.opensAtText}>{nextOpen || 'Closed'}</ThemedText>
              </ThemedView>
-        )}
+        ) : null}
       </ThemedView>
       
       <ThemedView style={styles.cardInfo}>
@@ -220,21 +230,27 @@ export default function FoodScreen() {
       <TouchableOpacity
         key={merchant.id}
         style={styles.listCard}
-        activeOpacity={0.8}
-        onPress={() => router.push(`/restaurant/${merchant.id}`)}
+        activeOpacity={typhoon?.enabled ? 1 : 0.8}
+        disabled={!!typhoon?.enabled}
+        onPress={() => !typhoon?.enabled && router.push(`/restaurant/${merchant.id}`)}
       >
         {/* Left: Square image */}
         <View style={[styles.listImageWrap, { width: imgSize, height: imgSize }]}>
           <MerchantImage
             uri={resolveImageUrl(merchant.coverImage)}
-            style={styles.listImage}
+            style={[styles.listImage, typhoon?.enabled && { opacity: 0.45 }]}
             placeholder={PLACEHOLDER_BANNER}
           />
-          {!isOpen && (
+          {typhoon?.enabled ? (
+            <View style={styles.listClosedOverlay}>
+              <ThemedText style={{ fontSize: 18 }}>🌀</ThemedText>
+              <ThemedText style={styles.listClosedText}>Suspended</ThemedText>
+            </View>
+          ) : !isOpen ? (
             <View style={styles.listClosedOverlay}>
               <ThemedText style={styles.listClosedText}>Closed</ThemedText>
             </View>
-          )}
+          ) : null}
         </View>
 
         {/* Right: Info */}
@@ -304,6 +320,21 @@ export default function FoodScreen() {
         </ThemedView>
       </ThemedView>
 
+      {/* 🌀 Typhoon Mode Banner */}
+      {typhoon?.enabled && (
+        <ThemedView style={styles.typhoonBanner}>
+          <ThemedText style={styles.typhoonBannerIcon}>🌀</ThemedText>
+          <ThemedView style={{ flex: 1, backgroundColor: 'transparent' }}>
+            <ThemedText style={styles.typhoonBannerTitle}>
+              Typhoon Mode Active
+            </ThemedText>
+            <ThemedText style={styles.typhoonBannerMsg} numberOfLines={2}>
+              {typhoon.message}
+            </ThemedText>
+          </ThemedView>
+        </ThemedView>
+      )}
+
       <ThemedView style={styles.contentBody}>
         {loading ? (
           <ThemedView style={styles.loadingContainer}>
@@ -322,6 +353,7 @@ export default function FoodScreen() {
         ) : (
           <>
           {/* ── Food Categories strip ── */}
+          <ThemedText style={styles.categoriesLabel}>Filter by categories</ThemedText>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -662,6 +694,15 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   // ── Food category strip ────────────────────────────────────
+  categoriesLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#888',
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   categoriesScroll: {
     paddingHorizontal: 12,
     paddingVertical: 12,
@@ -875,5 +916,40 @@ const styles = StyleSheet.create({
   orderAgainDeliveryText: {
     fontSize: 12,
     color: '#888',
+  },
+  // ── Typhoon overlay styles ──────────────────────────────────
+  typhoonBanner: {
+    backgroundColor: '#B71C1C',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  typhoonBannerIcon: { fontSize: 26 },
+  typhoonBannerTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#FFF',
+  },
+  typhoonBannerMsg: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: 2,
+  },
+  typhoonCardOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(30,0,0,0.72)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4,
+  },
+  typhoonCardIcon: { fontSize: 28 },
+  typhoonCardText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
 });

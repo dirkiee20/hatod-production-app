@@ -147,7 +147,7 @@ export default function ManageScreen() {
           </View>
 
           {restLoading ? (
-            <View style={styles.loadingBox}><ActivityIndicator size="large" color="#C2185B" /></View>
+            <View style={styles.loadingBox}><ActivityIndicator size="large" color="#4f46e5" /></View>
           ) : (
             <ScrollView
               showsVerticalScrollIndicator={false}
@@ -174,8 +174,8 @@ export default function ManageScreen() {
                       {r.isApproved ? (
                         <Switch
                           value={r.isOpen || false}
-                          trackColor={{ false: '#DDD', true: '#F48FB1' }}
-                          thumbColor={r.isOpen ? '#C2185B' : '#FFF'}
+                          trackColor={{ false: '#DDD', true: '#C7D2FE' }}
+                          thumbColor={r.isOpen ? '#4f46e5' : '#FFF'}
                           disabled
                         />
                       ) : (
@@ -223,7 +223,7 @@ export default function ManageScreen() {
           </View>
 
           {usersLoading ? (
-            <View style={styles.loadingBox}><ActivityIndicator size="large" color="#C2185B" /></View>
+            <View style={styles.loadingBox}><ActivityIndicator size="large" color="#4f46e5" /></View>
           ) : (
             <ScrollView
               style={{ flex: 1 }}
@@ -240,7 +240,7 @@ export default function ManageScreen() {
                   <View style={[styles.avatarCircle, {
                     backgroundColor:
                       user.role === UserRole.MERCHANT ? '#1976D2' :
-                      user.role === UserRole.ADMIN ? '#E65100' : '#C2185B'
+                      user.role === UserRole.ADMIN ? '#E65100' : '#4f46e5'
                   }]}>
                     <ThemedText style={styles.avatarText}>{(user.name || 'U').charAt(0)}</ThemedText>
                   </View>
@@ -251,12 +251,12 @@ export default function ManageScreen() {
                       <View style={[styles.roleBadge, {
                         backgroundColor:
                           user.role === UserRole.MERCHANT ? '#E3F2FD' :
-                          user.role === UserRole.ADMIN ? '#FFF3E0' : '#F3E5F5'
+                          user.role === UserRole.ADMIN ? '#FFF3E0' : '#EEF2FF'
                       }]}>
                         <ThemedText style={[styles.roleText, {
                           color:
                             user.role === UserRole.MERCHANT ? '#1976D2' :
-                            user.role === UserRole.ADMIN ? '#E65100' : '#7B1FA2'
+                            user.role === UserRole.ADMIN ? '#E65100' : '#4f46e5'
                         }]}>{user.role}</ThemedText>
                       </View>
                     </View>
@@ -278,7 +278,7 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 20,
     paddingBottom: 16,
-    backgroundColor: '#C2185B',
+    backgroundColor: '#4f46e5',
   },
   headerTitle: { fontSize: 24, fontWeight: '900', color: '#FFF' },
   headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.8)', marginTop: 4 },
@@ -305,7 +305,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
   },
-  segBtnActive: { backgroundColor: '#C2185B' },
+  segBtnActive: { backgroundColor: '#4f46e5' },
   segText: { fontSize: 13, fontWeight: '700', color: '#888' },
   segTextActive: { color: '#FFF' },
 
@@ -315,8 +315,8 @@ const styles = StyleSheet.create({
     flex: 1, backgroundColor: '#FFF', padding: 10, borderRadius: 10,
     alignItems: 'center', borderWidth: 1, borderColor: '#EEE',
   },
-  activeStatCard: { backgroundColor: '#C2185B', borderColor: '#C2185B' },
-  statValue: { fontSize: 18, fontWeight: '900', color: '#C2185B' },
+  activeStatCard: { backgroundColor: '#4f46e5', borderColor: '#4f46e5' },
+  statValue: { fontSize: 18, fontWeight: '900', color: '#4f46e5' },
   statLabel: { fontSize: 10, color: '#888', marginTop: 2 },
   activeStatText: { color: '#FFF' },
   restaurantCard: {
@@ -337,9 +337,9 @@ const styles = StyleSheet.create({
   // User tabs
   tabRow: { backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
   tab: { paddingHorizontal: 18, paddingVertical: 14 },
-  activeTab: { borderBottomWidth: 3, borderBottomColor: '#C2185B' },
+  activeTab: { borderBottomWidth: 3, borderBottomColor: '#4f46e5' },
   tabText: { fontSize: 13, fontWeight: '700', color: '#999' },
-  activeTabText: { color: '#C2185B' },
+  activeTabText: { color: '#4f46e5' },
 
   // User cards
   userCard: {

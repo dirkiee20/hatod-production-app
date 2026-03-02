@@ -9,8 +9,8 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { logout } from '../../api/client';
 
-const ACCENT = '#C2185B';
-const ACCENT_LIGHT = '#FCE4EC';
+const ACCENT = '#4f46e5';
+const ACCENT_LIGHT = '#EEF2FF';
 
 export default function AccountScreen() {
   const insets = useSafeAreaInsets();

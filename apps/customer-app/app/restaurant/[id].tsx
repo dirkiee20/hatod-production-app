@@ -1,11 +1,12 @@
-import { StyleSheet, ScrollView, TouchableOpacity, Image, View, Animated, ActivityIndicator } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, Image, View, Animated, ActivityIndicator, Modal, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import React, { useState, useRef, useEffect } from 'react';
-import { getMerchantById, getMenuItemsByMerchant } from '@/api/services';
+import { getMerchantById, getMenuItemsByMerchant, getMerchantReviews } from '@/api/services';
+import { Review } from '@/api/types';
 import { resolveImageUrl } from '@/api/client';
 import { Merchant, MenuItem } from '@/api/types';
 import { isMerchantOpen } from '@/utils/time';
@@ -27,6 +28,193 @@ function FallbackImage({ uri, style, placeholder }: { uri?: string; style: any; 
   );
 }
 
+// ─── Reviews Bottom Sheet ─────────────────────────────────────────────────────
+
+function StarRow({ filled, size = 14 }: { filled: number; size?: number }) {
+  return (
+    <View style={{ flexDirection: 'row', gap: 2 }}>
+      {[1, 2, 3, 4, 5].map(s => (
+        <ThemedText key={s} style={{ fontSize: size, color: s <= filled ? '#FFD700' : '#E0E0E0' }}>★</ThemedText>
+      ))}
+    </View>
+  );
+}
+
+function ReviewsSheet({
+  visible, merchantId, merchantName, avgRating, reviewCount, onClose,
+}: {
+  visible: boolean; merchantId: string; merchantName: string;
+  avgRating?: number; reviewCount?: number; onClose: () => void;
+}) {
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [loading, setLoading] = useState(false);
+  const slideAnim = useRef(new Animated.Value(600)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      setLoading(true);
+      getMerchantReviews(merchantId).then((data: Review[]) => {
+        setReviews(Array.isArray(data) ? data : []);
+        setLoading(false);
+      });
+      Animated.parallel([
+        Animated.timing(fadeAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
+        Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, damping: 20, stiffness: 180 }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(fadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
+        Animated.timing(slideAnim, { toValue: 600, duration: 220, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [visible]);
+
+  const breakdown = [5, 4, 3, 2, 1].map(star => ({
+    star,
+    count: reviews.filter((r: Review) => r.rating === star).length,
+  }));
+  const maxCount = Math.max(1, ...breakdown.map(b => b.count));
+
+  const formatDate = (iso: string) =>
+    new Date(iso).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  return (
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+      <View style={rvStyles.overlay}>
+        <Animated.View style={[StyleSheet.absoluteFill, rvStyles.backdrop, { opacity: fadeAnim }]}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        </Animated.View>
+
+        <Animated.View style={[rvStyles.sheet, { transform: [{ translateY: slideAnim }] }]}>
+          {/* Handle */}
+          <View style={rvStyles.handle} />
+
+          {/* Header */}
+          <View style={rvStyles.sheetHeader}>
+            <ThemedText style={rvStyles.sheetTitle}>Reviews · {merchantName}</ThemedText>
+            <TouchableOpacity onPress={onClose} style={rvStyles.closeBtn}>
+              <ThemedText style={{ fontSize: 16, color: '#666', fontWeight: '700' }}>✕</ThemedText>
+            </TouchableOpacity>
+          </View>
+
+          {/* Summary */}
+          <View style={rvStyles.summary}>
+            <View style={rvStyles.ratingBig}>
+              <ThemedText style={rvStyles.ratingNum}>{avgRating?.toFixed(1) ?? '—'}</ThemedText>
+              <StarRow filled={Math.round(avgRating ?? 0)} size={18} />
+              <ThemedText style={rvStyles.ratingTotal}>{reviewCount ?? 0} reviews</ThemedText>
+            </View>
+            <View style={rvStyles.breakdown}>
+              {breakdown.map(({ star, count }) => (
+                <View key={star} style={rvStyles.barRow}>
+                  <ThemedText style={rvStyles.barLabel}>{star}★</ThemedText>
+                  <View style={rvStyles.barTrack}>
+                    <View style={[rvStyles.barFill, { width: `${(count / maxCount) * 100}%` as any }]} />
+                  </View>
+                  <ThemedText style={rvStyles.barCount}>{count}</ThemedText>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          <View style={rvStyles.sheetDivider} />
+
+          {/* List */}
+          {loading ? (
+            <View style={rvStyles.loadingBox}>
+              <ActivityIndicator size="large" color="#5c6cc9" />
+            </View>
+          ) : reviews.length === 0 ? (
+            <View style={rvStyles.emptyBox}>
+              <ThemedText style={{ fontSize: 36 }}>💬</ThemedText>
+              <ThemedText style={rvStyles.emptyText}>No reviews yet</ThemedText>
+              <ThemedText style={rvStyles.emptySubText}>Be the first to leave a review!</ThemedText>
+            </View>
+          ) : (
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={rvStyles.reviewList}>
+              {reviews.map((review: Review) => (
+                <View key={review.id} style={rvStyles.reviewCard}>
+                  <View style={rvStyles.reviewHeader}>
+                    <View style={rvStyles.avatar}>
+                      <ThemedText style={rvStyles.avatarText}>
+                        {(review.customer?.firstName?.[0] ?? '?').toUpperCase()}
+                      </ThemedText>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <ThemedText style={rvStyles.reviewerName}>
+                        {review.customer
+                          ? `${review.customer.firstName} ${review.customer.lastName[0]}.`
+                          : 'Customer'}
+                      </ThemedText>
+                      <ThemedText style={rvStyles.reviewDate}>{formatDate(review.createdAt)}</ThemedText>
+                    </View>
+                    <StarRow filled={review.rating} size={13} />
+                  </View>
+                  {review.comment ? (
+                    <ThemedText style={rvStyles.comment}>"{review.comment}"</ThemedText>
+                  ) : null}
+                </View>
+              ))}
+            </ScrollView>
+          )}
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
+const rvStyles = StyleSheet.create({
+  overlay: { flex: 1, justifyContent: 'flex-end' },
+  backdrop: { backgroundColor: 'rgba(0,0,0,0.45)' },
+  sheet: {
+    backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingHorizontal: 20, paddingBottom: 36, paddingTop: 12,
+    maxHeight: '85%',
+    shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15, shadowRadius: 16, elevation: 24,
+  },
+  handle: {
+    width: 40, height: 4, borderRadius: 2, backgroundColor: '#E0E0E0',
+    alignSelf: 'center', marginBottom: 18,
+  },
+  sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  sheetTitle: { fontSize: 17, fontWeight: '900', color: '#222', flex: 1, marginRight: 8 },
+  closeBtn: {
+    width: 32, height: 32, borderRadius: 16, backgroundColor: '#F5F5F5',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  summary: { flexDirection: 'row', gap: 20, alignItems: 'center', marginBottom: 20 },
+  ratingBig: { alignItems: 'center', gap: 6, minWidth: 80 },
+  ratingNum: { fontSize: 44, fontWeight: '900', color: '#222', lineHeight: 50 },
+  ratingTotal: { fontSize: 12, color: '#888', marginTop: 2 },
+  breakdown: { flex: 1, gap: 6 },
+  barRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  barLabel: { fontSize: 11, color: '#888', width: 22, textAlign: 'right' },
+  barTrack: { flex: 1, height: 6, backgroundColor: '#F0F0F0', borderRadius: 3, overflow: 'hidden' },
+  barFill: { height: '100%', backgroundColor: '#FFD700', borderRadius: 3 },
+  barCount: { fontSize: 11, color: '#888', width: 16, textAlign: 'right' },
+  sheetDivider: { height: 1, backgroundColor: '#F5F5F5', marginBottom: 16 },
+  loadingBox: { height: 150, justifyContent: 'center', alignItems: 'center' },
+  emptyBox: { height: 180, justifyContent: 'center', alignItems: 'center', gap: 8 },
+  emptyText: { fontSize: 16, fontWeight: '800', color: '#555', marginTop: 4 },
+  emptySubText: { fontSize: 13, color: '#AAAAAA' },
+  reviewList: { paddingBottom: 8, gap: 14 },
+  reviewCard: {
+    backgroundColor: '#FAFAFA', borderRadius: 14, padding: 14,
+    borderWidth: 1, borderColor: '#F0F0F0',
+  },
+  reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
+  avatar: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: '#5c6cc9',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  avatarText: { fontSize: 15, fontWeight: '900', color: '#FFF' },
+  reviewerName: { fontSize: 13, fontWeight: '800', color: '#333' },
+  reviewDate: { fontSize: 11, color: '#AAAAAA', marginTop: 1 },
+  comment: { fontSize: 13, color: '#555', lineHeight: 19, fontStyle: 'italic' },
+});
+
 export default function RestaurantDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
@@ -38,6 +226,7 @@ export default function RestaurantDetailScreen() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [addingItemId, setAddingItemId] = useState<string | null>(null);
+  const [showReviews, setShowReviews] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -225,8 +414,12 @@ export default function RestaurantDetailScreen() {
             <ThemedView style={styles.ratingRow}>
               <ThemedText style={styles.ratingStar}>★</ThemedText>
               <ThemedText style={styles.ratingValue}>{merchant.rating?.toFixed(1) || 'New'}</ThemedText>
-              {merchant.reviewCount && (
-                <ThemedText style={styles.ratingCount}>({merchant.reviewCount} ratings)</ThemedText>
+              {merchant.reviewCount ? (
+                <TouchableOpacity onPress={() => setShowReviews(true)} activeOpacity={0.7}>
+                  <ThemedText style={styles.ratingCount}>({merchant.reviewCount} ratings) ›</ThemedText>
+                </TouchableOpacity>
+              ) : (
+                <ThemedText style={styles.ratingCount}>(No reviews yet)</ThemedText>
               )}
             </ThemedView>
 
@@ -348,6 +541,18 @@ export default function RestaurantDetailScreen() {
             <ThemedText style={styles.viewBtnText}>View Cart</ThemedText>
           </TouchableOpacity>
         </ThemedView>
+      )}
+
+      {/* Reviews Bottom Sheet */}
+      {merchant && (
+        <ReviewsSheet
+          visible={showReviews}
+          merchantId={merchant.id}
+          merchantName={merchant.name}
+          avgRating={merchant.rating}
+          reviewCount={merchant.reviewCount}
+          onClose={() => setShowReviews(false)}
+        />
       )}
     </ThemedView>
   );

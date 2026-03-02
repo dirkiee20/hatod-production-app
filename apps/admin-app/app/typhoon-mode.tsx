@@ -79,7 +79,7 @@ export default function TyphoonModeScreen() {
   if (loading) {
     return (
       <ThemedView style={styles.centered}>
-        <ActivityIndicator size="large" color="#1A237E" />
+        <ActivityIndicator size="large" color="#4f46e5" />
         <ThemedText style={{ color: '#999', marginTop: 12 }}>Loading settings…</ThemedText>
       </ThemedView>
     );
@@ -92,14 +92,14 @@ export default function TyphoonModeScreen() {
           headerShown: true,
           title: 'Typhoon Mode',
           headerTitleStyle: { fontWeight: '900', fontSize: 16 },
-          headerStyle: { backgroundColor: config.enabled ? '#1A237E' : '#FFF' },
-          headerTintColor: config.enabled ? '#FFF' : '#1A237E',
+          headerStyle: { backgroundColor: config.enabled ? '#4f46e5' : '#FFF' },
+          headerTintColor: config.enabled ? '#FFF' : '#4f46e5',
           headerLeft: () => (
             <TouchableOpacity onPress={() => router.back()}>
               <IconSymbol
                 size={20}
                 name="chevron.right"
-                color={config.enabled ? '#FFF' : '#1A237E'}
+                color={config.enabled ? '#FFF' : '#4f46e5'}
                 style={{ transform: [{ rotate: '180deg' }] }}
               />
             </TouchableOpacity>
@@ -108,28 +108,28 @@ export default function TyphoonModeScreen() {
       />
 
       <ScrollView
-        style={[styles.container, config.enabled && { backgroundColor: '#0D1547' }]}
+        style={[styles.container, config.enabled && { backgroundColor: '#1e1b4b' }]}
         contentContainerStyle={{ paddingBottom: 40 }}
       >
         {/* Hero Banner */}
-        <View style={[styles.hero, { backgroundColor: config.enabled ? '#1A237E' : '#E8EAF6' }]}>
+        <View style={[styles.hero, { backgroundColor: config.enabled ? '#4f46e5' : '#EEF2FF' }]}>
           <ThemedText style={styles.heroIcon}>🌀</ThemedText>
-          <ThemedText style={[styles.heroTitle, { color: config.enabled ? '#FFF' : '#1A237E' }]}>
+          <ThemedText style={[styles.heroTitle, { color: config.enabled ? '#FFF' : '#4f46e5' }]}>
             {config.enabled ? 'TYPHOON MODE ACTIVE' : 'Typhoon Mode'}
           </ThemedText>
-          <ThemedText style={[styles.heroSub, { color: config.enabled ? '#90CAF9' : '#5C6BC0' }]}>
+          <ThemedText style={[styles.heroSub, { color: config.enabled ? '#C7D2FE' : '#6366f1' }]}>
             {config.enabled
               ? `Activated ${config.activatedAt ? new Date(config.activatedAt).toLocaleString('en-PH') : ''}`
               : 'Suspend platform operations during a storm signal'}
           </ThemedText>
 
           {/* Master Toggle */}
-          <View style={[styles.toggleCard, { borderColor: config.enabled ? '#3949AB' : '#C5CAE9' }]}>
+          <View style={[styles.toggleCard, { borderColor: config.enabled ? '#6366f1' : '#C7D2FE' }]}>
             <View style={{ flex: 1 }}>
               <ThemedText style={[styles.toggleLabel, { color: config.enabled ? '#FFF' : '#333' }]}>
                 {config.enabled ? 'Typhoon Mode is ON' : 'Typhoon Mode is OFF'}
               </ThemedText>
-              <ThemedText style={[styles.toggleSub, { color: config.enabled ? '#9FA8DA' : '#888' }]}>
+              <ThemedText style={[styles.toggleSub, { color: config.enabled ? '#C7D2FE' : '#888' }]}>
                 {config.enabled ? 'Tap to deactivate' : 'Tap to activate'}
               </ThemedText>
             </View>
@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#EEE',
     overflow: 'hidden',
   },
-  cardDark: { backgroundColor: '#1A237E', borderColor: '#3949AB' },
+  cardDark: { backgroundColor: '#4f46e5', borderColor: '#6366f1' },
 
   optionRow: {
     flexDirection: 'row', alignItems: 'center',
@@ -343,20 +343,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAFAFA',
   },
   messageInputDark: {
-    backgroundColor: '#283593', borderColor: '#3949AB', color: '#E8EAF6',
+    backgroundColor: '#3730a3', borderColor: '#6366f1', color: '#E8EAF6',
   },
 
   saveBtn: {
-    backgroundColor: '#1A237E', borderRadius: 14,
+    backgroundColor: '#4f46e5', borderRadius: 14,
     padding: 16, alignItems: 'center',
   },
   saveBtnText: { color: '#FFF', fontSize: 15, fontWeight: '900' },
 
   infoBox: {
     margin: 16, marginTop: 20,
-    backgroundColor: '#E8EAF6', borderRadius: 12,
+    backgroundColor: '#EEF2FF', borderRadius: 12,
     padding: 16, gap: 8,
   },
-  infoTitle: { fontSize: 13, fontWeight: '800', color: '#3949AB' },
-  infoText: { fontSize: 12, color: '#5C6BC0', lineHeight: 20 },
+  infoTitle: { fontSize: 13, fontWeight: '800', color: '#4f46e5' },
+  infoText: { fontSize: 12, color: '#6366f1', lineHeight: 20 },
 });

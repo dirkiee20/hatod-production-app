@@ -3,7 +3,7 @@ import { StyleSheet, View, TouchableOpacity, TextInput, ActivityIndicator, Alert
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 import { getMerchants, getAllOrders, getRiders } from '../../api/services';
@@ -21,6 +21,7 @@ export default function MapScreen() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [riders, setRiders] = useState<Rider[]>([]);
   const [loading, setLoading] = useState(true);
+  const cameraRef = useRef<Mapbox.Camera>(null);
 
   const filters = ['All', 'Restaurants', 'Active Riders'];
 
@@ -33,6 +34,44 @@ export default function MapScreen() {
     })();
     fetchData();
   }, []);
+
+  // Once data finishes loading, fly to fit all markers — no hardcoded position
+  useEffect(() => {
+    if (loading || !cameraRef.current) return;
+
+    const coordinates = [
+      ...merchants.filter(m => m.longitude && m.latitude).map(m => [m.longitude!, m.latitude!]),
+      ...riders.filter(r => r.currentLongitude && r.currentLatitude).map(r => [r.currentLongitude!, r.currentLatitude!]),
+    ];
+
+    if (coordinates.length === 0) {
+      // No data at all — stay at a neutral default without animating
+      return;
+    }
+
+    if (coordinates.length === 1) {
+      cameraRef.current.setCamera({
+        centerCoordinate: coordinates[0],
+        zoomLevel: 14,
+        animationDuration: 1200,
+        animationMode: 'flyTo',
+      });
+    } else {
+      const minLng = Math.min(...coordinates.map(c => c[0]));
+      const maxLng = Math.max(...coordinates.map(c => c[0]));
+      const minLat = Math.min(...coordinates.map(c => c[1]));
+      const maxLat = Math.max(...coordinates.map(c => c[1]));
+      const latDiff = maxLat - minLat;
+      const lngDiff = maxLng - minLng;
+
+      cameraRef.current.fitBounds(
+        [maxLng + lngDiff * 0.1, maxLat + latDiff * 0.1],
+        [minLng - lngDiff * 0.1, minLat - latDiff * 0.1],
+        50,
+        1200
+      );
+    }
+  }, [loading]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -102,7 +141,7 @@ export default function MapScreen() {
       <View style={styles.mapContainer}>
         {loading && (
             <View style={styles.loadingOverlay}>
-                <ActivityIndicator size="large" color="#C2185B" />
+                <ActivityIndicator size="large" color="#4f46e5" />
             </View>
         )}
         
@@ -113,45 +152,9 @@ export default function MapScreen() {
             attributionEnabled={false}
         >
             <Mapbox.Camera
+                ref={cameraRef}
                 zoomLevel={11}
-                centerCoordinate={[120.9842, 14.5995]}
-                animationMode={'flyTo'}
-                animationDuration={2000}
-                ref={(c) => {
-                    if (c) {
-                        const coordinates = [
-                            ...merchants.filter(m => m.longitude && m.latitude).map(m => [m.longitude!, m.latitude!]),
-                            ...riders.filter(r => r.currentLongitude && r.currentLatitude).map(r => [r.currentLongitude!, r.currentLatitude!])
-                        ];
-
-                        if (coordinates.length > 0) {
-                            const minLng = Math.min(...coordinates.map(c => c[0]));
-                            const maxLng = Math.max(...coordinates.map(c => c[0]));
-                            const minLat = Math.min(...coordinates.map(c => c[1]));
-                            const maxLat = Math.max(...coordinates.map(c => c[1]));
-
-                            // If only one point
-                            if (minLng === maxLng && minLat === maxLat) {
-                                c.setCamera({
-                                    centerCoordinate: [minLng, minLat],
-                                    zoomLevel: 14,
-                                    animationDuration: 2000,
-                                });
-                            } else {
-                                // Add 10% padding
-                                const latDiff = maxLat - minLat;
-                                const lngDiff = maxLng - minLng;
-                                
-                                c.fitBounds(
-                                    [maxLng + lngDiff * 0.1, maxLat + latDiff * 0.1], // ne
-                                    [minLng - lngDiff * 0.1, minLat - latDiff * 0.1], // sw
-                                    50, // padding
-                                    2000 // duration
-                                );
-                            }
-                        }
-                    }
-                }}
+                animationMode={'none'}
             />
 
             {/* Restaurant Markers */}
@@ -249,7 +252,7 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 20,
     paddingBottom: 20,
-    backgroundColor: '#C2185B',
+    backgroundColor: '#4f46e5',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -287,7 +290,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
   },
   filterChipActive: {
-    backgroundColor: '#C2185B',
+    backgroundColor: '#4f46e5',
   },
   filterText: {
     fontSize: 13,
@@ -387,7 +390,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 24,
     fontWeight: '900',
-    color: '#C2185B',
+    color: '#4f46e5',
   },
   statLabel: {
     fontSize: 11,
