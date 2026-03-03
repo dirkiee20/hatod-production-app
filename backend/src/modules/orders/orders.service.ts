@@ -161,7 +161,7 @@ export class OrdersService {
         const destination = { lat: address.latitude, lng: address.longitude };
         
         try {
-          const feeResult = await this.deliveryFeeService.calculateDeliveryFee(origin, destination);
+          const feeResult = await this.deliveryFeeService.calculateDeliveryFee(origin, destination, subtotal);
           deliveryFee = feeResult.fee;
         } catch (error) {
           console.error('Failed to calculate delivery fee, using default:', error);

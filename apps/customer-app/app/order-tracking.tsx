@@ -456,9 +456,10 @@ export default function OrderTrackingScreen() {
                          <View style={{ flex: 1 }}>
                              <ThemedText style={{ fontWeight: '700', fontSize: 14 }}>{item.quantity}x {item.menuItem?.name}</ThemedText>
                              {(() => {
-                               if (!item.notes) return null;
+                               const rawOptions = item.options ?? item.notes;
+                               if (!rawOptions) return null;
                                let parsed: Record<string, any> = {};
-                               try { parsed = typeof item.notes === 'string' ? JSON.parse(item.notes) : item.notes; } catch { return null; }
+                               try { parsed = typeof rawOptions === 'string' ? JSON.parse(rawOptions) : rawOptions; } catch { return null; }
                                const entries = Object.entries(parsed).filter(([, v]) =>
                                  v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0)
                                );
@@ -845,4 +846,3 @@ const styles = StyleSheet.create({
     alignItems: 'center' 
   },
 });
-

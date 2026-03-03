@@ -23,8 +23,6 @@ export default function CheckoutScreen() {
     }
   }, [pabiliRequestId]);
 
-  const platformFee = 5; 
-  
   const isPabili = !!pabiliRequest;
   const displayItems = isPabili ? [
      { id: 'pabili-item', quantity: 1, name: 'Custom Pabili Items', options: { addons: pabiliRequest.items } as any, totalPrice: pabiliRequest.estimatedItemCost }
@@ -32,7 +30,7 @@ export default function CheckoutScreen() {
 
   const displaySubtotal = isPabili ? pabiliRequest.estimatedItemCost : cartTotal;
   const displayDeliveryFee = isPabili ? (pabiliRequest.serviceFee || 0) : deliveryFee;
-  const total = displaySubtotal + displayDeliveryFee + platformFee;
+  const total = displaySubtotal + displayDeliveryFee;
 
   const [loading, setLoading] = useState(false);
   const [typhoon, setTyphoon] = useState<TyphoonConfig | null>(null);
@@ -98,7 +96,8 @@ export default function CheckoutScreen() {
         orderData.items = items.map(i => ({
           menuItemId: i.menuItemId,
           quantity: i.quantity,
-          notes: i.options ? JSON.stringify(i.options) : undefined
+          options: i.options || undefined,
+          notes: typeof i.options?.note === 'string' ? i.options.note : undefined,
         }));
       }
       
@@ -130,7 +129,6 @@ export default function CheckoutScreen() {
     items: displayItems.length,
     subtotal: displaySubtotal,
     deliveryFee: displayDeliveryFee,
-    platformFee: platformFee,
     total: total,
   };
 
@@ -254,10 +252,6 @@ export default function CheckoutScreen() {
           <ThemedView style={styles.billRow}>
             <ThemedText style={styles.billLabel}>Delivery Fee</ThemedText>
             <ThemedText style={styles.billValue}>₱{orderSummary.deliveryFee}</ThemedText>
-          </ThemedView>
-          <ThemedView style={styles.billRow}>
-            <ThemedText style={styles.billLabel}>Platform Fee</ThemedText>
-            <ThemedText style={styles.billValue}>₱{orderSummary.platformFee}</ThemedText>
           </ThemedView>
           <View style={styles.billDivider} />
           <ThemedView style={styles.billRow}>
