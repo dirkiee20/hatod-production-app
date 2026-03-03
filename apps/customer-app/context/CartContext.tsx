@@ -52,6 +52,48 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [deliveryAddress, setDeliveryAddress] = useState<DeliveryAddress | null>(null);
   const [deliveryFee, setDeliveryFee] = useState(50); // Default fee
 
+  const normaliseOptionGroups = (raw: any[]): { name: string; choices: { label: string; price: number }[] }[] => {
+    return (Array.isArray(raw) ? raw : []).map((group: any) => {
+      const choices = (Array.isArray(group?.options) ? group.options : Array.isArray(group?.items) ? group.items : []).map((c: any) => ({
+        label: String(c?.label ?? c?.name ?? ''),
+        price: Number(c?.price ?? 0),
+      }));
+      return {
+        name: String(group?.name ?? group?.title ?? ''),
+        choices,
+      };
+    });
+  };
+
+  const computeOptionsExtra = (menuItemOptions: any, selectedOptions: Record<string, any> | undefined): number => {
+    if (!selectedOptions || typeof selectedOptions !== 'object') return 0;
+
+    const groups = normaliseOptionGroups(menuItemOptions);
+    const selectedByGroup = new Map<string, any>();
+    Object.entries(selectedOptions).forEach(([k, v]) => {
+      if (k !== 'note') selectedByGroup.set(k.toLowerCase(), v);
+    });
+
+    let extra = 0;
+    groups.forEach((group) => {
+      const selected = selectedByGroup.get(group.name.toLowerCase());
+      if (selected == null) return;
+
+      const addChoicePrice = (choiceLabel: string) => {
+        const match = group.choices.find((c) => c.label === choiceLabel);
+        if (match) extra += Number(match.price) || 0;
+      };
+
+      if (Array.isArray(selected)) {
+        selected.forEach((v) => addChoicePrice(String(v)));
+      } else {
+        addChoicePrice(String(selected));
+      }
+    });
+
+    return extra;
+  };
+
   const refreshCart = async () => {
     const token = await import('@/api/client').then(m => m.getAuthToken());
     if (!token) {
@@ -62,17 +104,26 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     if (cartData && cartData.items) {
       // Map backend structure to frontend structure
       const mappedItems: CartItem[] = cartData.items.map((ci: any) => ({
+        // Compute price with selected option/add-on deltas from server-stored option selections
+        // so cart totals stay consistent after refresh.
+        ...(() => {
+          const basePrice = Number(ci.menuItem.price) || 0;
+          const optionsExtra = computeOptionsExtra(ci.menuItem.options, ci.options || {});
+          const unitPrice = basePrice + optionsExtra;
+          return {
+            price: unitPrice,
+            totalPrice: unitPrice * ci.quantity,
+          };
+        })(),
         id: ci.id,
         menuItemId: ci.menuItemId,
         merchantId: ci.menuItem.merchantId,
         storeName: ci.menuItem?.merchant?.name,
         deliveryFee: 50, // Hardcoded or from backend
         name: ci.menuItem.name,
-        price: ci.menuItem.price,
         quantity: ci.quantity,
         image: resolveImageUrl(ci.menuItem.image || ci.menuItem.imageUrl), // Resolve URL
         options: ci.options || {},
-        totalPrice: ci.menuItem.price * ci.quantity, // Simple calculation ignoring option prices for now
       }));
       setItems(mappedItems);
     } else {

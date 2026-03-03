@@ -5,12 +5,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { getMerchants, getMyOrders, getTyphoonMode, TyphoonConfig } from '@/api/services';
+import { getMerchants, getMyOrders, getTyphoonMode, TyphoonConfig, getDeliveryFeeEstimate } from '@/api/services';
 import { Merchant } from '@/api/types';
 import { resolveImageUrl } from '@/api/client';
 
 const PLACEHOLDER_BANNER = 'https://placehold.co/400x225/f0f0f0/aaaaaa?text=No+Image';
 const PLACEHOLDER_LOGO = 'https://placehold.co/150x150/f0f0f0/aaaaaa?text=?';
+const PLACEHOLDER_CATEGORY = 'https://placehold.co/120x120/f0f0f0/aaaaaa?text=Food';
 
 // Wrapper that falls back to placeholder on error
 function MerchantImage({ uri, style, placeholder }: { uri?: string; style: any; placeholder: string }) {
@@ -24,8 +25,21 @@ function MerchantImage({ uri, style, placeholder }: { uri?: string; style: any; 
     />
   );
 }
+
+function CategoryImage({ uri, style }: { uri: string; style: any }) {
+  const [src, setSrc] = useState<string>(uri || PLACEHOLDER_CATEGORY);
+  useEffect(() => { setSrc(uri || PLACEHOLDER_CATEGORY); }, [uri]);
+  return (
+    <Image
+      source={{ uri: src }}
+      style={style}
+      onError={() => setSrc(PLACEHOLDER_CATEGORY)}
+    />
+  );
+}
 import { isMerchantOpen } from '@/utils/time';
 import { useSocket } from '@/context/SocketContext';
+import { useCart } from '@/context/CartContext';
 
 export default function FoodScreen() {
   const router = useRouter();
@@ -49,18 +63,9 @@ export default function FoodScreen() {
     deliveryFee?: number;
   }>>([]);
   const [typhoon, setTyphoon] = useState<TyphoonConfig | null>(null);
+  const [deliveryEstimates, setDeliveryEstimates] = useState<Record<string, { fee: number; distance: number; duration: number }>>({});
+  const { deliveryAddress, items } = useCart();
 
-  const FOOD_CATEGORIES = [
-    { label: 'Chicken',       image: 'https://images.unsplash.com/photo-1598103442097-8b74394b95c3?w=200&q=80' },
-    { label: 'Burgers',       image: 'https://images.unsplash.com/photo-1586190848861-99aa4a171e90?w=200&q=80' },
-    { label: 'Fried Chicken', image: 'https://images.unsplash.com/photo-1562967914-608f82629710?w=200&q=80' },
-    { label: 'Pizza',         image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=200&q=80' },
-    { label: 'Cake',          image: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=200&q=80' },
-    { label: 'Noodles',       image: 'https://images.unsplash.com/photo-1555126634-323283e090fa?w=200&q=80' },
-    { label: 'Seafood',       image: 'https://images.unsplash.com/photo-1559737558-2f5a35f4523b?w=200&q=80' },
-    { label: 'Rice Meals',    image: 'https://images.unsplash.com/photo-1603133872878-684f208fb84b?w=200&q=80' },
-  ];
-  
   const { socket } = useSocket();
 
   useEffect(() => {
@@ -130,10 +135,78 @@ export default function FoodScreen() {
     }
   };
 
+  useEffect(() => {
+    let isCancelled = false;
+
+    const fetchEstimates = async () => {
+      const restaurantMerchants = merchants.filter((m) => !m.type || m.type === 'RESTAURANT');
+      const destLat = deliveryAddress?.latitude;
+      const destLng = deliveryAddress?.longitude;
+      if (destLat == null || destLng == null || restaurantMerchants.length === 0) {
+        if (!isCancelled) setDeliveryEstimates({});
+        return;
+      }
+
+      const results = await Promise.all(
+        restaurantMerchants.map(async (merchant) => {
+          const originLat = merchant.latitude;
+          const originLng = merchant.longitude;
+          if (originLat == null || originLng == null) return null;
+
+          const subtotalForMerchant = items
+            .filter((ci) => ci.merchantId === merchant.id)
+            .reduce((sum, ci) => sum + ci.totalPrice, 0);
+
+          const estimate = await getDeliveryFeeEstimate(
+            { lat: originLat, lng: originLng },
+            { lat: destLat, lng: destLng },
+            subtotalForMerchant
+          );
+
+          if (!estimate) return null;
+          return { merchantId: merchant.id, estimate };
+        })
+      );
+
+      if (isCancelled) return;
+
+      const nextMap: Record<string, { fee: number; distance: number; duration: number }> = {};
+      results.forEach((entry) => {
+        if (entry) nextMap[entry.merchantId] = entry.estimate;
+      });
+      setDeliveryEstimates(nextMap);
+    };
+
+    fetchEstimates();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [merchants, deliveryAddress?.latitude, deliveryAddress?.longitude, items]);
+
+  const foodCategories = Array.from(
+    new Set(
+      merchants
+        .filter((m) => !m.type || m.type === 'RESTAURANT')
+        .flatMap((m) => (m.categories ?? []).map((c) => c.name))
+        .filter((name): name is string => !!name && name.trim().length > 0)
+    )
+  ).sort((a, b) => a.localeCompare(b));
+
+  useEffect(() => {
+    if (selectedCategory && !foodCategories.includes(selectedCategory)) {
+      setSelectedCategory(null);
+    }
+  }, [foodCategories, selectedCategory]);
+
   const filteredMerchants = merchants.filter(m => {
     if (!(!m.type || m.type === 'RESTAURANT')) return false;
     if (!m.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     if (selectedCategory) {
+      const categoryMatch = (m.categories ?? []).some(
+        (cat) => cat.name.toLowerCase() === selectedCategory.toLowerCase()
+      );
+      if (categoryMatch) return true;
       const haystack = `${m.name} ${m.description ?? ''}`.toLowerCase();
       return haystack.includes(selectedCategory.toLowerCase());
     }
@@ -154,8 +227,31 @@ export default function FoodScreen() {
     }
   ];
 
+  const getMerchantEtaText = (merchant: Merchant) => {
+    const estimate = deliveryEstimates[merchant.id];
+    if (estimate?.duration && estimate.duration > 0) {
+      const minutes = Math.max(1, Math.round(estimate.duration / 60));
+      return `${minutes} min`;
+    }
+    return merchant.deliveryTime ?? null;
+  };
+
+  const getMerchantFeeText = (merchant: Merchant) => {
+    const estimate = deliveryEstimates[merchant.id];
+    const fee = estimate?.fee ?? merchant.deliveryFee;
+    return typeof fee === 'number' ? `₱${fee.toFixed(2)}` : null;
+  };
+
+  const getFeeTextByMerchantId = (merchantId: string, fallbackFee?: number) => {
+    const liveFee = deliveryEstimates[merchantId]?.fee;
+    const fee = typeof liveFee === 'number' ? liveFee : fallbackFee;
+    return typeof fee === 'number' ? `₱ ${fee.toFixed(2)}` : 'Fee unavailable';
+  };
+
   const renderMerchantCard = (merchant: Merchant) => {
     const { isOpen, nextOpen } = isMerchantOpen(merchant);
+    const etaText = getMerchantEtaText(merchant);
+    const feeText = getMerchantFeeText(merchant);
     
     return (
     <TouchableOpacity 
@@ -207,7 +303,7 @@ export default function FoodScreen() {
         <ThemedView style={styles.feeRow}>
           <IconSymbol size={12} name="paperplane.fill" color="#555" />
           <ThemedText style={styles.feeText}>
-            {merchant.deliveryTime || '15-30 min'} • ₱{merchant.deliveryFee || 29}
+            {`${etaText ?? 'ETA unavailable'} • ${feeText ?? 'Fee unavailable'}`}
           </ThemedText>
         </ThemedView>
 
@@ -224,6 +320,8 @@ export default function FoodScreen() {
   // GrabFood-style horizontal list row for the All Restaurants section
   const renderListCard = (merchant: Merchant) => {
     const { isOpen, nextOpen } = isMerchantOpen(merchant);
+    const etaText = getMerchantEtaText(merchant);
+    const feeText = getMerchantFeeText(merchant);
     const imgSize = 110;
 
     return (
@@ -284,7 +382,7 @@ export default function FoodScreen() {
           <View style={styles.listDeliveryRow}>
             <IconSymbol size={11} name="paperplane.fill" color="#888" />
             <ThemedText style={styles.listDeliveryText}>
-              ₱{merchant.deliveryFee ?? 29}  ·  {merchant.deliveryTime || '15–30 min'}
+              {`${feeText ?? 'Fee unavailable'} • ${etaText ?? 'ETA unavailable'}`}
             </ThemedText>
           </View>
 
@@ -320,7 +418,7 @@ export default function FoodScreen() {
         </ThemedView>
       </ThemedView>
 
-      {/* 🌀 Typhoon Mode Banner */}
+      {/* Typhoon Mode Banner */}
       {typhoon?.enabled && (
         <ThemedView style={styles.typhoonBanner}>
           <ThemedText style={styles.typhoonBannerIcon}>🌀</ThemedText>
@@ -352,37 +450,38 @@ export default function FoodScreen() {
           </ThemedView>
         ) : (
           <>
-          {/* ── Food Categories strip ── */}
-          <ThemedText style={styles.categoriesLabel}>Filter by categories</ThemedText>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoriesScroll}
-          >
-            {FOOD_CATEGORIES.map((cat) => {
-              const active = selectedCategory === cat.label;
-              return (
-                <TouchableOpacity
-                  key={cat.label}
-                  style={styles.categoryItem}
-                  activeOpacity={0.75}
-                  onPress={() => setSelectedCategory(active ? null : cat.label)}
-                >
-                  <View style={[styles.categoryImgWrap, active && styles.categoryImgWrapActive]}>
-                    <Image
-                      source={{ uri: cat.image }}
-                      style={styles.categoryImg}
-                    />
-                  </View>
-                  <ThemedText style={[styles.categoryLabel, active && styles.categoryLabelActive]}>
-                    {cat.label}
-                  </ThemedText>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+          {foodCategories.length > 0 && (
+            <>
+              {/* Food Categories strip */}
+              <ThemedText style={styles.categoriesLabel}>Filter by categories</ThemedText>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categoriesScroll}
+              >
+                {foodCategories.map((categoryName) => {
+                  const active = selectedCategory === categoryName;
+                  return (
+                    <TouchableOpacity
+                      key={categoryName}
+                      style={styles.categoryItem}
+                      activeOpacity={0.75}
+                      onPress={() => setSelectedCategory(active ? null : categoryName)}
+                    >
+                      <View style={[styles.categoryImgWrap, active && styles.categoryImgWrapActive]}>
+                        <CategoryImage uri={PLACEHOLDER_CATEGORY} style={styles.categoryImg} />
+                      </View>
+                      <ThemedText style={[styles.categoryLabel, active && styles.categoryLabelActive]}>
+                        {categoryName}
+                      </ThemedText>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </>
+          )}
 
-          {/* ── Order Again ── */}
+          {/* Order Again */}
           {recentItems.length > 0 && (
             <ThemedView style={styles.sectionContainer}>
               <ThemedView style={styles.sectionHeader}>
@@ -435,7 +534,7 @@ export default function FoodScreen() {
                     {/* Delivery fee */}
                     <View style={styles.orderAgainDeliveryRow}>
                       <ThemedText style={styles.orderAgainDeliveryText}>
-                        🚴 ₱ {(item.deliveryFee ?? 29).toFixed(2)}
+                        Fee: {getFeeTextByMerchantId(item.merchantId, item.deliveryFee)}
                       </ThemedText>
                     </View>
                   </TouchableOpacity>
@@ -693,7 +792,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
   },
-  // ── Food category strip ────────────────────────────────────
+  // Food category strip
   categoriesLabel: {
     fontSize: 12,
     fontWeight: '700',
@@ -740,7 +839,7 @@ const styles = StyleSheet.create({
     color: '#5c6cc9',
     fontWeight: '800',
   },
-  // ── All Restaurants list styles ──────────────────────────────
+  // All Restaurants list styles
   listSection: {
     paddingHorizontal: 16,
   },
@@ -843,7 +942,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     flexShrink: 1,
   },
-  // ── Order Again styles ──────────────────────────────────────
+  // Order Again styles
   orderAgainScroll: {
     paddingHorizontal: 16,
     paddingBottom: 4,
@@ -917,7 +1016,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#888',
   },
-  // ── Typhoon overlay styles ──────────────────────────────────
+  // Typhoon overlay styles
   typhoonBanner: {
     backgroundColor: '#B71C1C',
     flexDirection: 'row',
@@ -953,3 +1052,4 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 });
+

@@ -13,6 +13,52 @@ export class OrdersService {
     private deliveryFeeService: DeliveryFeeService,
   ) {}
 
+  private roundMoney(value: number): number {
+    return Math.round(value * 100) / 100;
+  }
+
+  private normaliseOptionGroups(raw: any): { name: string; choices: { label: string; price: number }[] }[] {
+    return (Array.isArray(raw) ? raw : []).map((group: any) => {
+      const choices = (Array.isArray(group?.options) ? group.options : Array.isArray(group?.items) ? group.items : []).map((c: any) => ({
+        label: String(c?.label ?? c?.name ?? ''),
+        price: Number(c?.price ?? 0),
+      }));
+      return {
+        name: String(group?.name ?? group?.title ?? ''),
+        choices,
+      };
+    });
+  }
+
+  private computeOptionsExtra(menuItemOptions: any, selectedOptions: Record<string, unknown> | null | undefined): number {
+    if (!selectedOptions || typeof selectedOptions !== 'object') return 0;
+
+    const groups = this.normaliseOptionGroups(menuItemOptions);
+    const selectedByGroup = new Map<string, unknown>();
+    Object.entries(selectedOptions).forEach(([k, v]) => {
+      if (k !== 'note') selectedByGroup.set(k.toLowerCase(), v);
+    });
+
+    let extra = 0;
+    groups.forEach((group) => {
+      const selected = selectedByGroup.get(group.name.toLowerCase());
+      if (selected == null) return;
+
+      const addChoicePrice = (choiceLabel: string) => {
+        const match = group.choices.find((c) => c.label === choiceLabel);
+        if (match) extra += Number(match.price) || 0;
+      };
+
+      if (Array.isArray(selected)) {
+        selected.forEach((value) => addChoicePrice(String(value)));
+      } else {
+        addChoicePrice(String(selected));
+      }
+    });
+
+    return extra;
+  }
+
   async create(userId: string, dto: CreateOrderDto) {
     const customer = await this.prisma.customer.findUnique({
       where: { userId },
@@ -86,7 +132,7 @@ export class OrdersService {
 
     } else {
         // Existing flow for normal food orders
-        for (const item of dto.items) {
+        for (const item of dto.items ?? []) {
           const menuItem = await this.prisma.menuItem.findUnique({
             where: { id: item.menuItemId, merchantId: dto.merchantId },
           });
@@ -95,15 +141,20 @@ export class OrdersService {
             throw new BadRequestException(`Item ${item.menuItemId} is not available`);
           }
 
-          subtotal += menuItem.price * item.quantity;
+          const selectedOptions = (item as any).options ?? {};
+          const optionsExtra = this.computeOptionsExtra(menuItem.options, selectedOptions);
+          const unitPrice = this.roundMoney(menuItem.price + optionsExtra);
+          const lineTotal = this.roundMoney(unitPrice * item.quantity);
+          subtotal += lineTotal;
           orderItemsData.push({
             menuItemId: item.menuItemId,
             quantity: item.quantity,
-            price: menuItem.price,
+            price: unitPrice,
             notes: item.notes,
-            options: (item as any).options ?? null,
+            options: selectedOptions,
           });
         }
+        subtotal = this.roundMoney(subtotal);
 
         // Calculate Delivery Fee using DeliveryFeeService
         const origin = { lat: merchant.latitude, lng: merchant.longitude };
@@ -724,4 +775,3 @@ export class OrdersService {
     };
   }
 }
-

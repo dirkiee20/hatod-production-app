@@ -173,9 +173,6 @@ export default function ItemDetailScreen() {
           <ThemedView style={styles.headerRow}>
             <ThemedText style={styles.itemName}>{item.name}</ThemedText>
             <View>
-              {item.originalPrice != null && item.originalPrice !== item.price ? (
-                <ThemedText style={styles.originalPrice}>₱{item.originalPrice}</ThemedText>
-              ) : null}
               <ThemedText style={styles.itemPrice}>₱{item.price}</ThemedText>
             </View>
           </ThemedView>
@@ -321,10 +318,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start', backgroundColor: 'transparent',
   },
   itemName: { fontSize: 22, fontWeight: '900', color: '#333', flex: 1, marginRight: 12 },
-  originalPrice: {
-    fontSize: 13, color: '#BBB', fontWeight: '600',
-    textDecorationLine: 'line-through', textAlign: 'right',
-  },
   itemPrice: { fontSize: 20, fontWeight: '800', color: '#333', textAlign: 'right' },
 
   categoryRow: { marginTop: 6, backgroundColor: 'transparent' },

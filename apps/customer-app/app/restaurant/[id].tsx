@@ -5,7 +5,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import React, { useState, useRef, useEffect } from 'react';
-import { getMerchantById, getMenuItemsByMerchant, getMerchantReviews } from '@/api/services';
+import { getMerchantById, getMenuItemsByMerchant, getMerchantReviews, getDeliveryFeeEstimate } from '@/api/services';
 import { Review } from '@/api/types';
 import { resolveImageUrl } from '@/api/client';
 import { Merchant, MenuItem } from '@/api/types';
@@ -218,7 +218,7 @@ const rvStyles = StyleSheet.create({
 export default function RestaurantDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
-  const { items, itemCount, cartTotal, addToCart } = useCart();
+  const { items, itemCount, cartTotal, addToCart, deliveryAddress } = useCart();
   const insets = useSafeAreaInsets();
   const [activeCategory, setActiveCategory] = useState(0);
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -227,6 +227,7 @@ export default function RestaurantDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [addingItemId, setAddingItemId] = useState<string | null>(null);
   const [showReviews, setShowReviews] = useState(false);
+  const [deliveryEstimate, setDeliveryEstimate] = useState<{ fee: number; distance: number; duration: number } | null>(null);
 
   useEffect(() => {
     loadData();
@@ -245,6 +246,46 @@ export default function RestaurantDetailScreen() {
     setMenuItems(menuData);
     setLoading(false);
   };
+
+  useEffect(() => {
+    const fetchDeliveryEstimate = async () => {
+      if (!merchant) {
+        setDeliveryEstimate(null);
+        return;
+      }
+
+      if (
+        !merchant.latitude ||
+        !merchant.longitude ||
+        !deliveryAddress?.latitude ||
+        !deliveryAddress?.longitude
+      ) {
+        setDeliveryEstimate(null);
+        return;
+      }
+
+      const subtotalForThisMerchant = items
+        .filter((ci) => ci.merchantId === merchant.id)
+        .reduce((sum, ci) => sum + ci.totalPrice, 0);
+
+      const estimate = await getDeliveryFeeEstimate(
+        { lat: merchant.latitude, lng: merchant.longitude },
+        { lat: deliveryAddress.latitude, lng: deliveryAddress.longitude },
+        subtotalForThisMerchant
+      );
+
+      setDeliveryEstimate(estimate);
+    };
+
+    fetchDeliveryEstimate();
+  }, [
+    merchant?.id,
+    merchant?.latitude,
+    merchant?.longitude,
+    deliveryAddress?.latitude,
+    deliveryAddress?.longitude,
+    items,
+  ]);
 
   // Handle quick add to cart
   const handleQuickAdd = async (item: MenuItem) => {
@@ -265,7 +306,7 @@ export default function RestaurantDetailScreen() {
     groups.forEach(g => {
       if (g.isRadio && g.required && g.choices.length > 0) {
         // Find choice with 0 price (base size), fallback to first
-        const defaultChoice = g.choices.find(c => c.price === 0) || g.choices[0];
+        const defaultChoice = g.choices.find((c: { price: number }) => c.price === 0) || g.choices[0];
         defaultOptions[g.name] = defaultChoice.label;
       }
     });
@@ -277,7 +318,7 @@ export default function RestaurantDetailScreen() {
         menuItemId: item.id,
         merchantId: merchant.id,
         storeName: merchant.name,
-        deliveryFee: merchant.deliveryFee || 0,
+        deliveryFee: deliveryEstimate?.fee ?? merchant.deliveryFee ?? 0,
         name: item.name,
         price: item.price,
         quantity: 1,
@@ -343,6 +384,14 @@ export default function RestaurantDetailScreen() {
   }
 
   const { isOpen: isStoreOpen, nextOpen } = merchant ? isMerchantOpen(merchant) : { isOpen: true, nextOpen: '' };
+  const estimatedEtaText = (() => {
+    if (deliveryEstimate?.duration && deliveryEstimate.duration > 0) {
+      const minutes = Math.max(1, Math.round(deliveryEstimate.duration / 60));
+      return `${minutes} min`;
+    }
+    return merchant.deliveryTime || '15-30 min';
+  })();
+  const estimatedFeeValue = deliveryEstimate?.fee ?? merchant.deliveryFee ?? 29;
 
   return (
     <ThemedView style={styles.container}>
@@ -430,10 +479,10 @@ export default function RestaurantDetailScreen() {
             <ThemedView style={styles.deliveryCard}>
               <ThemedView style={styles.deliveryTextGroup}>
                 <ThemedText style={styles.deliveryTitle}>
-                  Delivery {merchant.deliveryTime || '15-30 min'}
+                  Delivery {estimatedEtaText}
                 </ThemedText>
                 <ThemedText style={styles.deliverySub}>
-                  ₱ {merchant.deliveryFee || 29}.00 delivery fee
+                  ₱ {estimatedFeeValue.toFixed(2)} delivery fee
                 </ThemedText>
               </ThemedView>
             </ThemedView>
