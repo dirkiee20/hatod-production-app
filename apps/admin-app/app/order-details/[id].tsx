@@ -1,119 +1,208 @@
-import { StyleSheet, ScrollView, TouchableOpacity, View, Image } from 'react-native';
-import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import { StyleSheet, ScrollView, TouchableOpacity, View, ActivityIndicator, Alert } from 'react-native';
+import { useLocalSearchParams, useRouter, Stack, useFocusEffect } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getOrderById, updateOrderStatus } from '@/api/services';
+import { Order, OrderStatus } from '@/api/types';
+
+const formatCurrency = (value: number) => `₱${Number(value || 0).toFixed(2)}`;
+const formatStatus = (status?: string) => (status || '').replace(/_/g, ' ');
+
+const getStatusColors = (status?: string) => {
+  if (status === 'DELIVERED') return { bg: '#E8F5E9', text: '#388E3C' };
+  if (status === 'CANCELLED') return { bg: '#FFEBEE', text: '#D32F2F' };
+  if (status === 'PENDING') return { bg: '#FFF8E1', text: '#F57C00' };
+  return { bg: '#E3F2FD', text: '#1976D2' };
+};
+
+const canCancel = (status?: string) =>
+  ['PENDING', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP'].includes(String(status || ''));
+
+const getOptionsText = (item: any): string | null => {
+  const raw = item?.options ?? item?.notes;
+  if (!raw) return null;
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return Object.entries(parsed)
+        .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : String(value)}`)
+        .join(' • ');
+    } catch {
+      return raw;
+    }
+  }
+  if (typeof raw === 'object') {
+    return Object.entries(raw)
+      .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : String(value)}`)
+      .join(' • ');
+  }
+  return null;
+};
 
 export default function OrderDetailsScreen() {
-  const { id } = useLocalSearchParams();
+  const { id } = useLocalSearchParams<{ id?: string | string[] }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const orderId = Array.isArray(id) ? id[0] : id;
 
-  // Mock order data
-  const order = {
-    id: id,
-    status: 'In Progress',
-    time: 'Oct 24, 2:30 PM',
-    customer: {
-      name: 'Juan Dela Cruz',
-      phone: '+63 912 345 6789',
-      address: 'Block 5 Lot 2, Villa Corito, Surigao City',
-      image: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=200',
-    },
-    driver: {
-      name: 'Pedro Penduko',
-      phone: '+63 998 765 4321',
-      plate: 'ABC 1234',
-      vehicle: 'Motorcycle',
-      status: 'On the way to restaurant',
-    },
-    restaurant: {
-      name: 'The Burger Mansion',
-      address: '123 Main St, Surigao City',
-    },
-    items: [
-      { quantity: 2, name: 'Signature Double Cheese', price: 598, options: 'Large, Extra Cheese' },
-      { quantity: 1, name: 'Classic Fries', price: 89, options: 'Regular' },
-      { quantity: 2, name: 'Coke Zero', price: 120, options: 'Medium' },
-    ],
-    summary: {
-      subtotal: 807,
-      deliveryFee: 49,
-      serviceFee: 25,
-      total: 881,
-      paymentMethod: 'Cash on Delivery',
+  const [order, setOrder] = useState<Order | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
+
+  const fetchOrder = useCallback(async () => {
+    if (!orderId) {
+      setLoading(false);
+      return;
     }
+    setLoading(true);
+    const data = await getOrderById(orderId);
+    setOrder(data);
+    setLoading(false);
+  }, [orderId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchOrder();
+    }, [fetchOrder]),
+  );
+
+  const handleCancelOrder = () => {
+    if (!order) return;
+    Alert.alert(
+      'Cancel Order',
+      `Cancel order #${order.orderNumber || order.id.slice(0, 8)}?`,
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Cancel Order',
+          style: 'destructive',
+          onPress: async () => {
+            setUpdating(true);
+            const ok = await updateOrderStatus(order.id, OrderStatus.CANCELLED);
+            setUpdating(false);
+            if (!ok) {
+              Alert.alert('Error', 'Failed to cancel order.');
+              return;
+            }
+            await fetchOrder();
+          },
+        },
+      ],
+    );
   };
+
+  const timeline = useMemo(() => {
+    const status = String(order?.status || '');
+    const isCancelled = status === 'CANCELLED';
+
+    const steps = [
+      { label: 'Order Placed', done: true },
+      { label: 'Preparing', done: ['PREPARING', 'READY_FOR_PICKUP', 'PICKED_UP', 'DELIVERING', 'DELIVERED'].includes(status) },
+      { label: 'Delivery', done: ['PICKED_UP', 'DELIVERING', 'DELIVERED'].includes(status) },
+      { label: 'Completed', done: status === 'DELIVERED' },
+    ];
+
+    if (isCancelled) {
+      return steps.map((step, idx) => ({ ...step, done: idx === 0 }));
+    }
+
+    return steps;
+  }, [order?.status]);
+
+  if (loading) {
+    return (
+      <ThemedView style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color="#C2185B" />
+      </ThemedView>
+    );
+  }
+
+  if (!order) {
+    return (
+      <ThemedView style={[styles.container, styles.centered]}>
+        <ThemedText style={{ color: '#666', marginBottom: 12 }}>Order not found.</ThemedText>
+        <TouchableOpacity style={styles.actionBtnSecondary} onPress={() => router.back()}>
+          <ThemedText style={styles.secondaryBtnText}>Back</ThemedText>
+        </TouchableOpacity>
+      </ThemedView>
+    );
+  }
+
+  const statusColor = getStatusColors(order.status);
+  const customerName =
+    order.customer?.name ||
+    `${order.customer?.firstName || ''} ${order.customer?.lastName || ''}`.trim() ||
+    'Guest';
+  const customerPhone = order.customer?.user?.phone || order.customer?.phone || 'No phone';
+  const riderName =
+    `${order.rider?.firstName || ''} ${order.rider?.lastName || ''}`.trim() || order.rider?.name || 'Unassigned';
+  const riderMeta = order.rider
+    ? `${order.rider.vehicleType || 'Rider'}${order.rider.vehicleNumber ? ` • ${order.rider.vehicleNumber}` : ''}`
+    : 'No rider assigned yet';
+  const address = [order.address?.street, order.address?.city, order.address?.state].filter(Boolean).join(', ') || order.deliveryAddress || 'No address';
+  const createdAt = order.createdAt ? new Date(order.createdAt).toLocaleString() : '';
+  const subtotal = Number(order.subtotal ?? order.totalAmount ?? 0);
+  const deliveryFee = Number(order.deliveryFee ?? 0);
+  const tax = Number(order.tax ?? 0);
+  const total = Number(order.total ?? order.totalAmount ?? subtotal + deliveryFee + tax);
+  const paymentMethod = order.paymentMethod ? order.paymentMethod.replace(/_/g, ' ') : 'N/A';
 
   return (
     <ThemedView style={styles.container}>
-      <Stack.Screen options={{ 
-        headerShown: true, 
-        title: 'Order Details',
-        headerTitleStyle: { fontWeight: '900', fontSize: 16 },
-        headerLeft: () => (
-          <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 10 }}>
-            <IconSymbol size={20} name="chevron.right" color="#000" style={{ transform: [{ rotate: '180deg' }] }} />
-          </TouchableOpacity>
-        ),
-      }} />
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: 'Order Details',
+          headerTitleStyle: { fontWeight: '900', fontSize: 16 },
+          headerLeft: () => (
+            <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 10 }}>
+              <IconSymbol size={20} name="chevron.right" color="#000" style={{ transform: [{ rotate: '180deg' }] }} />
+            </TouchableOpacity>
+          ),
+        }}
+      />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        
-        {/* Status Card */}
         <View style={styles.statusCard}>
           <View style={styles.statusHeader}>
             <View style={styles.orderIdBlock}>
-              <ThemedText style={styles.orderId} numberOfLines={1}>
-                #{typeof order.id === 'string' ? order.id.slice(0, 8).toUpperCase() : order.id}
-              </ThemedText>
+              <ThemedText style={styles.orderId}>#{order.orderNumber || order.id.slice(0, 8).toUpperCase()}</ThemedText>
             </View>
-            <View style={[styles.statusBadge, { backgroundColor: '#FFF3E0' }]}>
-              <ThemedText style={[styles.statusText, { color: '#F57C00' }]}>{order.status}</ThemedText>
+            <View style={[styles.statusBadge, { backgroundColor: statusColor.bg }]}>
+              <ThemedText style={[styles.statusText, { color: statusColor.text }]}>{formatStatus(order.status)}</ThemedText>
             </View>
           </View>
-          <ThemedText style={styles.orderTime}>{order.time}</ThemedText>
-          
+          <ThemedText style={styles.orderTime}>{createdAt}</ThemedText>
+
           <View style={styles.timeline}>
-            <View style={styles.timelineItem}>
-              <View style={[styles.timelineDot, styles.dotActive]} />
-              <ThemedText style={styles.timelineText}>Order Placed</ThemedText>
-            </View>
-            <View style={styles.timelineLine} />
-            <View style={styles.timelineItem}>
-              <View style={[styles.timelineDot, styles.dotActive]} />
-              <ThemedText style={styles.timelineText}>Confirmed</ThemedText>
-            </View>
-            <View style={styles.timelineLine} />
-            <View style={styles.timelineItem}>
-              <View style={[styles.timelineDot, styles.dotActive]} />
-              <ThemedText style={styles.timelineText}>Preparing</ThemedText>
-            </View>
-            <View style={[styles.timelineLine, styles.lineInactive]} />
-            <View style={styles.timelineItem}>
-              <View style={styles.timelineDot} />
-              <ThemedText style={[styles.timelineText, styles.textInactive]}>Delivery</ThemedText>
-            </View>
+            {timeline.map((step, idx) => (
+              <React.Fragment key={step.label}>
+                <View style={styles.timelineItem}>
+                  <View style={[styles.timelineDot, step.done && styles.dotActive]} />
+                  <ThemedText style={[styles.timelineText, !step.done && styles.textInactive]}>{step.label}</ThemedText>
+                </View>
+                {idx < timeline.length - 1 && (
+                  <View style={[styles.timelineLine, !(step.done && timeline[idx + 1].done) && styles.lineInactive]} />
+                )}
+              </React.Fragment>
+            ))}
           </View>
         </View>
 
-        {/* Customer & Driver Info */}
         <View style={styles.section}>
           <ThemedText style={styles.sectionTitle}>People Involved</ThemedText>
-          
+
           <View style={styles.personCard}>
-            <Image source={{ uri: order.customer.image }} style={styles.avatar} />
+            <View style={[styles.avatar, styles.iconAvatar]}>
+              <IconSymbol size={24} name="person.fill" color="#C2185B" />
+            </View>
             <View style={styles.personInfo}>
               <ThemedText style={styles.roleLabel}>Customer</ThemedText>
-              <ThemedText style={styles.personName}>{order.customer.name}</ThemedText>
-              <ThemedText style={styles.personDetail}>{order.customer.phone}</ThemedText>
-            </View>
-            <View style={styles.actionButtons}>
-              <TouchableOpacity style={styles.iconBtn}>
-                <IconSymbol size={20} name="paperplane.fill" color="#C2185B" />
-              </TouchableOpacity>
+              <ThemedText style={styles.personName}>{customerName}</ThemedText>
+              <ThemedText style={styles.personDetail}>{customerPhone}</ThemedText>
             </View>
           </View>
 
@@ -122,85 +211,72 @@ export default function OrderDetailsScreen() {
               <IconSymbol size={24} name="paperplane.fill" color="#1976D2" />
             </View>
             <View style={styles.personInfo}>
-              <ThemedText style={styles.roleLabel}>Driver • {order.driver.plate}</ThemedText>
-              <ThemedText style={styles.personName}>{order.driver.name}</ThemedText>
-              <ThemedText style={styles.personDetail}>{order.driver.status}</ThemedText>
-            </View>
-            <View style={styles.actionButtons}>
-              <TouchableOpacity style={styles.iconBtn}>
-                <IconSymbol size={20} name="paperplane.fill" color="#C2185B" />
-              </TouchableOpacity>
+              <ThemedText style={styles.roleLabel}>Rider</ThemedText>
+              <ThemedText style={styles.personName}>{riderName}</ThemedText>
+              <ThemedText style={styles.personDetail}>{riderMeta}</ThemedText>
             </View>
           </View>
         </View>
 
-        {/* Deliver To */}
         <View style={styles.section}>
           <ThemedText style={styles.sectionTitle}>Delivery Location</ThemedText>
           <View style={styles.locationCard}>
             <IconSymbol size={24} name="map" color="#C2185B" />
             <View style={styles.locationInfo}>
-              <ThemedText style={styles.locationAddress}>{order.customer.address}</ThemedText>
-              <ThemedText style={styles.locationNote}>Note: Near the blue gate</ThemedText>
+              <ThemedText style={styles.locationAddress}>{address}</ThemedText>
             </View>
           </View>
         </View>
 
-        {/* Order Items */}
         <View style={styles.section}>
           <ThemedText style={styles.sectionTitle}>Order Summary</ThemedText>
           <View style={styles.itemsCard}>
             <View style={styles.restaurantHeader}>
-              <ThemedText style={styles.restaurantName}>{order.restaurant.name}</ThemedText>
+              <ThemedText style={styles.restaurantName}>{order.merchant?.name || 'Merchant'}</ThemedText>
             </View>
-            
-            {order.items.map((item, idx) => (
-              <View key={idx} style={styles.orderItem}>
-                <View style={styles.quantityBadge}>
-                  <ThemedText style={styles.quantityText}>{item.quantity}x</ThemedText>
+
+            {(order.items || []).map((item, idx) => {
+              const optionsText = getOptionsText(item);
+              const lineTotal = Number(item.price || 0) * Number(item.quantity || 1);
+              return (
+                <View key={item.id || idx} style={styles.orderItem}>
+                  <View style={styles.quantityBadge}>
+                    <ThemedText style={styles.quantityText}>{item.quantity}x</ThemedText>
+                  </View>
+                  <View style={styles.itemDetails}>
+                    <ThemedText style={styles.itemName}>{item.menuItem?.name || 'Item'}</ThemedText>
+                    {!!optionsText && <ThemedText style={styles.itemOptions}>{optionsText}</ThemedText>}
+                  </View>
+                  <ThemedText style={styles.itemPrice}>{formatCurrency(lineTotal)}</ThemedText>
                 </View>
-                <View style={styles.itemDetails}>
-                  <ThemedText style={styles.itemName}>{item.name}</ThemedText>
-                  {item.options && typeof item.options === 'string' && (
-                    <ThemedText style={styles.itemOptions}>{item.options}</ThemedText>
-                  )}
-                  {item.options && typeof item.options === 'object' && (
-                    <View style={{ marginTop: 4 }}>
-                      {Object.entries(item.options).map(([key, value]) => (
-                        <ThemedText key={key} style={styles.itemOptions}>
-                          {key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase())}: {String(value)}
-                        </ThemedText>
-                      ))}
-                    </View>
-                  )}
-                </View>
-                <ThemedText style={styles.itemPrice}>₱{item.price}</ThemedText>
-              </View>
-            ))}
+              );
+            })}
 
             <View style={styles.divider} />
 
             <View style={styles.summaryRow}>
               <ThemedText style={styles.summaryLabel}>Subtotal</ThemedText>
-              <ThemedText style={styles.summaryValue}>₱{order.summary.subtotal}</ThemedText>
+              <ThemedText style={styles.summaryValue}>{formatCurrency(subtotal)}</ThemedText>
             </View>
             <View style={styles.summaryRow}>
               <ThemedText style={styles.summaryLabel}>Delivery Fee</ThemedText>
-              <ThemedText style={styles.summaryValue}>₱{order.summary.deliveryFee}</ThemedText>
+              <ThemedText style={styles.summaryValue}>{formatCurrency(deliveryFee)}</ThemedText>
             </View>
-            <View style={styles.summaryRow}>
-              <ThemedText style={styles.summaryLabel}>Service Fee</ThemedText>
-              <ThemedText style={styles.summaryValue}>₱{order.summary.serviceFee}</ThemedText>
-            </View>
-            
+            {tax > 0 && (
+              <View style={styles.summaryRow}>
+                <ThemedText style={styles.summaryLabel}>Tax</ThemedText>
+                <ThemedText style={styles.summaryValue}>{formatCurrency(tax)}</ThemedText>
+              </View>
+            )}
+
             <View style={[styles.divider, { marginTop: 12 }]} />
-            
+
             <View style={styles.totalRow}>
               <View>
                 <ThemedText style={styles.totalLabel}>Total</ThemedText>
-                <ThemedText style={styles.paymentMethod}>{order.summary.paymentMethod}</ThemedText>
+                <ThemedText style={styles.paymentMethod}>{paymentMethod}</ThemedText>
               </View>
-              <ThemedText style={styles.totalValue}>₱{order.summary.total}</ThemedText>
+              <ThemedText style={styles.totalValue}>{formatCurrency(total)}</ThemedText>
             </View>
           </View>
         </View>
@@ -208,14 +284,23 @@ export default function OrderDetailsScreen() {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* Footer Actions */}
       <ThemedView style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-         <TouchableOpacity style={styles.actionBtnSecondary}>
-            <ThemedText style={styles.secondaryBtnText}>Cancel Order</ThemedText>
-         </TouchableOpacity>
-         <TouchableOpacity style={styles.actionBtnPrimary}>
-            <ThemedText style={styles.primaryBtnText}>Track Driver</ThemedText>
-         </TouchableOpacity>
+        <TouchableOpacity style={styles.actionBtnSecondary} onPress={() => router.back()}>
+          <ThemedText style={styles.secondaryBtnText}>Back</ThemedText>
+        </TouchableOpacity>
+        {canCancel(order.status) ? (
+          <TouchableOpacity
+            style={[styles.actionBtnPrimary, updating && { opacity: 0.7 }]}
+            onPress={handleCancelOrder}
+            disabled={updating}
+          >
+            {updating ? <ActivityIndicator size="small" color="#FFF" /> : <ThemedText style={styles.primaryBtnText}>Cancel Order</ThemedText>}
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={styles.actionBtnPrimary} onPress={fetchOrder}>
+            <ThemedText style={styles.primaryBtnText}>Refresh</ThemedText>
+          </TouchableOpacity>
+        )}
       </ThemedView>
     </ThemedView>
   );
@@ -225,6 +310,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FAFAFA',
+  },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   scrollContent: {
     padding: 16,
@@ -332,6 +421,11 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     marginRight: 12,
   },
+  iconAvatar: {
+    backgroundColor: '#FCE4EC',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   personInfo: {
     flex: 1,
   },
@@ -352,18 +446,6 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 2,
   },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#FCE4EC',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   locationCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -382,12 +464,6 @@ const styles = StyleSheet.create({
     color: '#333',
     fontWeight: '600',
     lineHeight: 20,
-  },
-  locationNote: {
-    fontSize: 12,
-    color: '#888',
-    marginTop: 4,
-    fontStyle: 'italic',
   },
   itemsCard: {
     backgroundColor: '#FFF',
@@ -504,7 +580,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
   },
   secondaryBtnText: {
-    color: '#D32F2F',
+    color: '#666',
     fontSize: 14,
     fontWeight: '800',
   },
@@ -519,6 +595,6 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     color: '#FFF',
     fontSize: 14,
-    fontWeight: '900',
+    fontWeight: '800',
   },
 });

@@ -71,23 +71,45 @@ export interface Order {
   merchantId: string;
   riderId?: string;
   status: OrderStatus;
+  subtotal?: number;
+  total?: number;
   totalAmount: number;
   deliveryFee: number;
+  tax?: number;
   deliveryAddress: string;
+  paymentMethod?: 'CASH_ON_DELIVERY' | 'ONLINE_PAYMENT';
+  paymentStatus?: 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED';
   items: OrderItem[];
   createdAt: string;
   updatedAt: string;
   merchant?: Merchant;
-  customer?: User;
-  rider?: User;
+  customer?: User & {
+    firstName?: string;
+    lastName?: string;
+    user?: { phone?: string; email?: string };
+  };
+  rider?: User & {
+    firstName?: string;
+    lastName?: string;
+    vehicleNumber?: string;
+    vehicleType?: string;
+  };
+  address?: {
+    street?: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+  };
 }
 
 export interface OrderItem {
   id: string;
   orderId: string;
-  menuItemId: string;
+  menuItemId: string | null;
   quantity: number;
   price: number;
+  notes?: string;
+  options?: any;
   menuItem?: MenuItem;
 }
 
@@ -96,7 +118,9 @@ export enum OrderStatus {
   CONFIRMED = 'CONFIRMED',
   PREPARING = 'PREPARING',
   READY = 'READY',
+  READY_FOR_PICKUP = 'READY_FOR_PICKUP',
   PICKED_UP = 'PICKED_UP',
+  DELIVERING = 'DELIVERING',
   DELIVERED = 'DELIVERED',
   CANCELLED = 'CANCELLED',
 }

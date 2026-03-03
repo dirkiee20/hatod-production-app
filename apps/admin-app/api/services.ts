@@ -1,5 +1,5 @@
 import { authenticatedFetch, publicFetch } from './client';
-import { Merchant, Order, User, DashboardStats } from './types';
+import { Merchant, Order, User, DashboardStats, OrderStatus } from './types';
 
 // Merchant APIs
 export const getMerchants = async (): Promise<Merchant[]> => {
@@ -111,10 +111,42 @@ export const getOrderById = async (id: string): Promise<Order | null> => {
     if (!response.ok) {
       throw new Error('Failed to fetch order');
     }
-    return await response.json();
+    const order = await response.json();
+    return {
+      ...order,
+      totalAmount: order.total ?? order.totalAmount ?? 0,
+      customer: order.customer
+        ? {
+            ...order.customer,
+            name:
+              order.customer.firstName && order.customer.lastName
+                ? `${order.customer.firstName} ${order.customer.lastName}`
+                : order.customer.name || 'Guest',
+          }
+        : null,
+    } as Order;
   } catch (error) {
     console.error('Error fetching order:', error);
     return null;
+  }
+};
+
+export const updateOrderStatus = async (
+  orderId: string,
+  status: OrderStatus | string,
+  reason?: string,
+): Promise<boolean> => {
+  try {
+    const body: Record<string, unknown> = { status };
+    if (reason) body.reason = reason;
+    const response = await authenticatedFetch(`/orders/${orderId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+    return response.ok;
+  } catch (error) {
+    console.error('Error updating order status:', error);
+    return false;
   }
 };
 
