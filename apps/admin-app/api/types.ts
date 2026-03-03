@@ -41,7 +41,7 @@ export interface Merchant {
   totalOrders?: number;
   createdAt: string;
   updatedAt: string;
-  type?: 'RESTAURANT' | 'GROCERY' | 'PHARMACY';
+  type?: 'RESTAURANT' | 'GROCERY' | 'PHARMACY' | 'GOVERNMENT';
 }
 
 export interface MenuItem {
@@ -149,3 +149,4 @@ export interface DeliveryFeeConfig {
   createdAt: string;
   updatedAt: string;
 }
+

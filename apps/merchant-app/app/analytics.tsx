@@ -190,7 +190,7 @@ export default function AnalyticsScreen() {
               <ThemedText style={styles.statLabel}>Cancel Rate</ThemedText>
            </View>
            <View style={styles.statBox}>
-              <IconSymbol size={24} name="bag.fill" color="#4CAF50" />
+              <IconSymbol size={24} name="orders" color="#4CAF50" />
               <ThemedText style={styles.statVal}>{loading ? '—' : totalOrders}</ThemedText>
               <ThemedText style={styles.statLabel}>Total Orders</ThemedText>
            </View>
@@ -457,3 +457,4 @@ const styles = StyleSheet.create({
     color: '#999',
   },
 });
+

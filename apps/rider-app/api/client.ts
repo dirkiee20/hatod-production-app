@@ -1,15 +1,71 @@
-import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
-// Intelligent API URL resolution
-const getApiUrl = () => {
-    // 3. Default fallback (Production / iOS simulator / Web)
-    return 'https://hatod-production-app-production.up.railway.app/api';
+const PRODUCTION_API_URL = 'https://hatod-production-app-production.up.railway.app/api';
+
+const normalizeApiUrl = (url: string) => {
+  const normalised = url.replace(/\/+$/, '');
+  return normalised.endsWith('/api') ? normalised : `${normalised}/api`;
 };
 
-const API_URL = getApiUrl();
-console.log('Rider App API URL:', API_URL);
+const getLocalDevApiUrl = () => {
+  if (!__DEV__) return null;
+  if (Platform.OS === 'android' && !Constants.isDevice) {
+    return 'http://10.0.2.2:3000/api';
+  }
+  const hostUri = Constants.expoConfig?.hostUri;
+  if (hostUri) {
+    const ip = hostUri.split(':')[0];
+    return `http://${ip}:3000/api`;
+  }
+  if (Platform.OS === 'ios') {
+    return 'http://localhost:3000/api';
+  }
+  return null;
+};
+
+const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+const preferredApiUrl = envUrl
+  ? normalizeApiUrl(envUrl)
+  : getLocalDevApiUrl() ?? PRODUCTION_API_URL;
+
+let currentApiUrl = preferredApiUrl;
+console.log('Rider App preferred API URL:', preferredApiUrl);
+
+const fetchWithRetry = async (url: string, options: RequestInit, retries = 3, delay = 1000): Promise<Response> => {
+  try {
+    return await fetch(url, options);
+  } catch (error) {
+    if (retries > 0) {
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return fetchWithRetry(url, options, retries - 1, delay * 2);
+    }
+    throw error;
+  }
+};
+
+const fetchFromCurrentApi = async (endpoint: string, options: RequestInit): Promise<Response> => {
+  return fetchWithRetry(`${currentApiUrl}${endpoint}`, options);
+};
+
+const switchToProductionApi = () => {
+  if (currentApiUrl === PRODUCTION_API_URL) return;
+  currentApiUrl = PRODUCTION_API_URL;
+  console.warn(`[API Fallback] Rider app switched to production API: ${currentApiUrl}`);
+};
+
+const requestWithAutoFallback = async (endpoint: string, options: RequestInit): Promise<Response> => {
+  try {
+    return await fetchFromCurrentApi(endpoint, options);
+  } catch (error) {
+    if (currentApiUrl !== PRODUCTION_API_URL) {
+      switchToProductionApi();
+      return fetchFromCurrentApi(endpoint, options);
+    }
+    throw error;
+  }
+};
 
 let authToken: string | null = null;
 let logoutCallback: (() => void) | null = null;
@@ -30,7 +86,7 @@ export const getAuthToken = async () => {
 
 export const login = async (phone: string, password: string) => {
   try {
-    const response = await fetch(`${API_URL}/auth/login`, {
+    const response = await requestWithAutoFallback('/auth/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -59,7 +115,7 @@ export const login = async (phone: string, password: string) => {
 
 export const register = async (userData: { firstName: string; lastName: string; phone: string; password: string; email: string }) => {
   try {
-    const response = await fetch(`${API_URL}/auth/register`, {
+    const response = await requestWithAutoFallback('/auth/register', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -172,7 +228,7 @@ export const authenticatedFetch = async (endpoint: string, options: RequestInit 
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   } as HeadersInit;
 
-  const res = await fetch(`${API_URL}${endpoint}`, {
+  const res = await requestWithAutoFallback(endpoint, {
     ...options,
     headers,
   });
@@ -192,7 +248,7 @@ export const publicFetch = async (endpoint: string, options: RequestInit = {}) =
     ...(options.headers || {}),
   } as HeadersInit;
 
-  const res = await fetch(`${API_URL}${endpoint}`, {
+  const res = await requestWithAutoFallback(endpoint, {
     ...options,
     headers,
   });

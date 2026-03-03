@@ -1,40 +1,45 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
-// Intelligent API URL resolution
-const getApiUrl = () => {
-    // 1. If explicit env var is set, use it
-    /*
-    if (process.env.EXPO_PUBLIC_API_URL) {
-        return process.env.EXPO_PUBLIC_API_URL;
-    }
-    */
+const PRODUCTION_API_URL = 'https://hatod-production-app-production.up.railway.app/api';
 
-    // 2. If running on Android during development, try to use the packager IP
-    /*
-    if (Platform.OS === 'android' && __DEV__) {
-        // Use 10.0.2.2 for Android Emulator standard loopback
-        if (!Constants.isDevice) {
-            return 'http://10.0.2.2:3000';
-        }
-
-        const hostUri = Constants.expoConfig?.hostUri;
-        if (hostUri) {
-             const ip = hostUri.split(':')[0];
-             // Assuming backend runs on port 3000 on the same machine
-             return `http://${ip}:3000`;
-        }
-        return 'http://10.0.2.2:3000';
-    }
-    */
-
-    // 3. Default fallback (Production / iOS simulator / Web)
-    return 'https://hatod-production-app-production.up.railway.app/api';
+const normalizeApiUrl = (url: string) => {
+  const normalised = url.replace(/\/+$/, '');
+  return normalised.endsWith('/api') ? normalised : `${normalised}/api`;
 };
 
-const API_URL = getApiUrl();
-console.log('Customer App API URL:', API_URL);
+const getLocalDevApiUrl = () => {
+  if (!__DEV__) return null;
+
+  // Android emulator loopback to host machine
+  if (Platform.OS === 'android' && !Constants.isDevice) {
+    return 'http://10.0.2.2:3000/api';
+  }
+
+  // Expo host IP on LAN (physical device / iOS simulator)
+  const hostUri = Constants.expoConfig?.hostUri;
+  if (hostUri) {
+    const ip = hostUri.split(':')[0];
+    return `http://${ip}:3000/api`;
+  }
+
+  if (Platform.OS === 'ios') {
+    return 'http://localhost:3000/api';
+  }
+
+  return null;
+};
+
+const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+const preferredApiUrl = envUrl
+  ? normalizeApiUrl(envUrl)
+  : getLocalDevApiUrl() ?? PRODUCTION_API_URL;
+
+let currentApiUrl = preferredApiUrl;
+export let API_BASE = currentApiUrl;
+
+console.log('Customer App preferred API URL:', preferredApiUrl);
 
 let authToken: string | null = null;
 let logoutCallback: (() => void) | null = null;
@@ -55,7 +60,7 @@ export const getAuthToken = async () => {
 
 export const login = async (phone: string, password: string) => {
   try {
-    const response = await fetchWithRetry(`${API_URL}/auth/login`, {
+    const response = await requestWithAutoFallback('/auth/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -84,7 +89,7 @@ export const login = async (phone: string, password: string) => {
 
 export const register = async (userData: { firstName: string; lastName: string; phone: string; password: string; email: string }) => {
   try {
-    const response = await fetchWithRetry(`${API_URL}/auth/register`, {
+    const response = await requestWithAutoFallback('/auth/register', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -129,6 +134,30 @@ const fetchWithRetry = async (url: string, options: RequestInit, retries = 3, de
   }
 };
 
+const fetchFromCurrentApi = async (endpoint: string, options: RequestInit): Promise<Response> => {
+  return fetchWithRetry(`${currentApiUrl}${endpoint}`, options);
+};
+
+const switchToProductionApi = () => {
+  if (currentApiUrl === PRODUCTION_API_URL) return;
+  currentApiUrl = PRODUCTION_API_URL;
+  API_BASE = currentApiUrl;
+  console.warn(`[API Fallback] Switched to production API: ${currentApiUrl}`);
+};
+
+const requestWithAutoFallback = async (endpoint: string, options: RequestInit): Promise<Response> => {
+  try {
+    return await fetchFromCurrentApi(endpoint, options);
+  } catch (error) {
+    // If local dev endpoint is down/unreachable, fail over to production automatically.
+    if (currentApiUrl !== PRODUCTION_API_URL) {
+      switchToProductionApi();
+      return fetchFromCurrentApi(endpoint, options);
+    }
+    throw error;
+  }
+};
+
 export const authenticatedFetch = async (endpoint: string, options: RequestInit = {}) => {
   const token = await getAuthToken();
   
@@ -138,9 +167,8 @@ export const authenticatedFetch = async (endpoint: string, options: RequestInit 
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   } as HeadersInit;
 
-  const url = `${API_URL}${endpoint}`;
   try {
-    const res = await fetchWithRetry(url, {
+    const res = await requestWithAutoFallback(endpoint, {
       ...options,
       headers,
     });
@@ -174,9 +202,8 @@ export const publicFetch = async (endpoint: string, options: RequestInit = {}) =
     ...(options.headers || {}),
   } as HeadersInit;
 
-  const url = `${API_URL}${endpoint}`;
   try {
-    const res = await fetchWithRetry(url, {
+    const res = await requestWithAutoFallback(endpoint, {
         ...options,
         headers,
     });
@@ -197,8 +224,6 @@ export const publicFetch = async (endpoint: string, options: RequestInit = {}) =
     throw error;
   }
 };
-
-export const API_BASE = API_URL;
 
 export const resolveImageUrl = (url: string | null | undefined): string | undefined => {
   if (!url) return undefined;
