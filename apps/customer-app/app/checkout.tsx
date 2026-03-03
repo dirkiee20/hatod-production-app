@@ -106,14 +106,8 @@ export default function CheckoutScreen() {
       const order = await createOrder(orderData);
 
       if (order) {
-         Alert.alert('Success', 'Order placed successfully!', [
-            { text: 'OK', onPress: () => {
-                clearCart();
-                router.replace('/(tabs)');
-                // Ideally navigate to order tracking or history, but ensuring stack reset is safer
-                setTimeout(() => router.push({ pathname: '/order-tracking', params: { id: order.id } }), 100);
-            }}
-         ]);
+         clearCart();
+         router.replace({ pathname: '/order-summary', params: { id: order.id } });
       } else {
          Alert.alert('Order Failed', 'Could not place order. Please check your connection and try again.');
       }

@@ -443,54 +443,6 @@ export default function OrderTrackingScreen() {
             </View>
         )}
 
-        {/* Order Items Summary */}
-        {order.items && order.items.length > 0 && (
-            <View style={{ marginTop: 24, paddingTop: 24, borderTopWidth: 1, borderTopColor: '#EEE' }}>
-                <ThemedText style={{ fontSize: 16, fontWeight: '900', color: '#333', marginBottom: 16 }}>Order Summary</ThemedText>
-                {order.items.map((item: any, idx: number) => (
-                    <View key={idx} style={{ flexDirection: 'row', marginBottom: 16, alignItems: 'center' }}>
-                         <Image 
-                            source={{ uri: resolveImageUrl(item.menuItem?.image || item.menuItem?.imageUrl) || undefined }}
-                            style={{ width: 48, height: 48, borderRadius: 8, backgroundColor: '#F5F5F5', marginRight: 12 }} 
-                         />
-                         <View style={{ flex: 1 }}>
-                             <ThemedText style={{ fontWeight: '700', fontSize: 14 }}>{item.quantity}x {item.menuItem?.name}</ThemedText>
-                             {(() => {
-                               const rawOptions = item.options ?? item.notes;
-                               if (!rawOptions) return null;
-                               let parsed: Record<string, any> = {};
-                               try { parsed = typeof rawOptions === 'string' ? JSON.parse(rawOptions) : rawOptions; } catch { return null; }
-                               const entries = Object.entries(parsed).filter(([, v]) =>
-                                 v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0)
-                               );
-                               if (entries.length === 0) return null;
-                               return (
-                                 <View style={{ marginTop: 3 }}>
-                                   {entries.map(([key, value]) => {
-                                     if (key === 'note') {
-                                       return (
-                                         <ThemedText key={key} style={{ fontSize: 11, color: '#999', fontStyle: 'italic' }}>
-                                           📝 {String(value)}
-                                         </ThemedText>
-                                       );
-                                     }
-                                     const display = Array.isArray(value) ? value.join(', ') : String(value);
-                                     return (
-                                       <View key={key} style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                                         <ThemedText style={{ fontSize: 11, color: '#aaa', fontWeight: '700' }}>{key}: </ThemedText>
-                                         <ThemedText style={{ fontSize: 11, color: '#666', fontWeight: '600' }}>{display}</ThemedText>
-                                       </View>
-                                     );
-                                   })}
-                                 </View>
-                               );
-                             })()}
-                         </View>
-                         <ThemedText style={{ fontWeight: '700' }}>₱{((item.price || 0) * item.quantity).toFixed(2)}</ThemedText>
-                    </View>
-                ))}
-            </View>
-        )}
 
       </ThemedView>
       {/* Review Modal */}

@@ -242,7 +242,7 @@ export default function FoodOrdersScreen() {
       <TouchableOpacity
         key={order.id}
         style={styles.card}
-        onPress={() => router.push({ pathname: '/order-tracking', params: { id: order.id } })}
+        onPress={() => router.push({ pathname: '/order-summary', params: { id: order.id } })}
         activeOpacity={0.95}
       >
         <View style={styles.cardHeader}>
@@ -305,9 +305,9 @@ export default function FoodOrdersScreen() {
           {!isPast && (
             <TouchableOpacity
               style={styles.trackBtn}
-              onPress={() => router.push({ pathname: '/order-tracking', params: { id: order.id } })}
+              onPress={() => router.push({ pathname: '/order-summary', params: { id: order.id } })}
             >
-              <ThemedText style={styles.trackText}>Track Order</ThemedText>
+              <ThemedText style={styles.trackText}>View Summary</ThemedText>
             </TouchableOpacity>
           )}
 
