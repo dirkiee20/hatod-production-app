@@ -17,6 +17,38 @@ export class OrdersService {
     return Math.round(value * 100) / 100;
   }
 
+  // Merchant-facing revenue should be based on the merchant's original menu price,
+  // not admin-adjusted customer price.
+  private getMerchantUnitPriceFromOrderItem(item: {
+    price: number;
+    menuItem?: { price: number; originalPrice?: number | null } | null;
+  }): number {
+    const orderedUnitPrice = Number(item?.price ?? 0);
+    const currentMenuPrice = Number(item?.menuItem?.price ?? orderedUnitPrice);
+    const originalPrice = item?.menuItem?.originalPrice;
+
+    if (typeof originalPrice === 'number' && !Number.isNaN(originalPrice)) {
+      const adminMarkup = currentMenuPrice - originalPrice;
+      const merchantUnitPrice = orderedUnitPrice - adminMarkup;
+      return merchantUnitPrice > 0 ? merchantUnitPrice : 0;
+    }
+
+    return orderedUnitPrice;
+  }
+
+  private getMerchantSubtotalFromOrder(order: {
+    subtotal: number;
+    items?: Array<{ price: number; quantity: number; menuItem?: { price: number; originalPrice?: number | null } | null }>;
+  }): number {
+    const items = Array.isArray(order?.items) ? order.items : [];
+    if (items.length === 0) return Number(order?.subtotal ?? 0);
+
+    return items.reduce((sum, item) => {
+      const qty = Number(item?.quantity ?? 1);
+      return sum + this.getMerchantUnitPriceFromOrderItem(item) * qty;
+    }, 0);
+  }
+
   private normaliseOptionGroups(raw: any): { name: string; choices: { label: string; price: number }[] }[] {
     return (Array.isArray(raw) ? raw : []).map((group: any) => {
       const choices = (Array.isArray(group?.options) ? group.options : Array.isArray(group?.items) ? group.items : []).map((c: any) => ({
@@ -580,8 +612,8 @@ export class OrdersService {
     const deliveredOrders = orders.filter(o => o.status === OrderStatus.DELIVERED);
     const cancelledOrders = orders.filter(o => o.status === OrderStatus.CANCELLED);
 
-    // KPI calculations
-    const totalRevenue = deliveredOrders.reduce((sum, o) => sum + o.subtotal, 0);
+    // KPI calculations (merchant-original pricing)
+    const totalRevenue = deliveredOrders.reduce((sum, o) => sum + this.getMerchantSubtotalFromOrder(o), 0);
     const totalOrders = orders.length;
     const avgOrder = deliveredOrders.length > 0 ? totalRevenue / deliveredOrders.length : 0;
     const cancelRate = totalOrders > 0 ? (cancelledOrders.length / totalOrders) * 100 : 0;
@@ -599,7 +631,7 @@ export class OrdersService {
             const od = new Date(o.createdAt);
             return od.getDate() === d.getDate() && od.getMonth() === d.getMonth();
           })
-          .reduce((sum, o) => sum + o.subtotal, 0);
+          .reduce((sum, o) => sum + this.getMerchantSubtotalFromOrder(o), 0);
         chartData.push({ label: dayLabel, value: dayRevenue });
       }
     } else if (range === 'month') {
@@ -614,7 +646,7 @@ export class OrdersService {
             const od = new Date(o.createdAt);
             return od >= windowStart && od <= d;
           })
-          .reduce((sum, o) => sum + o.subtotal, 0);
+          .reduce((sum, o) => sum + this.getMerchantSubtotalFromOrder(o), 0);
         chartData.push({ label, value: windowRevenue });
       }
     } else {
@@ -627,7 +659,7 @@ export class OrdersService {
             const od = new Date(o.createdAt);
             return od.getMonth() === d.getMonth() && od.getFullYear() === d.getFullYear();
           })
-          .reduce((sum, o) => sum + o.subtotal, 0);
+          .reduce((sum, o) => sum + this.getMerchantSubtotalFromOrder(o), 0);
         chartData.push({ label: months[d.getMonth()], value: monthRevenue });
       }
     }
@@ -636,15 +668,17 @@ export class OrdersService {
     const itemSalesMap = new Map<string, { name: string; sales: number; revenue: number }>();
     for (const order of deliveredOrders) {
       for (const item of order.items) {
-        const existing = itemSalesMap.get(item.menuItemId);
+        const itemKey = item.menuItemId || item.id;
+        const itemRevenue = this.getMerchantUnitPriceFromOrderItem(item) * item.quantity;
+        const existing = itemSalesMap.get(itemKey);
         if (existing) {
           existing.sales += item.quantity;
-          existing.revenue += item.price * item.quantity;
+          existing.revenue += itemRevenue;
         } else {
-          itemSalesMap.set(item.menuItemId, {
+          itemSalesMap.set(itemKey, {
             name: item.menuItem?.name || 'Unknown',
             sales: item.quantity,
-            revenue: item.price * item.quantity,
+            revenue: itemRevenue,
           });
         }
       }

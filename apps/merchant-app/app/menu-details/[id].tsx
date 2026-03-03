@@ -6,6 +6,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import React, { useState, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authenticatedFetch, API_BASE, resolveImageUrl } from '../../api/client';
+import { getMerchantMenuItemBasePrice, mapOptionsToMerchantOriginalPrices } from '@/lib/pricing';
 
 export default function MenuDetailsScreen() {
   const { id } = useLocalSearchParams();
@@ -30,7 +31,10 @@ export default function MenuDetailsScreen() {
               setItem({
                   ...data,
                   description: data.description || '',
-                  options: data.options || parseVariants(data.description || '').options,
+                  options: mapOptionsToMerchantOriginalPrices(
+                    data.options || parseVariants(data.description || '').options,
+                    data,
+                  ),
                   available: data.isAvailable
               });
           } else {
@@ -163,7 +167,7 @@ export default function MenuDetailsScreen() {
         <ThemedView style={styles.content}>
           <ThemedView style={styles.headerRow}>
             <ThemedText style={styles.itemName}>{item.name}</ThemedText>
-            <ThemedText style={styles.itemPrice}>₱{item.price}</ThemedText>
+            <ThemedText style={styles.itemPrice}>₱{getMerchantMenuItemBasePrice(item).toFixed(2)}</ThemedText>
           </ThemedView>
           
           <ThemedView style={styles.categoryRow}>
@@ -438,3 +442,4 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 });
+

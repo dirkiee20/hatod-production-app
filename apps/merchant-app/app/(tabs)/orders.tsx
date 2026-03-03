@@ -8,6 +8,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { getMerchantOrders, updateOrderStatus, getAvailableRiders, assignRider } from '@/api/services';
 import { Order, OrderStatus } from '@/api/types';
 import { useSocket } from '@/context/SocketContext';
+import { getMerchantOrderSubtotal } from '@/lib/pricing';
 
 export default function OrdersScreen() {
   const router = useRouter();
@@ -262,7 +263,7 @@ export default function OrdersScreen() {
     
                 <View style={styles.summaryRow}>
                    <ThemedText style={styles.itemsCount}>
-                       {order.items?.length || 0} items • ₱{order.total}
+                       {order.items?.length || 0} items • ₱{getMerchantOrderSubtotal(order).toFixed(2)}
                    </ThemedText>
                    <View style={styles.actionRow}>
                      <TouchableOpacity 
@@ -552,3 +553,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   }
 });
+

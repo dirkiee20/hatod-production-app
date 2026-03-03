@@ -7,6 +7,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import React, { useState, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authenticatedFetch, resolveImageUrl } from '../api/client';
+import { getMerchantMenuItemBasePrice, mapOptionsToMerchantOriginalPrices } from '@/lib/pricing';
 
 export default function AddMenuItemScreen() {
   const router = useRouter();
@@ -41,7 +42,7 @@ export default function AddMenuItemScreen() {
               setFormData({
                   name: data.name,
                   description: data.description || '',
-                  price: data.price.toString(),
+                  price: getMerchantMenuItemBasePrice(data).toString(),
                   category: data.category?.name || 'Main Course',
                   available: data.isAvailable
               });
@@ -51,7 +52,7 @@ export default function AddMenuItemScreen() {
               }
               
               if (data.options && Array.isArray(data.options) && data.options.length > 0) {
-                  setVariants(data.options);
+                  setVariants(mapOptionsToMerchantOriginalPrices(data.options, data));
               }
           } else {
               console.error('Failed to fetch item for edit, status:', res.status);

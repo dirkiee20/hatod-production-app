@@ -42,6 +42,19 @@ export const getMerchantOrders = async (): Promise<Order[]> => {
   }
 };
 
+export const getOrderById = async (orderId: string): Promise<Order | null> => {
+  try {
+    const response = await authenticatedFetch(`/orders/${orderId}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch order details');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching order details:', error);
+    return null;
+  }
+};
+
 export const updateOrderStatus = async (orderId: string, status: OrderStatus): Promise<boolean> => {
   try {
     const response = await authenticatedFetch(`/orders/${orderId}/status`, {

@@ -7,6 +7,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import React, { useState, useCallback } from 'react';
 import { getMenuItems } from '@/api/services';
 import { MenuItem } from '@/api/types';
+import { getMerchantMenuItemBasePrice } from '@/lib/pricing';
 import { resolveImageUrl } from '@/api/client';
 
 export default function MenuScreen() {
@@ -60,7 +61,7 @@ export default function MenuScreen() {
                 />
                 <ThemedView style={styles.itemInfo}>
                   <ThemedText style={styles.itemName}>{item.name}</ThemedText>
-                  <ThemedText style={styles.itemPrice}>₱{item.price}</ThemedText>
+                  <ThemedText style={styles.itemPrice}>₱{getMerchantMenuItemBasePrice(item).toFixed(2)}</ThemedText>
                   <View style={styles.availabilityBadge}>
                     <View style={[styles.availabilityDot, { backgroundColor: item.isAvailable ? '#4CAF50' : '#D32F2F' }]} />
                     <ThemedText style={[styles.availabilityText, { color: item.isAvailable ? '#388E3C' : '#D32F2F' }]}>
@@ -179,3 +180,4 @@ const styles = StyleSheet.create({
     padding: 5,
   },
 });
+

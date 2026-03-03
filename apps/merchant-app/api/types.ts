@@ -21,6 +21,7 @@ export interface MenuItem {
   name: string;
   description?: string;
   price: number;
+  originalPrice?: number | null;
   imageUrl?: string;
   image?: string;
   categoryId?: string;
@@ -39,7 +40,7 @@ export interface MenuCategory {
 
 export interface Order {
   id: string;
-  orderNumber: string;
+  orderNumber?: string;
   customerId: string;
   merchantId: string;
   riderId?: string;
@@ -54,10 +55,17 @@ export interface Order {
   customer?: {
       firstName: string;
       lastName: string;
+      phone?: string;
+      user?: {
+        phone?: string;
+        email?: string;
+      };
   };
   address?: {
       street: string;
       city: string;
+      state?: string;
+      zipCode?: string;
   };
 }
 
@@ -68,6 +76,7 @@ export interface OrderItem {
   quantity: number;
   price: number;
   notes?: string;
+  options?: any;
   menuItem?: MenuItem;
 }
 

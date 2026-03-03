@@ -7,6 +7,7 @@ import React, { useState, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { getMerchantOrders } from '@/api/services';
 import { Order, OrderStatus } from '@/api/types';
+import { getMerchantOrderSubtotal } from '@/lib/pricing';
 
 import { useSocket } from '@/context/SocketContext';
 import { Alert } from 'react-native';
@@ -64,7 +65,7 @@ export default function DashboardScreen() {
         o.createdAt.startsWith(today) && 
         o.status !== OrderStatus.CANCELLED
     );
-    const todaysSales = todaysOrders.reduce((sum, o) => sum + o.total, 0);
+    const todaysSales = todaysOrders.reduce((sum, o) => sum + getMerchantOrderSubtotal(o), 0);
 
     // 2. Active Orders
     const activeOrders = orders.filter(o => 
@@ -74,7 +75,7 @@ export default function DashboardScreen() {
     // 3. Total Revenue (All non-cancelled)
     const totalRevenue = orders
         .filter(o => o.status !== OrderStatus.CANCELLED)
-        .reduce((sum, o) => sum + o.total, 0);
+        .reduce((sum, o) => sum + getMerchantOrderSubtotal(o), 0);
 
     setStats([
         { label: 'Today\'s Sales', value: `₱${todaysSales.toLocaleString()}`, icon: 'dashboard', color: '#f78734' },
@@ -148,7 +149,7 @@ export default function DashboardScreen() {
                     {recentOrder.status} • {new Date(recentOrder.createdAt).toLocaleTimeString()}
                 </ThemedText>
             </ThemedView>
-            <ThemedText style={styles.recentValue}>₱{recentOrder.total}</ThemedText>
+            <ThemedText style={styles.recentValue}>₱{getMerchantOrderSubtotal(recentOrder).toFixed(2)}</ThemedText>
             </ThemedView>
         ) : (
             <ThemedText style={{ color: '#999', fontStyle: 'italic' }}>No recent orders</ThemedText>
@@ -303,3 +304,4 @@ const styles = StyleSheet.create({
     color: '#C2185B',
   },
 });
+
