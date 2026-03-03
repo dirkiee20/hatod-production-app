@@ -6,11 +6,13 @@ import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { getOrderById } from '@/api/services';
 import { resolveImageUrl } from '@/api/client';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const formatMoney = (value: number) => `₱${value.toFixed(2)}`;
 
 export default function OrderSummaryScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState<any>(null);
@@ -189,7 +191,7 @@ export default function OrderSummaryScreen() {
         <View style={{ height: 120 }} />
       </ScrollView>
 
-      <ThemedView style={styles.footer}>
+      <ThemedView style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
         <TouchableOpacity
           style={styles.trackBtn}
           onPress={() => router.push({ pathname: '/order-tracking', params: { id: order.id } })}
@@ -369,7 +371,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
     paddingHorizontal: 16,
     paddingTop: 10,
-    paddingBottom: 22,
     gap: 10,
   },
   trackBtn: {

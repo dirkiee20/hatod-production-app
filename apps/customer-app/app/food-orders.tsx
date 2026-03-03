@@ -307,7 +307,8 @@ export default function FoodOrdersScreen() {
               style={styles.trackBtn}
               onPress={() => router.push({ pathname: '/order-summary', params: { id: order.id } })}
             >
-              <ThemedText style={styles.trackText}>View Summary</ThemedText>
+              <ThemedText style={styles.trackText}>Summary</ThemedText>
+              <IconSymbol size={14} name="chevron.right" color="#FFF" />
             </TouchableOpacity>
           )}
 
@@ -459,8 +460,14 @@ const styles = StyleSheet.create({
   },
   reorderText: { fontSize: 12, fontWeight: '700', color: '#f78734' },
   trackBtn: {
-    backgroundColor: '#f78734', paddingVertical: 6,
-    paddingHorizontal: 12, borderRadius: 8,
+    backgroundColor: '#f78734',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
   },
   trackText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
 
