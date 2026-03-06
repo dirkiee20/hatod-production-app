@@ -116,6 +116,17 @@ export default function AccountScreen() {
             <IconSymbol size={16} name="chevron.right" color="#CCC" />
           </TouchableOpacity>
 
+          <TouchableOpacity style={styles.menuRow} activeOpacity={0.7} onPress={() => router.push('/pabili-service' as any)}>
+            <View style={[styles.menuIconBox, { backgroundColor: '#FFF3E0' }]}>
+              <IconSymbol size={18} name="bag.fill" color="#f78734" />
+            </View>
+            <View style={styles.menuTextBlock}>
+              <ThemedText style={styles.menuRowLabel}>We Buy For You Availability</ThemedText>
+              <ThemedText style={styles.menuRowSub}>Enable or disable Pabili requests</ThemedText>
+            </View>
+            <IconSymbol size={16} name="chevron.right" color="#CCC" />
+          </TouchableOpacity>
+
           <TouchableOpacity style={styles.menuRow} activeOpacity={0.7} onPress={() => router.push('/food-categories' as any)}>
             <View style={styles.menuIconBox}>
               <IconSymbol size={18} name="doc.badge.fill" color={ACCENT} />

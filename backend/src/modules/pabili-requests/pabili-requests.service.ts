@@ -3,15 +3,24 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SocketGateway } from '../socket/socket.gateway';
 import { CreatePabiliRequestDto } from './dto/create-pabili-request.dto';
 import { QuotePabiliRequestDto } from './dto/quote-pabili-request.dto';
+import { SettingsService } from '../settings/settings.service';
 
 @Injectable()
 export class PabiliRequestsService {
   constructor(
     private prisma: PrismaService,
     private socketGateway: SocketGateway,
+    private settingsService: SettingsService,
   ) {}
 
   async create(userId: string, createDto: CreatePabiliRequestDto) {
+    const pabiliConfig = await this.settingsService.getPabiliServiceConfig();
+    if (!pabiliConfig.enabled) {
+      throw new BadRequestException(
+        pabiliConfig.message || 'We Buy For You service is currently unavailable.',
+      );
+    }
+
     const customer = await this.prisma.customer.findUnique({ where: { userId } });
     if (!customer) throw new NotFoundException('Customer not found');
 

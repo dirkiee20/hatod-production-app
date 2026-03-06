@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import {
   GovernmentServiceConfig,
+  PabiliServiceConfig,
   SettingsService,
   TyphoonConfig,
 } from './settings.service';
@@ -46,6 +47,13 @@ export class SettingsController {
     return this.settingsService.getGovernmentServiceConfig();
   }
 
+  // GET /settings/pabili-service - public availability for customer app.
+  @Public()
+  @Get('pabili-service')
+  getPabiliServiceConfig() {
+    return this.settingsService.getPabiliServiceConfig();
+  }
+
   // GET /settings/typhoon - logged in users can read current system state.
   @Get('typhoon')
   getTyphoon() {
@@ -70,6 +78,16 @@ export class SettingsController {
     @Request() req: any,
   ) {
     return this.settingsService.setGovernmentServiceConfig(dto, req.user?.email);
+  }
+
+  // PATCH /settings/pabili-service - admin only.
+  @Patch('pabili-service')
+  @Roles('ADMIN')
+  updatePabiliService(
+    @Body() dto: Partial<PabiliServiceConfig>,
+    @Request() req: any,
+  ) {
+    return this.settingsService.setPabiliServiceConfig(dto, req.user?.email);
   }
 
   // GET /settings/food-categories/admin - admin list (active + inactive).

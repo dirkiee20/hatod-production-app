@@ -6,6 +6,7 @@ import { CreateFoodCategoryDto, UpdateFoodCategoryDto } from './dto/food-categor
 
 const TYPHOON_KEY = 'system:typhoon_mode';
 const GOVERNMENT_SERVICE_KEY = 'system:government_service';
+const PABILI_SERVICE_KEY = 'system:pabili_service';
 
 export interface TyphoonConfig {
   enabled: boolean;
@@ -18,6 +19,13 @@ export interface TyphoonConfig {
 }
 
 export interface GovernmentServiceConfig {
+  enabled: boolean;
+  message: string;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
+export interface PabiliServiceConfig {
   enabled: boolean;
   message: string;
   updatedAt: string | null;
@@ -57,6 +65,13 @@ const DEFAULT_CONFIG: TyphoonConfig = {
 const DEFAULT_GOVERNMENT_SERVICE_CONFIG: GovernmentServiceConfig = {
   enabled: false,
   message: 'Government services are currently unavailable. Please check back later.',
+  updatedAt: null,
+  updatedBy: null,
+};
+
+const DEFAULT_PABILI_SERVICE_CONFIG: PabiliServiceConfig = {
+  enabled: false,
+  message: 'We Buy For You service is currently unavailable. Please check back later.',
   updatedAt: null,
   updatedBy: null,
 };
@@ -106,6 +121,26 @@ export class SettingsService {
       updatedBy: adminEmail ?? 'admin',
     };
     await this.redis.setJson(GOVERNMENT_SERVICE_KEY, updated);
+    return updated;
+  }
+
+  async getPabiliServiceConfig(): Promise<PabiliServiceConfig> {
+    const cached = await this.redis.getJson<PabiliServiceConfig>(PABILI_SERVICE_KEY);
+    return cached ?? DEFAULT_PABILI_SERVICE_CONFIG;
+  }
+
+  async setPabiliServiceConfig(
+    config: Partial<PabiliServiceConfig>,
+    adminEmail?: string,
+  ): Promise<PabiliServiceConfig> {
+    const current = await this.getPabiliServiceConfig();
+    const updated: PabiliServiceConfig = {
+      ...current,
+      ...config,
+      updatedAt: new Date().toISOString(),
+      updatedBy: adminEmail ?? 'admin',
+    };
+    await this.redis.setJson(PABILI_SERVICE_KEY, updated);
     return updated;
   }
 

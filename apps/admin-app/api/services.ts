@@ -411,6 +411,13 @@ export interface GovernmentServiceConfig {
   updatedBy: string | null;
 }
 
+export interface PabiliServiceConfig {
+  enabled: boolean;
+  message: string;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
 export const getTyphoonMode = async (): Promise<TyphoonConfig | null> => {
   try {
     const res = await authenticatedFetch('/settings/typhoon');
@@ -452,6 +459,32 @@ export const setGovernmentServiceConfig = async (
 ): Promise<GovernmentServiceConfig | null> => {
   try {
     const res = await authenticatedFetch('/settings/government-service', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+};
+
+export const getPabiliServiceConfig = async (): Promise<PabiliServiceConfig | null> => {
+  try {
+    const res = await authenticatedFetch('/settings/pabili-service');
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+};
+
+export const setPabiliServiceConfig = async (
+  config: Partial<PabiliServiceConfig>,
+): Promise<PabiliServiceConfig | null> => {
+  try {
+    const res = await authenticatedFetch('/settings/pabili-service', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config),

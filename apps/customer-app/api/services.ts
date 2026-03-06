@@ -24,6 +24,13 @@ export interface GovernmentServiceConfig {
   updatedBy: string | null;
 }
 
+export interface PabiliServiceConfig {
+  enabled: boolean;
+  message: string;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
 // Merchant APIs
 export const getMerchants = async (): Promise<Merchant[]> => {
   try {
@@ -100,6 +107,19 @@ export const getGovernmentServiceConfig = async (): Promise<GovernmentServiceCon
     return await response.json();
   } catch (error) {
     console.error('Error fetching government service config:', error);
+    return null;
+  }
+};
+
+export const getPabiliServiceConfig = async (): Promise<PabiliServiceConfig | null> => {
+  try {
+    const response = await publicFetch('/settings/pabili-service');
+    if (!response.ok) {
+      throw new Error('Failed to fetch pabili service config');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching pabili service config:', error);
     return null;
   }
 };
