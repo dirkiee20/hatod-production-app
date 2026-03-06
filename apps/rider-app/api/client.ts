@@ -2,19 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const PRODUCTION_API_URL = 'https://hatod-production-app-production.up.railway.app/api';
 const REQUEST_TIMEOUT_MS = 10000;
-
-const normalizeApiUrl = (url: string) => {
-  const normalised = url.replace(/\/+$/, '');
-  return normalised.endsWith('/api') ? normalised : `${normalised}/api`;
-};
-
-const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
-const preferredApiUrl = envUrl
-  ? normalizeApiUrl(envUrl)
-  : PRODUCTION_API_URL;
-
-let currentApiUrl = preferredApiUrl;
-console.log('Rider App preferred API URL:', preferredApiUrl);
+const currentApiUrl = PRODUCTION_API_URL;
 
 const fetchWithTimeout = async (url: string, options: RequestInit, timeoutMs = REQUEST_TIMEOUT_MS): Promise<Response> => {
   const controller = new AbortController();
@@ -51,22 +39,8 @@ const fetchFromCurrentApi = async (endpoint: string, options: RequestInit): Prom
   return fetchWithRetry(`${currentApiUrl}${endpoint}`, options);
 };
 
-const switchToProductionApi = () => {
-  if (currentApiUrl === PRODUCTION_API_URL) return;
-  currentApiUrl = PRODUCTION_API_URL;
-  console.warn(`[API Fallback] Rider app switched to production API: ${currentApiUrl}`);
-};
-
-const requestWithAutoFallback = async (endpoint: string, options: RequestInit): Promise<Response> => {
-  try {
-    return await fetchFromCurrentApi(endpoint, options);
-  } catch (error) {
-    if (currentApiUrl !== PRODUCTION_API_URL) {
-      switchToProductionApi();
-      return fetchFromCurrentApi(endpoint, options);
-    }
-    throw error;
-  }
+const requestApi = async (endpoint: string, options: RequestInit): Promise<Response> => {
+  return fetchFromCurrentApi(endpoint, options);
 };
 
 let authToken: string | null = null;
@@ -88,7 +62,7 @@ export const getAuthToken = async () => {
 
 export const login = async (phone: string, password: string) => {
   try {
-    const response = await requestWithAutoFallback('/auth/login', {
+    const response = await requestApi('/auth/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -117,7 +91,7 @@ export const login = async (phone: string, password: string) => {
 
 export const register = async (userData: { firstName: string; lastName: string; phone: string; password: string; email: string }) => {
   try {
-    const response = await requestWithAutoFallback('/auth/register', {
+    const response = await requestApi('/auth/register', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -230,7 +204,7 @@ export const authenticatedFetch = async (endpoint: string, options: RequestInit 
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   } as HeadersInit;
 
-  const res = await requestWithAutoFallback(endpoint, {
+  const res = await requestApi(endpoint, {
     ...options,
     headers,
   });
@@ -250,7 +224,7 @@ export const publicFetch = async (endpoint: string, options: RequestInit = {}) =
     ...(options.headers || {}),
   } as HeadersInit;
 
-  const res = await requestWithAutoFallback(endpoint, {
+  const res = await requestApi(endpoint, {
     ...options,
     headers,
   });

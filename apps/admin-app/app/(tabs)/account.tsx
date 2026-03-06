@@ -105,6 +105,17 @@ export default function AccountScreen() {
             <IconSymbol size={16} name="chevron.right" color="#CCC" />
           </TouchableOpacity>
 
+          <TouchableOpacity style={styles.menuRow} activeOpacity={0.7} onPress={() => router.push('/food-categories' as any)}>
+            <View style={styles.menuIconBox}>
+              <IconSymbol size={18} name="doc.badge.fill" color={ACCENT} />
+            </View>
+            <View style={styles.menuTextBlock}>
+              <ThemedText style={styles.menuRowLabel}>Food Category Images</ThemedText>
+              <ThemedText style={styles.menuRowSub}>Set permanent food categories and image URLs</ThemedText>
+            </View>
+            <IconSymbol size={16} name="chevron.right" color="#CCC" />
+          </TouchableOpacity>
+
           <TouchableOpacity style={styles.menuRow} activeOpacity={0.7}>
             <View style={styles.menuIconBox}>
               <IconSymbol size={18} name="doc.text" color={ACCENT} />

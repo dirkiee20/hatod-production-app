@@ -215,8 +215,10 @@ export default function FoodOrdersScreen() {
     setRatingOrder(null);
   };
 
-  const activeOrders = orders.filter(o => !['DELIVERED', 'COMPLETED', 'CANCELED'].includes(o.status));
-  const pastOrders = orders.filter(o => ['DELIVERED', 'COMPLETED', 'CANCELED'].includes(o.status));
+  // Government requests are handled in Government Transcripts screen only.
+  const foodOrders = orders.filter((o) => o?.merchant?.type !== 'GOVERNMENT');
+  const activeOrders = foodOrders.filter(o => !['DELIVERED', 'COMPLETED', 'CANCELED'].includes(o.status));
+  const pastOrders = foodOrders.filter(o => ['DELIVERED', 'COMPLETED', 'CANCELED'].includes(o.status));
 
   const StoreLogo = ({ logoUrl }: { logoUrl: string | null | undefined }) => {
     const [imageError, setImageError] = useState(false);

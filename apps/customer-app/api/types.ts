@@ -109,3 +109,13 @@ export interface Review {
     avatar?: string;
   };
 }
+
+export interface FoodCategorySetting {
+  id: string;
+  name: string;
+  imageUrl: string;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}

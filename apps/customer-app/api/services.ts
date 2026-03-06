@@ -1,5 +1,5 @@
 import { publicFetch, authenticatedFetch } from './client';
-import { Merchant, MenuItem, Order } from './types';
+import { Merchant, MenuItem, Order, FoodCategorySetting } from './types';
 
 const devLog = (...args: unknown[]) => {
   if (__DEV__) {
@@ -68,6 +68,19 @@ export const getLegalPolicies = async (): Promise<LegalPoliciesConfig | null> =>
   } catch (error) {
     console.error('Error fetching legal policies:', error);
     return null;
+  }
+};
+
+export const getFoodCategories = async (): Promise<FoodCategorySetting[]> => {
+  try {
+    const response = await publicFetch('/settings/food-categories');
+    if (!response.ok) {
+      throw new Error('Failed to fetch food categories');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching food categories:', error);
+    return [];
   }
 };
 

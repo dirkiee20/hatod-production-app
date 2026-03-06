@@ -1,48 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
-import { Platform } from 'react-native';
 
 const PRODUCTION_API_URL = 'https://hatod-production-app-production.up.railway.app/api';
-
-const normalizeApiUrl = (url: string) => {
-  const normalised = url.replace(/\/+$/, '');
-  return normalised.endsWith('/api') ? normalised : `${normalised}/api`;
-};
-
-const getLocalDevApiUrl = () => {
-  if (!__DEV__) return null;
-
-  // Android emulator loopback to host machine
-  if (Platform.OS === 'android' && !Constants.isDevice) {
-    return 'http://10.0.2.2:3000/api';
-  }
-
-  // Expo host IP on LAN (physical device / iOS simulator)
-  const hostUri = Constants.expoConfig?.hostUri;
-  if (hostUri) {
-    const ip = hostUri.split(':')[0];
-    return `http://${ip}:3000/api`;
-  }
-
-  if (Platform.OS === 'ios') {
-    return 'http://localhost:3000/api';
-  }
-
-  return null;
-};
-
-const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
-const preferredApiUrl = envUrl
-  ? normalizeApiUrl(envUrl)
-  : getLocalDevApiUrl() ?? PRODUCTION_API_URL;
-
-let currentApiUrl = preferredApiUrl;
-export let API_BASE = currentApiUrl;
-
-if (__DEV__) {
-  console.log('Customer App preferred API URL:', preferredApiUrl);
-}
+const currentApiUrl = PRODUCTION_API_URL;
+export const API_BASE = PRODUCTION_API_URL;
 
 let authToken: string | null = null;
 let logoutCallback: (() => void) | null = null;
@@ -88,7 +49,7 @@ export const getAuthToken = async () => {
 
 export const login = async (phone: string, password: string) => {
   try {
-    const response = await requestWithAutoFallback('/auth/login', {
+    const response = await requestApi('/auth/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -148,7 +109,7 @@ export const register = async (userData: {
   };
 
   try {
-    let response = await requestWithAutoFallback('/auth/register', {
+    let response = await requestApi('/auth/register', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -160,7 +121,7 @@ export const register = async (userData: {
       const errorText = await response.text();
       if (shouldRetryLegacyRegister(errorText)) {
         console.warn('Register endpoint is older than app payload. Retrying with legacy payload.');
-        response = await requestWithAutoFallback('/auth/register', {
+        response = await requestApi('/auth/register', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -223,24 +184,8 @@ const fetchFromCurrentApi = async (endpoint: string, options: RequestInit): Prom
   return fetchWithRetry(`${currentApiUrl}${endpoint}`, options);
 };
 
-const switchToProductionApi = () => {
-  if (currentApiUrl === PRODUCTION_API_URL) return;
-  currentApiUrl = PRODUCTION_API_URL;
-  API_BASE = currentApiUrl;
-  console.warn(`[API Fallback] Switched to production API: ${currentApiUrl}`);
-};
-
-const requestWithAutoFallback = async (endpoint: string, options: RequestInit): Promise<Response> => {
-  try {
-    return await fetchFromCurrentApi(endpoint, options);
-  } catch (error) {
-    // If local dev endpoint is down/unreachable, fail over to production automatically.
-    if (currentApiUrl !== PRODUCTION_API_URL) {
-      switchToProductionApi();
-      return fetchFromCurrentApi(endpoint, options);
-    }
-    throw error;
-  }
+const requestApi = async (endpoint: string, options: RequestInit): Promise<Response> => {
+  return fetchFromCurrentApi(endpoint, options);
 };
 
 export const authenticatedFetch = async (endpoint: string, options: RequestInit = {}) => {
@@ -253,7 +198,7 @@ export const authenticatedFetch = async (endpoint: string, options: RequestInit 
   } as HeadersInit;
 
   try {
-    const res = await requestWithAutoFallback(endpoint, {
+    const res = await requestApi(endpoint, {
       ...options,
       headers,
     });
@@ -292,7 +237,7 @@ export const publicFetch = async (endpoint: string, options: RequestInit = {}) =
   } as HeadersInit;
 
   try {
-    const res = await requestWithAutoFallback(endpoint, {
+    const res = await requestApi(endpoint, {
         ...options,
         headers,
     });

@@ -1,22 +1,24 @@
 import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Image, useWindowDimensions, View, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { getMerchants, getMyOrders, getTyphoonMode, TyphoonConfig, getDeliveryFeeEstimate } from '@/api/services';
-import { Merchant } from '@/api/types';
+import { getMerchants, getMyOrders, getTyphoonMode, TyphoonConfig, getDeliveryFeeEstimate, getFoodCategories } from '@/api/services';
+import { Merchant, FoodCategorySetting } from '@/api/types';
 import { resolveImageUrl } from '@/api/client';
+import { isMerchantOpen } from '@/utils/time';
+import { useSocket } from '@/context/SocketContext';
+import { useCart } from '@/context/CartContext';
 
 const PLACEHOLDER_BANNER = 'https://placehold.co/400x225/f0f0f0/aaaaaa?text=No+Image';
-const PLACEHOLDER_LOGO = 'https://placehold.co/150x150/f0f0f0/aaaaaa?text=?';
-const PLACEHOLDER_CATEGORY = 'https://placehold.co/120x120/f0f0f0/aaaaaa?text=Food';
+const LOCAL_CATEGORY_FALLBACK = require('../../assets/images/hatod-logo.png');
 
 // Wrapper that falls back to placeholder on error
 function MerchantImage({ uri, style, placeholder }: { uri?: string; style: any; placeholder: string }) {
   const [src, setSrc] = useState<string>(uri || placeholder);
-  useEffect(() => { setSrc(uri || placeholder); }, [uri]);
+  useEffect(() => { setSrc(uri || placeholder); }, [uri, placeholder]);
   return (
     <Image
       source={{ uri: src }}
@@ -26,20 +28,44 @@ function MerchantImage({ uri, style, placeholder }: { uri?: string; style: any; 
   );
 }
 
-function CategoryImage({ uri, style }: { uri: string; style: any }) {
-  const [src, setSrc] = useState<string>(uri || PLACEHOLDER_CATEGORY);
-  useEffect(() => { setSrc(uri || PLACEHOLDER_CATEGORY); }, [uri]);
+const FOOD_CATEGORY_IMAGE_OVERRIDES: { keywords: string[]; image: string }[] = [
+  { keywords: ['pizza'], image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=240&q=80' },
+  { keywords: ['burger'], image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=240&q=80' },
+  { keywords: ['chicken'], image: 'https://images.unsplash.com/photo-1626645738196-c2a7c87a8f58?w=240&q=80' },
+  { keywords: ['coffee', 'cafe', 'tea'], image: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=240&q=80' },
+  { keywords: ['dessert', 'cake', 'pastry', 'sweet'], image: 'https://images.unsplash.com/photo-1551024601-bec78aea704b?w=240&q=80' },
+  { keywords: ['bbq', 'grill'], image: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=240&q=80' },
+  { keywords: ['seafood', 'fish', 'shrimp'], image: 'https://images.unsplash.com/photo-1615141982883-c7ad0e69fd62?w=240&q=80' },
+  { keywords: ['beef', 'steak'], image: 'https://images.unsplash.com/photo-1558030006-450675393462?w=240&q=80' },
+  { keywords: ['rice'], image: 'https://images.unsplash.com/photo-1516684732162-798a0062be99?w=240&q=80' },
+  { keywords: ['noodle', 'ramen', 'pasta'], image: 'https://images.unsplash.com/photo-1617093727343-374698b1b08d?w=240&q=80' },
+  { keywords: ['soup'], image: 'https://images.unsplash.com/photo-1547592166-23ac45744acd?w=240&q=80' },
+  { keywords: ['vegan', 'vegetarian', 'salad'], image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=240&q=80' },
+  { keywords: ['breakfast'], image: 'https://images.unsplash.com/photo-1533089860892-a7c6f0a88666?w=240&q=80' },
+  { keywords: ['sandwich'], image: 'https://images.unsplash.com/photo-1509722747041-616f39b57569?w=240&q=80' },
+  { keywords: ['snack'], image: 'https://images.unsplash.com/photo-1576107232684-1279f390859f?w=240&q=80' },
+  { keywords: ['drink', 'juice', 'smoothie'], image: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=240&q=80' },
+  { keywords: ['milk tea', 'boba'], image: 'https://images.unsplash.com/photo-1558857563-b371033873b8?w=240&q=80' },
+  { keywords: ['filipino', 'local'], image: 'https://images.unsplash.com/photo-1559847844-5315695dadae?w=240&q=80' },
+];
+
+function CategoryImage({ uri, style }: { uri?: string; style: any }) {
+  const [hasError, setHasError] = useState(false);
+  useEffect(() => { setHasError(false); }, [uri]);
+
+  if (!uri || hasError) {
+    return <Image source={LOCAL_CATEGORY_FALLBACK} style={style} resizeMode="cover" />;
+  }
+
   return (
     <Image
-      source={{ uri: src }}
+      source={{ uri }}
       style={style}
-      onError={() => setSrc(PLACEHOLDER_CATEGORY)}
+      resizeMode="cover"
+      onError={() => setHasError(true)}
     />
   );
 }
-import { isMerchantOpen } from '@/utils/time';
-import { useSocket } from '@/context/SocketContext';
-import { useCart } from '@/context/CartContext';
 
 export default function FoodScreen() {
   const router = useRouter();
@@ -51,7 +77,7 @@ export default function FoodScreen() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [recentItems, setRecentItems] = useState<Array<{
+  const [recentItems, setRecentItems] = useState<{
     menuItemId: string;
     name: string;
     price: number;
@@ -61,8 +87,9 @@ export default function FoodScreen() {
     merchantRating?: number;
     merchantId: string;
     deliveryFee?: number;
-  }>>([]);
+  }[]>([]);
   const [typhoon, setTyphoon] = useState<TyphoonConfig | null>(null);
+  const [configuredCategories, setConfiguredCategories] = useState<FoodCategorySetting[]>([]);
   const [deliveryEstimates, setDeliveryEstimates] = useState<Record<string, { fee: number; distance: number; duration: number }>>({});
   const { deliveryAddress, items } = useCart();
 
@@ -114,6 +141,7 @@ export default function FoodScreen() {
       }).catch(() => {});
       // Fetch typhoon mode status
       getTyphoonMode().then(t => setTyphoon(t)).catch(() => {});
+      getFoodCategories().then(setConfiguredCategories).catch(() => {});
     }, [])
   );
 
@@ -184,14 +212,99 @@ export default function FoodScreen() {
     };
   }, [merchants, deliveryAddress?.latitude, deliveryAddress?.longitude, items]);
 
-  const foodCategories = Array.from(
-    new Set(
-      merchants
-        .filter((m) => !m.type || m.type === 'RESTAURANT')
-        .flatMap((m) => (m.categories ?? []).map((c) => c.name))
-        .filter((name): name is string => !!name && name.trim().length > 0)
-    )
-  ).sort((a, b) => a.localeCompare(b));
+  const configuredCategoryMap = useMemo(() => {
+    const next: Record<string, FoodCategorySetting> = {};
+    for (const category of configuredCategories) {
+      const key = category.name.trim().toLowerCase();
+      if (!key || next[key]) continue;
+      next[key] = category;
+    }
+    return next;
+  }, [configuredCategories]);
+
+  const configuredCategoryNames = useMemo(() => {
+    const sorted = [...configuredCategories].sort(
+      (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)
+    );
+    const names: string[] = [];
+    const seen = new Set<string>();
+    for (const category of sorted) {
+      const name = category.name.trim();
+      const key = name.toLowerCase();
+      if (!name || seen.has(key)) continue;
+      seen.add(key);
+      names.push(name);
+    }
+    return names;
+  }, [configuredCategories]);
+
+  const merchantDrivenCategories = useMemo(() => {
+    return Array.from(
+      new Set(
+        merchants
+          .filter((m) => !m.type || m.type === 'RESTAURANT')
+          .flatMap((m) => (m.categories ?? []).map((c) => c.name))
+          .filter((name): name is string => !!name && name.trim().length > 0)
+      )
+    ).sort((a, b) => a.localeCompare(b));
+  }, [merchants]);
+
+  const foodCategories = useMemo(() => {
+    const merged: string[] = [];
+    const seen = new Set<string>();
+
+    for (const name of configuredCategoryNames) {
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(name);
+    }
+
+    for (const name of merchantDrivenCategories) {
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(name);
+    }
+
+    return merged;
+  }, [configuredCategoryNames, merchantDrivenCategories]);
+
+  const foodCategoryImages = useMemo(() => {
+    const imageMap: Record<string, string | undefined> = {};
+
+    for (const categoryName of foodCategories) {
+      const normalizedCategory = categoryName.trim().toLowerCase();
+      const configured = configuredCategoryMap[normalizedCategory];
+      if (configured?.imageUrl) {
+        imageMap[categoryName] = resolveImageUrl(configured.imageUrl) || configured.imageUrl;
+        continue;
+      }
+
+      const override = FOOD_CATEGORY_IMAGE_OVERRIDES.find((entry) =>
+        entry.keywords.some((keyword) => normalizedCategory.includes(keyword))
+      );
+
+      if (override) {
+        imageMap[categoryName] = override.image;
+        continue;
+      }
+
+      const merchantMatch = merchants.find((merchant) => {
+        if (merchant.type && merchant.type !== 'RESTAURANT') return false;
+        if (!merchant.coverImage && !merchant.logo) return false;
+        return (merchant.categories ?? []).some(
+          (category) => category.name.toLowerCase() === normalizedCategory
+        );
+      });
+
+      imageMap[categoryName] = merchantMatch
+        ? resolveImageUrl(merchantMatch.coverImage || merchantMatch.logo)
+        : undefined;
+    }
+
+    return imageMap;
+  }, [configuredCategoryMap, foodCategories, merchants]);
 
   useEffect(() => {
     if (selectedCategory && !foodCategories.includes(selectedCategory)) {
@@ -319,7 +432,7 @@ export default function FoodScreen() {
 
   // GrabFood-style horizontal list row for the All Restaurants section
   const renderListCard = (merchant: Merchant) => {
-    const { isOpen, nextOpen } = isMerchantOpen(merchant);
+    const { isOpen } = isMerchantOpen(merchant);
     const etaText = getMerchantEtaText(merchant);
     const feeText = getMerchantFeeText(merchant);
     const imgSize = 110;
@@ -461,6 +574,7 @@ export default function FoodScreen() {
               >
                 {foodCategories.map((categoryName) => {
                   const active = selectedCategory === categoryName;
+                  const categoryImageUri = foodCategoryImages[categoryName];
                   return (
                     <TouchableOpacity
                       key={categoryName}
@@ -469,7 +583,7 @@ export default function FoodScreen() {
                       onPress={() => setSelectedCategory(active ? null : categoryName)}
                     >
                       <View style={[styles.categoryImgWrap, active && styles.categoryImgWrapActive]}>
-                        <CategoryImage uri={PLACEHOLDER_CATEGORY} style={styles.categoryImg} />
+                        <CategoryImage uri={categoryImageUri} style={styles.categoryImg} />
                       </View>
                       <ThemedText style={[styles.categoryLabel, active && styles.categoryLabelActive]}>
                         {categoryName}

@@ -3,8 +3,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // API Configuration
 const API_URL = 'https://hatod-production-app-production.up.railway.app/api';
 
-console.log('[RiderService] Initialized with API URL:', API_URL);
-
 const getAuthToken = async () => {
   try {
     return await AsyncStorage.getItem('auth_token');
@@ -24,7 +22,6 @@ const authenticatedFetch = async (endpoint: string, options: RequestInit = {}) =
   } as HeadersInit;
 
   const url = `${API_URL}${endpoint}`;
-  console.log(`[RiderService] Fetching: ${url}`);
 
   try {
     const res = await fetch(url, {

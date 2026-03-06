@@ -1,5 +1,5 @@
-import { authenticatedFetch, publicFetch } from './client';
-import { Merchant, Order, User, DashboardStats, OrderStatus } from './types';
+import { authenticatedFetch } from './client';
+import { Merchant, Order, User, DashboardStats, OrderStatus, FoodCategorySetting } from './types';
 
 // Merchant APIs
 export const getMerchants = async (): Promise<Merchant[]> => {
@@ -427,5 +427,75 @@ export const setTyphoonMode = async (
     return res.json();
   } catch {
     return null;
+  }
+};
+
+export const getFoodCategoriesAdmin = async (): Promise<FoodCategorySetting[]> => {
+  try {
+    const res = await authenticatedFetch('/settings/food-categories/admin');
+    if (!res.ok) throw new Error('Failed to fetch food categories');
+    return await res.json();
+  } catch (error) {
+    console.error('Error fetching food categories:', error);
+    return [];
+  }
+};
+
+export const createFoodCategory = async (payload: {
+  name: string;
+  imageUrl: string;
+  sortOrder?: number;
+  isActive?: boolean;
+}): Promise<FoodCategorySetting | null> => {
+  try {
+    const res = await authenticatedFetch('/settings/food-categories', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(err || 'Failed to create food category');
+    }
+    return await res.json();
+  } catch (error) {
+    console.error('Error creating food category:', error);
+    return null;
+  }
+};
+
+export const updateFoodCategory = async (
+  id: string,
+  payload: {
+    name?: string;
+    imageUrl?: string;
+    sortOrder?: number;
+    isActive?: boolean;
+  },
+): Promise<FoodCategorySetting | null> => {
+  try {
+    const res = await authenticatedFetch(`/settings/food-categories/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(err || 'Failed to update food category');
+    }
+    return await res.json();
+  } catch (error) {
+    console.error('Error updating food category:', error);
+    return null;
+  }
+};
+
+export const deleteFoodCategory = async (id: string): Promise<boolean> => {
+  try {
+    const res = await authenticatedFetch(`/settings/food-categories/${id}`, {
+      method: 'DELETE',
+    });
+    return res.ok;
+  } catch (error) {
+    console.error('Error deleting food category:', error);
+    return false;
   }
 };

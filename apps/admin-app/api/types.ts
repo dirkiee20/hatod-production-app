@@ -174,3 +174,13 @@ export interface DeliveryFeeConfig {
   updatedAt: string;
 }
 
+export interface FoodCategorySetting {
+  id: string;
+  name: string;
+  imageUrl: string;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+

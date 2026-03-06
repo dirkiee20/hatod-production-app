@@ -3,14 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logout } from '@/api/client';
 
 const PRODUCTION_API_URL = 'https://hatod-production-app-production.up.railway.app/api';
-
-const normalizeApiUrl = (url: string) => {
-  const normalised = url.replace(/\/+$/, '');
-  return normalised.endsWith('/api') ? normalised : `${normalised}/api`;
-};
-
-const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
-const API_URL = envUrl ? normalizeApiUrl(envUrl) : PRODUCTION_API_URL;
+const API_URL = PRODUCTION_API_URL;
 
 const api = axios.create({
   baseURL: API_URL,

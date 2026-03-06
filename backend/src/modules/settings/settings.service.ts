@@ -1,6 +1,8 @@
-﻿import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from '../redis/redis.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { CreateFoodCategoryDto, UpdateFoodCategoryDto } from './dto/food-category.dto';
 
 const TYPHOON_KEY = 'system:typhoon_mode';
 
@@ -24,6 +26,16 @@ export interface LegalPoliciesConfig {
   supportEmail: string;
 }
 
+export interface FoodCategoryConfig {
+  id: string;
+  name: string;
+  imageUrl: string;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 const DEFAULT_CONFIG: TyphoonConfig = {
   enabled: false,
   message: 'Service is temporarily suspended due to typhoon. Please stay safe.',
@@ -39,6 +51,7 @@ export class SettingsService {
   constructor(
     private redis: RedisService,
     private configService: ConfigService,
+    private prisma: PrismaService,
   ) {}
 
   async getTyphoonMode(): Promise<TyphoonConfig> {
@@ -65,22 +78,113 @@ export class SettingsService {
     return {
       termsUrl:
         this.configService.get<string>('LEGAL_TERMS_URL') ??
-        'https://hatod.app/terms',
+        'https://hatodlegalcenter-production.up.railway.app/terms.html',
       privacyUrl:
         this.configService.get<string>('LEGAL_PRIVACY_URL') ??
-        'https://hatod.app/privacy',
+        'https://hatodlegalcenter-production.up.railway.app/terms.html',
       termsVersion:
-        this.configService.get<string>('LEGAL_TERMS_VERSION') ?? '2026-02-01',
+        this.configService.get<string>('LEGAL_TERMS_VERSION') ?? '2026-03-01',
       privacyVersion:
-        this.configService.get<string>('LEGAL_PRIVACY_VERSION') ?? '2026-02-01',
+        this.configService.get<string>('LEGAL_PRIVACY_VERSION') ?? '2026-03-01',
       effectiveDate:
-        this.configService.get<string>('LEGAL_EFFECTIVE_DATE') ?? '2026-02-01',
+        this.configService.get<string>('LEGAL_EFFECTIVE_DATE') ?? '2026-03-01',
       accountDeletionInfoUrl:
         this.configService.get<string>('LEGAL_ACCOUNT_DELETION_URL') ??
-        'https://hatod.app/account-deletion',
+        'https://hatodlegalcenter-production.up.railway.app/account-deletion.html',
       supportEmail:
         this.configService.get<string>('LEGAL_SUPPORT_EMAIL') ??
         'hatodservices@gmail.com',
     };
+  }
+
+  async getFoodCategories(includeInactive = false): Promise<FoodCategoryConfig[]> {
+    return this.prisma.foodCategorySetting.findMany({
+      where: includeInactive ? undefined : { isActive: true },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    });
+  }
+
+  async createFoodCategory(dto: CreateFoodCategoryDto): Promise<FoodCategoryConfig> {
+    const name = this.normalizeCategoryName(dto.name);
+    const imageUrl = this.normalizeImageUrl(dto.imageUrl);
+    await this.assertUniqueCategoryName(name);
+
+    return this.prisma.foodCategorySetting.create({
+      data: {
+        name,
+        imageUrl,
+        sortOrder: dto.sortOrder ?? 0,
+        isActive: dto.isActive ?? true,
+      },
+    });
+  }
+
+  async updateFoodCategory(id: string, dto: UpdateFoodCategoryDto): Promise<FoodCategoryConfig> {
+    const existing = await this.prisma.foodCategorySetting.findUnique({ where: { id } });
+    if (!existing) {
+      throw new NotFoundException('Food category not found');
+    }
+
+    const data: Partial<FoodCategoryConfig> = {};
+
+    if (dto.name !== undefined) {
+      const normalizedName = this.normalizeCategoryName(dto.name);
+      await this.assertUniqueCategoryName(normalizedName, id);
+      data.name = normalizedName;
+    }
+
+    if (dto.imageUrl !== undefined) {
+      data.imageUrl = this.normalizeImageUrl(dto.imageUrl);
+    }
+    if (dto.sortOrder !== undefined) {
+      data.sortOrder = dto.sortOrder;
+    }
+    if (dto.isActive !== undefined) {
+      data.isActive = dto.isActive;
+    }
+
+    return this.prisma.foodCategorySetting.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async deleteFoodCategory(id: string): Promise<{ success: true }> {
+    const existing = await this.prisma.foodCategorySetting.findUnique({ where: { id } });
+    if (!existing) {
+      throw new NotFoundException('Food category not found');
+    }
+
+    await this.prisma.foodCategorySetting.delete({ where: { id } });
+    return { success: true };
+  }
+
+  private normalizeCategoryName(name: string): string {
+    const normalized = name.trim().replace(/\s+/g, ' ');
+    if (!normalized) throw new BadRequestException('Category name is required');
+    return normalized;
+  }
+
+  private normalizeImageUrl(imageUrl: string): string {
+    const normalized = imageUrl.trim();
+    if (!normalized) throw new BadRequestException('Category image URL is required');
+    return normalized;
+  }
+
+  private async assertUniqueCategoryName(name: string, excludeId?: string): Promise<void> {
+    const existing = await this.prisma.foodCategorySetting.findFirst({
+      where: {
+        name: {
+          equals: name,
+          mode: 'insensitive',
+        },
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+      select: { id: true },
+    });
+
+    if (existing) {
+      throw new BadRequestException('Food category name already exists');
+    }
   }
 }

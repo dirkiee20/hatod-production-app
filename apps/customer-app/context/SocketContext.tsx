@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { Platform } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 import { API_BASE, getAuthToken } from '../api/client';
 
@@ -28,17 +27,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return;
       }
       
-      // Extract base URL without the /api suffix for socket connection if needed
-      let baseUrl = API_BASE.replace(/\/api\/?$/, '');
-
-      // Extra safety for Android: ensure localhost is replaced if API_BASE failed to catch it
-      if (Platform.OS === 'android' && (baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1'))) {
-         // This is a last-resort fallback if getApiUrl returned localhost
-         baseUrl = baseUrl.replace('localhost', '10.0.2.2').replace('127.0.0.1', '10.0.2.2');
-         console.log('Adjusted Socket URL for Android:', baseUrl);
-      }
-
-      console.log('Connecting to socket at:', `${baseUrl}/events`);
+      const baseUrl = API_BASE.replace(/\/api\/?$/, '');
 
       // Create socket connection
       const newSocket = io(`${baseUrl}/events`, {
