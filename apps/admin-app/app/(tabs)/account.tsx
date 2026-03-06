@@ -105,6 +105,17 @@ export default function AccountScreen() {
             <IconSymbol size={16} name="chevron.right" color="#CCC" />
           </TouchableOpacity>
 
+          <TouchableOpacity style={styles.menuRow} activeOpacity={0.7} onPress={() => router.push('/government-service' as any)}>
+            <View style={[styles.menuIconBox, { backgroundColor: '#E3F2FD' }]}>
+              <IconSymbol size={18} name="building.2.fill" color="#1565C0" />
+            </View>
+            <View style={styles.menuTextBlock}>
+              <ThemedText style={styles.menuRowLabel}>Government Availability</ThemedText>
+              <ThemedText style={styles.menuRowSub}>Enable or disable customer access</ThemedText>
+            </View>
+            <IconSymbol size={16} name="chevron.right" color="#CCC" />
+          </TouchableOpacity>
+
           <TouchableOpacity style={styles.menuRow} activeOpacity={0.7} onPress={() => router.push('/food-categories' as any)}>
             <View style={styles.menuIconBox}>
               <IconSymbol size={18} name="doc.badge.fill" color={ACCENT} />

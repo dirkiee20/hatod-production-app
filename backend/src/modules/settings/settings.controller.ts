@@ -9,7 +9,11 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
-import { SettingsService, TyphoonConfig } from './settings.service';
+import {
+  GovernmentServiceConfig,
+  SettingsService,
+  TyphoonConfig,
+} from './settings.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -35,6 +39,13 @@ export class SettingsController {
     return this.settingsService.getFoodCategories(false);
   }
 
+  // GET /settings/government-service - public availability for customer app.
+  @Public()
+  @Get('government-service')
+  getGovernmentServiceConfig() {
+    return this.settingsService.getGovernmentServiceConfig();
+  }
+
   // GET /settings/typhoon - logged in users can read current system state.
   @Get('typhoon')
   getTyphoon() {
@@ -49,6 +60,16 @@ export class SettingsController {
     @Request() req: any,
   ) {
     return this.settingsService.setTyphoonMode(dto, req.user?.email);
+  }
+
+  // PATCH /settings/government-service - admin only.
+  @Patch('government-service')
+  @Roles('ADMIN')
+  updateGovernmentService(
+    @Body() dto: Partial<GovernmentServiceConfig>,
+    @Request() req: any,
+  ) {
+    return this.settingsService.setGovernmentServiceConfig(dto, req.user?.email);
   }
 
   // GET /settings/food-categories/admin - admin list (active + inactive).

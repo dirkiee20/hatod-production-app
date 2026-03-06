@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateFoodCategoryDto, UpdateFoodCategoryDto } from './dto/food-category.dto';
 
 const TYPHOON_KEY = 'system:typhoon_mode';
+const GOVERNMENT_SERVICE_KEY = 'system:government_service';
 
 export interface TyphoonConfig {
   enabled: boolean;
@@ -14,6 +15,13 @@ export interface TyphoonConfig {
   level: 'SIGNAL_1' | 'SIGNAL_2' | 'SIGNAL_3' | 'SIGNAL_4';
   suspendOrders: boolean;
   suspendDeliveries: boolean;
+}
+
+export interface GovernmentServiceConfig {
+  enabled: boolean;
+  message: string;
+  updatedAt: string | null;
+  updatedBy: string | null;
 }
 
 export interface LegalPoliciesConfig {
@@ -46,6 +54,13 @@ const DEFAULT_CONFIG: TyphoonConfig = {
   suspendDeliveries: true,
 };
 
+const DEFAULT_GOVERNMENT_SERVICE_CONFIG: GovernmentServiceConfig = {
+  enabled: false,
+  message: 'Government services are currently unavailable. Please check back later.',
+  updatedAt: null,
+  updatedBy: null,
+};
+
 @Injectable()
 export class SettingsService {
   constructor(
@@ -71,6 +86,26 @@ export class SettingsService {
       activatedBy: config.enabled ? (adminEmail ?? 'admin') : null,
     };
     await this.redis.setJson(TYPHOON_KEY, updated);
+    return updated;
+  }
+
+  async getGovernmentServiceConfig(): Promise<GovernmentServiceConfig> {
+    const cached = await this.redis.getJson<GovernmentServiceConfig>(GOVERNMENT_SERVICE_KEY);
+    return cached ?? DEFAULT_GOVERNMENT_SERVICE_CONFIG;
+  }
+
+  async setGovernmentServiceConfig(
+    config: Partial<GovernmentServiceConfig>,
+    adminEmail?: string,
+  ): Promise<GovernmentServiceConfig> {
+    const current = await this.getGovernmentServiceConfig();
+    const updated: GovernmentServiceConfig = {
+      ...current,
+      ...config,
+      updatedAt: new Date().toISOString(),
+      updatedBy: adminEmail ?? 'admin',
+    };
+    await this.redis.setJson(GOVERNMENT_SERVICE_KEY, updated);
     return updated;
   }
 

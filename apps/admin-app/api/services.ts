@@ -404,6 +404,13 @@ export interface TyphoonConfig {
   suspendDeliveries: boolean;
 }
 
+export interface GovernmentServiceConfig {
+  enabled: boolean;
+  message: string;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
 export const getTyphoonMode = async (): Promise<TyphoonConfig | null> => {
   try {
     const res = await authenticatedFetch('/settings/typhoon');
@@ -419,6 +426,32 @@ export const setTyphoonMode = async (
 ): Promise<TyphoonConfig | null> => {
   try {
     const res = await authenticatedFetch('/settings/typhoon', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+};
+
+export const getGovernmentServiceConfig = async (): Promise<GovernmentServiceConfig | null> => {
+  try {
+    const res = await authenticatedFetch('/settings/government-service');
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+};
+
+export const setGovernmentServiceConfig = async (
+  config: Partial<GovernmentServiceConfig>,
+): Promise<GovernmentServiceConfig | null> => {
+  try {
+    const res = await authenticatedFetch('/settings/government-service', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config),

@@ -47,7 +47,13 @@ export const getAuthToken = async () => {
   return authToken;
 };
 
-export const login = async (phone: string, password: string) => {
+export const login = async (
+  phone: string,
+  password: string,
+  options?: { rememberMe?: boolean },
+) => {
+  const rememberMe = options?.rememberMe ?? true;
+
   try {
     const response = await requestApi('/auth/login', {
       method: 'POST',
@@ -68,7 +74,12 @@ export const login = async (phone: string, password: string) => {
 
     const data = await response.json();
     authToken = data.access_token;
-    await persistAuthToken(data.access_token);
+    if (rememberMe) {
+      await persistAuthToken(data.access_token);
+    } else {
+      // Session-only sign in: keep token in memory but clear persisted storage.
+      await clearAuthToken();
+    }
     return data;
   } catch (error) {
     console.error('Error logging in:', error);
@@ -209,7 +220,7 @@ export const authenticatedFetch = async (endpoint: string, options: RequestInit 
             try {
                 const text = await res.clone().text();
                 console.error(`[API Error Body]`, text);
-            } catch (e) {
+            } catch {
                 console.error('[API Error] Could not read error body');
             }
         }
@@ -248,7 +259,7 @@ export const publicFetch = async (endpoint: string, options: RequestInit = {}) =
             try {
                 const text = await res.clone().text();
                 console.error(`[Public API Error Body]`, text);
-            } catch (e) {
+            } catch {
                 console.error('[Public API Error] Could not read error body');
             }
         }

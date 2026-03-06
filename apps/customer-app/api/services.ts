@@ -17,6 +17,13 @@ export interface LegalPoliciesConfig {
   supportEmail: string;
 }
 
+export interface GovernmentServiceConfig {
+  enabled: boolean;
+  message: string;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
 // Merchant APIs
 export const getMerchants = async (): Promise<Merchant[]> => {
   try {
@@ -81,6 +88,19 @@ export const getFoodCategories = async (): Promise<FoodCategorySetting[]> => {
   } catch (error) {
     console.error('Error fetching food categories:', error);
     return [];
+  }
+};
+
+export const getGovernmentServiceConfig = async (): Promise<GovernmentServiceConfig | null> => {
+  try {
+    const response = await publicFetch('/settings/government-service');
+    if (!response.ok) {
+      throw new Error('Failed to fetch government service config');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching government service config:', error);
+    return null;
   }
 };
 

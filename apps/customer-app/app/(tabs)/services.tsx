@@ -1,21 +1,42 @@
-import { StyleSheet, ScrollView, TouchableOpacity, useWindowDimensions, Image, View, ActivityIndicator } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, Image, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import React, { useState, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { getTyphoonMode, TyphoonConfig } from '@/api/services';
+import {
+  getGovernmentServiceConfig,
+  getTyphoonMode,
+  GovernmentServiceConfig,
+  TyphoonConfig,
+} from '@/api/services';
+
+const DEFAULT_GOVERNMENT_CONFIG: GovernmentServiceConfig = {
+  enabled: false,
+  message: 'Government services are currently unavailable. Please check back later.',
+  updatedAt: null,
+  updatedBy: null,
+};
 
 export default function ServicesScreen() {
   const router = useRouter();
-  const { width } = useWindowDimensions();
   const [typhoon, setTyphoon] = useState<TyphoonConfig | null>(null);
+  const [governmentConfig, setGovernmentConfig] = useState<GovernmentServiceConfig>(
+    DEFAULT_GOVERNMENT_CONFIG,
+  );
 
   useFocusEffect(
     useCallback(() => {
-      getTyphoonMode().then(t => setTyphoon(t)).catch(() => {});
-    }, [])
+      Promise.all([getTyphoonMode(), getGovernmentServiceConfig()])
+        .then(([typhoonConfig, govConfig]) => {
+          setTyphoon(typhoonConfig);
+          setGovernmentConfig(govConfig ?? DEFAULT_GOVERNMENT_CONFIG);
+        })
+        .catch(() => {
+          setGovernmentConfig(DEFAULT_GOVERNMENT_CONFIG);
+        });
+    }, []),
   );
 
   const services = [
@@ -32,7 +53,7 @@ export default function ServicesScreen() {
     {
       id: 'pabili',
       title: 'We Buy For You',
-      subtitle: 'Personal shopper & custom errands',
+      subtitle: 'Personal shopper and custom errands',
       icon: 'pabili',
       route: '/services/pabili',
       color: '#f78734',
@@ -48,10 +69,9 @@ export default function ServicesScreen() {
         <ThemedText style={styles.headerSubtitle}>Premium assistance at your fingertips</ThemedText>
       </ThemedView>
 
-      {/* 🌀 Typhoon Mode Banner */}
       {typhoon?.enabled && (
         <ThemedView style={styles.typhoonBanner}>
-          <ThemedText style={styles.typhoonBannerIcon}>🌀</ThemedText>
+          <ThemedText style={styles.typhoonBannerIcon}>!</ThemedText>
           <ThemedView style={{ flex: 1, backgroundColor: 'transparent' }}>
             <ThemedText style={styles.typhoonBannerTitle}>Typhoon Mode Active</ThemedText>
             <ThemedText style={styles.typhoonBannerMsg} numberOfLines={2}>
@@ -64,63 +84,85 @@ export default function ServicesScreen() {
       <ThemedView style={styles.content}>
         <ThemedText style={styles.sectionTitle}>What do you need help with?</ThemedText>
 
-        {services.map((service) => (
-          <TouchableOpacity
-            key={service.id}
-            style={[styles.card, typhoon?.enabled && styles.cardDisabled]}
-            onPress={() => !typhoon?.enabled && router.push(service.route as any)}
-            activeOpacity={typhoon?.enabled ? 1 : 0.85}
-            disabled={!!typhoon?.enabled}
-          >
-            <View style={styles.imageContainer}>
-              <Image
-                source={{ uri: service.image }}
-                style={[styles.cardImage, typhoon?.enabled && { opacity: 0.4 }]}
-              />
-              <View style={styles.imageOverlay} />
-              {typhoon?.enabled ? (
-                <View style={styles.typhoonCardOverlay}>
-                  <ThemedText style={styles.typhoonCardIcon}>🌀</ThemedText>
-                  <ThemedText style={styles.typhoonCardText}>Suspended</ThemedText>
-                </View>
-              ) : null}
-              <View style={[styles.iconBadge, { backgroundColor: typhoon?.enabled ? '#E0E0E0' : service.bgColor }]}>
-                <IconSymbol
-                  name={service.icon as any}
-                  size={20}
-                  color={typhoon?.enabled ? '#AAA' : service.color}
-                />
-              </View>
-            </View>
+        {services.map((service) => {
+          const isGovernmentService = service.id === 'gov';
+          const governmentUnavailable = isGovernmentService && !governmentConfig.enabled;
+          const isDisabled = !!typhoon?.enabled || governmentUnavailable;
+          const disabledReason = typhoon?.enabled
+            ? 'typhoon'
+            : governmentUnavailable
+              ? 'government'
+              : null;
 
-            <ThemedView style={[styles.cardFooter, typhoon?.enabled && { backgroundColor: '#F5F5F5' }]}>
-              <ThemedView style={styles.textContainer}>
-                <ThemedText style={[styles.cardTitle, typhoon?.enabled && { color: '#AAA' }]}>
-                  {service.title}
-                </ThemedText>
-                <ThemedText style={styles.cardSubtitle}>{service.subtitle}</ThemedText>
-                {typhoon?.enabled && (
-                  <ThemedText style={styles.suspendedTag}>⚠ Unavailable during typhoon</ThemedText>
-                )}
-              </ThemedView>
-              <ThemedView style={[styles.arrowBox, typhoon?.enabled && { backgroundColor: '#EEEEEE' }]}>
-                <IconSymbol
-                  name="chevron.right"
-                  size={18}
-                  color={typhoon?.enabled ? '#CCC' : '#5c6cc9'}
+          return (
+            <TouchableOpacity
+              key={service.id}
+              style={[styles.card, isDisabled && styles.cardDisabled]}
+              onPress={() => !isDisabled && router.push(service.route as any)}
+              activeOpacity={isDisabled ? 1 : 0.85}
+              disabled={isDisabled}
+            >
+              <View style={styles.imageContainer}>
+                <Image
+                  source={{ uri: service.image }}
+                  style={[styles.cardImage, isDisabled && { opacity: 0.4 }]}
                 />
+                <View style={styles.imageOverlay} />
+                {disabledReason ? (
+                  <View style={styles.typhoonCardOverlay}>
+                    <ThemedText style={styles.typhoonCardIcon}>
+                      {disabledReason === 'typhoon' ? '!' : 'X'}
+                    </ThemedText>
+                    <ThemedText style={styles.typhoonCardText}>
+                      {disabledReason === 'typhoon' ? 'Suspended' : 'Unavailable'}
+                    </ThemedText>
+                  </View>
+                ) : null}
+                <View style={[styles.iconBadge, { backgroundColor: isDisabled ? '#E0E0E0' : service.bgColor }]}>
+                  <IconSymbol
+                    name={service.icon as any}
+                    size={20}
+                    color={isDisabled ? '#AAA' : service.color}
+                  />
+                </View>
+              </View>
+
+              <ThemedView style={[styles.cardFooter, isDisabled && { backgroundColor: '#F5F5F5' }]}>
+                <ThemedView style={styles.textContainer}>
+                  <ThemedText style={[styles.cardTitle, isDisabled && { color: '#AAA' }]}>
+                    {service.title}
+                  </ThemedText>
+                  <ThemedText style={styles.cardSubtitle}>{service.subtitle}</ThemedText>
+                  {typhoon?.enabled && (
+                    <ThemedText style={styles.suspendedTag}>Unavailable during typhoon</ThemedText>
+                  )}
+                  {!typhoon?.enabled && governmentUnavailable && (
+                    <ThemedText style={styles.governmentUnavailableTag} numberOfLines={2}>
+                      {governmentConfig.message}
+                    </ThemedText>
+                  )}
+                </ThemedView>
+                <ThemedView style={[styles.arrowBox, isDisabled && { backgroundColor: '#EEEEEE' }]}>
+                  <IconSymbol
+                    name="chevron.right"
+                    size={18}
+                    color={isDisabled ? '#CCC' : '#5c6cc9'}
+                  />
+                </ThemedView>
               </ThemedView>
-            </ThemedView>
-          </TouchableOpacity>
-        ))}
+            </TouchableOpacity>
+          );
+        })}
 
         <ThemedView style={styles.comingSoonCard}>
           <ThemedView style={styles.comingSoonIconBox}>
-             <IconSymbol name="services" size={20} color="#AAA" />
+            <IconSymbol name="services" size={20} color="#AAA" />
           </ThemedView>
           <ThemedView style={styles.comingSoonTextContainer}>
-             <ThemedText style={styles.comingSoonTitle}>More Services Soon</ThemedText>
-             <ThemedText style={styles.comingSoonSubtitle}>We are constantly adding new professional services to simplify your life.</ThemedText>
+            <ThemedText style={styles.comingSoonTitle}>More Services Soon</ThemedText>
+            <ThemedText style={styles.comingSoonSubtitle}>
+              We are constantly adding new professional services to simplify your life.
+            </ThemedText>
           </ThemedView>
         </ThemedView>
       </ThemedView>
@@ -158,7 +200,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontWeight: '500',
   },
-  // ── Typhoon banner ─────────────────────────────────────────
   typhoonBanner: {
     backgroundColor: '#B71C1C',
     flexDirection: 'row',
@@ -185,7 +226,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1.2,
   },
-  // ─────────────────────────────────────────────────────────
   content: {
     paddingHorizontal: 16,
     paddingTop: 20,
@@ -271,6 +311,12 @@ const styles = StyleSheet.create({
   suspendedTag: {
     fontSize: 11,
     color: '#B71C1C',
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  governmentUnavailableTag: {
+    fontSize: 11,
+    color: '#B26A00',
     fontWeight: '700',
     marginTop: 4,
   },

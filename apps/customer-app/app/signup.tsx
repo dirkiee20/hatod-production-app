@@ -1,12 +1,27 @@
-import React, { useState } from 'react';
-import { StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Image, KeyboardAvoidingView, Platform, ScrollView, View, Modal, Alert } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  View,
+  Alert,
+  Linking,
+} from 'react-native';
 import { useRouter, Link } from 'expo-router';
 import Constants from 'expo-constants';
 import { ThemedText } from '@/components/themed-text';
-import { register } from '@/api/client'; // Assuming register function exists or I'll need to create it
-import { getLegalPolicies } from '@/api/services';
+import { register } from '@/api/client';
+import { getLegalPolicies, LegalPoliciesConfig } from '@/api/services';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { PRIVACY_POLICY_VERSION, TERMS_OF_SERVICE_VERSION } from '@/constants/legal';
+
+const DEFAULT_TERMS_URL = 'https://hatodlegalcenter-production.up.railway.app/terms.html';
+const DEFAULT_PRIVACY_URL = 'https://hatodlegalcenter-production.up.railway.app/terms.html';
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -18,13 +33,31 @@ export default function SignupScreen() {
   const [loading, setLoading] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [consentGiven, setConsentGiven] = useState(false);
   const [consentError, setConsentError] = useState(false);
-  const [policyModal, setPolicyModal] = useState<'terms' | 'privacy' | null>(null);
+  const [policies, setPolicies] = useState<LegalPoliciesConfig | null>(null);
+
   const LEGAL_FETCH_TIMEOUT_MS = 8000;
 
+  useEffect(() => {
+    getLegalPolicies().then(setPolicies).catch(() => setPolicies(null));
+  }, []);
+
+  const openPolicy = async (type: 'terms' | 'privacy') => {
+    const url = type === 'terms'
+      ? (policies?.termsUrl || DEFAULT_TERMS_URL)
+      : (policies?.privacyUrl || DEFAULT_PRIVACY_URL);
+
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert('Unable to open link', 'Please try again later.');
+    }
+  };
+
   const handleSignup = async () => {
-    // Clear previous errors
     setPasswordError('');
     setConfirmPasswordError('');
     setConsentError(false);
@@ -52,20 +85,22 @@ export default function SignupScreen() {
 
     setLoading(true);
     try {
-      let termsVersion = TERMS_OF_SERVICE_VERSION;
-      let privacyVersion = PRIVACY_POLICY_VERSION;
+      let termsVersion = policies?.termsVersion ?? TERMS_OF_SERVICE_VERSION;
+      let privacyVersion = policies?.privacyVersion ?? PRIVACY_POLICY_VERSION;
 
-      try {
-        const legalPolicies = await Promise.race([
-          getLegalPolicies(),
-          new Promise<null>((resolve) => setTimeout(() => resolve(null), LEGAL_FETCH_TIMEOUT_MS)),
-        ]);
-        if (legalPolicies) {
-          termsVersion = legalPolicies.termsVersion ?? TERMS_OF_SERVICE_VERSION;
-          privacyVersion = legalPolicies.privacyVersion ?? PRIVACY_POLICY_VERSION;
+      if (!policies) {
+        try {
+          const fetched = await Promise.race([
+            getLegalPolicies(),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), LEGAL_FETCH_TIMEOUT_MS)),
+          ]);
+          if (fetched) {
+            termsVersion = fetched.termsVersion ?? TERMS_OF_SERVICE_VERSION;
+            privacyVersion = fetched.privacyVersion ?? PRIVACY_POLICY_VERSION;
+          }
+        } catch {
+          // keep fallback versions
         }
-      } catch {
-        // Continue with bundled fallback versions if legal metadata endpoint is unavailable.
       }
 
       await register({
@@ -93,28 +128,26 @@ export default function SignupScreen() {
 
   return (
     <View style={styles.container}>
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.scrollContent} bounces={false}>
-          
           <View style={styles.header}>
             <View style={styles.logoContainer}>
-               <Image 
-                 source={require('@/assets/images/hatod-logo.png')} 
-                 style={styles.logoImage} 
-                 resizeMode="contain"
-               />
+              <Image
+                source={require('@/assets/images/hatod-logo.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
             </View>
             <ThemedText style={styles.title}>HATOD SIGNUP</ThemedText>
           </View>
 
           <View style={styles.formContainer}>
-            
             <View style={styles.inputContainer}>
               <View style={styles.iconContainer}>
-                 <IconSymbol size={20} name="person.fill" color="#f78734" />
+                <IconSymbol size={20} name="person.fill" color="#f78734" />
               </View>
               <TextInput
                 style={styles.input}
@@ -127,7 +160,7 @@ export default function SignupScreen() {
 
             <View style={styles.inputContainer}>
               <View style={styles.iconContainer}>
-                 <IconSymbol size={20} name="person.fill" color="#f78734" />
+                <IconSymbol size={20} name="person.fill" color="#f78734" />
               </View>
               <TextInput
                 style={styles.input}
@@ -140,7 +173,7 @@ export default function SignupScreen() {
 
             <View style={styles.inputContainer}>
               <View style={styles.iconContainer}>
-                 <IconSymbol size={20} name="phone" color="#f78734" />
+                <IconSymbol size={20} name="phone" color="#f78734" />
               </View>
               <TextInput
                 style={styles.input}
@@ -156,7 +189,7 @@ export default function SignupScreen() {
             <View>
               <View style={styles.inputContainer}>
                 <View style={styles.iconContainer}>
-                   <IconSymbol size={20} name="lock.fill" color="#f78734" />
+                  <IconSymbol size={20} name="lock.fill" color="#f78734" />
                 </View>
                 <TextInput
                   style={styles.input}
@@ -167,18 +200,21 @@ export default function SignupScreen() {
                     setPassword(text);
                     setPasswordError('');
                   }}
-                  secureTextEntry
+                  secureTextEntry={!showPassword}
                 />
+                <TouchableOpacity onPress={() => setShowPassword((prev) => !prev)} style={styles.showPasswordButton}>
+                  <ThemedText style={styles.showPasswordText}>{showPassword ? 'Hide' : 'Show'}</ThemedText>
+                </TouchableOpacity>
               </View>
               {passwordError ? (
                 <ThemedText style={styles.errorText}>{passwordError}</ThemedText>
               ) : null}
             </View>
-            
+
             <View>
               <View style={styles.inputContainer}>
                 <View style={styles.iconContainer}>
-                   <IconSymbol size={20} name="lock.fill" color="#f78734" />
+                  <IconSymbol size={20} name="lock.fill" color="#f78734" />
                 </View>
                 <TextInput
                   style={styles.input}
@@ -189,15 +225,18 @@ export default function SignupScreen() {
                     setConfirmPassword(text);
                     setConfirmPasswordError('');
                   }}
-                  secureTextEntry
+                  secureTextEntry={!showConfirmPassword}
                 />
+                <TouchableOpacity onPress={() => setShowConfirmPassword((prev) => !prev)} style={styles.showPasswordButton}>
+                  <ThemedText style={styles.showPasswordText}>{showConfirmPassword ? 'Hide' : 'Show'}</ThemedText>
+                </TouchableOpacity>
               </View>
               {confirmPasswordError ? (
                 <ThemedText style={styles.errorText}>{confirmPasswordError}</ThemedText>
               ) : null}
             </View>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.loginButton, loading && styles.loginButtonDisabled]}
               onPress={handleSignup}
               disabled={loading}
@@ -209,76 +248,44 @@ export default function SignupScreen() {
               )}
             </TouchableOpacity>
 
-      <View style={styles.footer}>
+            <View style={styles.footer}>
               <ThemedText style={styles.footerText}>Already a member?</ThemedText>
               <Link href="/login" asChild>
                 <TouchableOpacity>
-                    <ThemedText style={[styles.footerText, { fontWeight: 'bold', textDecorationLine: 'underline' }]}>Login here</ThemedText>
+                  <ThemedText style={[styles.footerText, { fontWeight: 'bold', textDecorationLine: 'underline' }]}>
+                    Login here
+                  </ThemedText>
                 </TouchableOpacity>
               </Link>
             </View>
 
-            {/* Consent Checkbox */}
             <TouchableOpacity
               style={[styles.consentRow, consentError && styles.consentRowError]}
-              onPress={() => { setConsentGiven(!consentGiven); setConsentError(false); }}
+              onPress={() => {
+                setConsentGiven(!consentGiven);
+                setConsentError(false);
+              }}
               activeOpacity={0.8}
             >
               <View style={[styles.consentCheckbox, consentGiven && styles.consentCheckboxChecked]}>
-                {consentGiven && <ThemedText style={styles.consentCheckmark}>âœ“</ThemedText>}
+                {consentGiven && <IconSymbol size={14} name="checkmark" color="#FFF" />}
               </View>
               <View style={{ flex: 1 }}>
                 <ThemedText style={styles.consentText}>
                   I have read and agree to the{' '}
-                  <ThemedText
-                    style={styles.consentLink}
-                    onPress={() => setPolicyModal('terms')}
-                  >Terms of Service</ThemedText>
+                  <ThemedText style={styles.consentLink} onPress={() => openPolicy('terms')}>
+                    Terms of Service
+                  </ThemedText>
                   {' '}and{' '}
-                  <ThemedText
-                    style={styles.consentLink}
-                    onPress={() => setPolicyModal('privacy')}
-                  >Privacy Policy</ThemedText>
+                  <ThemedText style={styles.consentLink} onPress={() => openPolicy('privacy')}>
+                    Privacy Policy
+                  </ThemedText>
                 </ThemedText>
                 {consentError && (
-                  <ThemedText style={styles.consentErrorText}>âš  You must agree to continue</ThemedText>
+                  <ThemedText style={styles.consentErrorText}>You must agree to continue</ThemedText>
                 )}
               </View>
             </TouchableOpacity>
-
-            {/* Policy Modal */}
-            <Modal visible={!!policyModal} transparent animationType="slide" onRequestClose={() => setPolicyModal(null)}>
-              <View style={styles.policyOverlay}>
-                <View style={styles.policySheet}>
-                  <View style={styles.policyHeader}>
-                    <ThemedText style={styles.policyTitle}>
-                      {policyModal === 'terms' ? 'ðŸ“„ Terms of Service' : 'ðŸ”’ Privacy Policy'}
-                    </ThemedText>
-                    <TouchableOpacity onPress={() => setPolicyModal(null)} style={styles.policyClose}>
-                      <ThemedText style={{ fontSize: 16, color: '#666', fontWeight: '700' }}>âœ•</ThemedText>
-                    </TouchableOpacity>
-                  </View>
-                  <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-                    {policyModal === 'terms' ? (
-                      <ThemedText style={styles.policyBody}>
-                        {`HATOD TERMS OF SERVICE\n\nEffective Date: February 2026\n\n1. ACCEPTANCE OF TERMS\nBy creating an account and using the HATOD app, you agree to be bound by these Terms of Service.\n\n2. USE OF SERVICE\nHATOD provides an on-demand delivery platform connecting customers with merchants and riders. You must be at least 18 years old to use this service.\n\n3. ACCOUNT RESPONSIBILITY\nYou are responsible for maintaining the confidentiality of your account credentials. You agree to notify us immediately of any unauthorized use.\n\n4. ORDERS AND PAYMENTS\nAll orders placed through HATOD are subject to merchant availability. Prices displayed are set by merchants and may vary.\n\n5. DELIVERY\nDelivery times are estimates and may vary based on demand, weather, and other factors. HATOD is not liable for delays outside its reasonable control.\n\n6. CANCELLATIONS\nOrders may be cancelled prior to merchant acceptance. Once accepted and being prepared, cancellations may not be possible.\n\n7. PROHIBITED CONDUCT\nYou agree not to misuse the platform, submit fraudulent orders, or engage in any conduct that disrupts the service.\n\n8. MODIFICATIONS\nHATOD reserves the right to modify these Terms at any time. Continued use of the service constitutes acceptance of the revised Terms.\n\n9. GOVERNING LAW\nThese Terms are governed by the laws of the Republic of the Philippines.\n\nFor questions, contact us at hatodservices@gmail.com`}
-                      </ThemedText>
-                    ) : (
-                      <ThemedText style={styles.policyBody}>
-                        {`HATOD PRIVACY POLICY\n\nEffective Date: February 2026\n\n1. INFORMATION WE COLLECT\nWe collect information you provide when registering: name, phone number, and delivery addresses. We also collect order history and usage data.\n\n2. HOW WE USE YOUR INFORMATION\nâ€¢ To process and fulfill your orders\nâ€¢ To communicate order status and updates\nâ€¢ To improve our services\nâ€¢ To comply with legal obligations\n\n3. DATA SHARING\nWe share your information with:\nâ€¢ Merchants â€” to fulfill your orders\nâ€¢ Riders â€” for delivery purposes (name and delivery address only)\nâ€¢ Payment processors â€” for transaction processing\n\nWe do NOT sell your personal data to third parties.\n\n4. DATA RETENTION\nWe retain your data for as long as your account is active or as required by law.\n\n5. YOUR RIGHTS\nUnder the Philippine Data Privacy Act of 2012 (R.A. 10173), you have the right to:\nâ€¢ Access your personal data\nâ€¢ Correct inaccurate data\nâ€¢ Request erasure of your data\nâ€¢ Object to processing\n\n6. DATA SECURITY\nWe implement appropriate technical and organizational measures to protect your personal data against unauthorized access.\n\n7. CONTACT US\nFor privacy concerns, contact our Data Protection Officer at hatodservices@gmail.com`}
-                      </ThemedText>
-                    )}
-                  </ScrollView>
-                  <TouchableOpacity
-                    style={styles.policyAgreeBtn}
-                    onPress={() => { setConsentGiven(true); setConsentError(false); setPolicyModal(null); }}
-                  >
-                    <ThemedText style={styles.policyAgreeBtnText}>I Agree & Close</ThemedText>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </Modal>
-
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -332,7 +339,7 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     paddingHorizontal: 5,
     paddingVertical: 5,
-    marginBottom: 15, // slightly tighter for signup
+    marginBottom: 15,
     backgroundColor: 'transparent',
     height: 55,
   },
@@ -350,7 +357,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FFF',
     height: '100%',
-    paddingRight: 20,
+    paddingRight: 10,
+  },
+  showPasswordButton: {
+    paddingHorizontal: 10,
+    justifyContent: 'center',
+  },
+  showPasswordText: {
+    color: '#FFF',
+    fontWeight: '700',
+    fontSize: 13,
   },
   loginButton: {
     backgroundColor: '#f78734',
@@ -392,48 +408,53 @@ const styles = StyleSheet.create({
     marginBottom: 5,
     marginLeft: 20,
   },
-  // Consent
   consentRow: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 12,
-    marginTop: 16, marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginTop: 16,
+    marginBottom: 8,
     backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 14, padding: 14,
-    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   consentRowError: {
     borderColor: '#FFB3B3',
     backgroundColor: 'rgba(255,100,100,0.15)',
   },
   consentCheckbox: {
-    width: 22, height: 22, borderRadius: 6,
-    borderWidth: 2, borderColor: '#FFF',
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#FFF',
     backgroundColor: 'transparent',
-    justifyContent: 'center', alignItems: 'center',
-    marginTop: 1, flexShrink: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 1,
+    flexShrink: 0,
   },
   consentCheckboxChecked: {
-    backgroundColor: '#f78734', borderColor: '#f78734',
+    backgroundColor: '#f78734',
+    borderColor: '#f78734',
   },
-  consentCheckmark: { fontSize: 14, color: '#FFF', fontWeight: '900', lineHeight: 16 },
-  consentText: { fontSize: 13, color: 'rgba(255,255,255,0.9)', lineHeight: 20 },
-  consentLink: { fontSize: 13, color: '#FFD700', fontWeight: '800', textDecorationLine: 'underline' },
-  consentErrorText: { fontSize: 12, color: '#FFB3B3', marginTop: 6, fontWeight: '700' },
-  // Policy Modal
-  policyOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
-  policySheet: {
-    backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    padding: 24, maxHeight: '85%',
+  consentText: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.9)',
+    lineHeight: 20,
   },
-  policyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  policyTitle: { fontSize: 18, fontWeight: '900', color: '#222', flex: 1 },
-  policyClose: {
-    width: 32, height: 32, borderRadius: 16, backgroundColor: '#F5F5F5',
-    justifyContent: 'center', alignItems: 'center',
+  consentLink: {
+    fontSize: 13,
+    color: '#FFD700',
+    fontWeight: '800',
+    textDecorationLine: 'underline',
   },
-  policyBody: { fontSize: 13, color: '#444', lineHeight: 22, paddingBottom: 20 },
-  policyAgreeBtn: {
-    backgroundColor: '#5c6cc9', borderRadius: 14, paddingVertical: 14,
-    alignItems: 'center', marginTop: 12,
+  consentErrorText: {
+    fontSize: 12,
+    color: '#FFB3B3',
+    marginTop: 6,
+    fontWeight: '700',
   },
-  policyAgreeBtnText: { color: '#FFF', fontSize: 15, fontWeight: '900' }
 });

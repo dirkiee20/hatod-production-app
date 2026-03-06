@@ -1,13 +1,30 @@
-import React, { useState } from 'react';
-import { StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Image, KeyboardAvoidingView, Platform, ScrollView, View, Modal } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  View,
+  Alert,
+  Linking,
+} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, Link } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { login } from '@/api/client';
+import { getLegalPolicies, LegalPoliciesConfig } from '@/api/services';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
 import { useUser } from '@/context/UserContext';
 import { useCart } from '@/context/CartContext';
+
+const DEFAULT_TERMS_URL = 'https://hatodlegalcenter-production.up.railway.app/terms.html';
+const DEFAULT_PRIVACY_URL = 'https://hatodlegalcenter-production.up.railway.app/terms.html';
+const REMEMBER_ME_KEY = 'customer_remember_me';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -18,10 +35,38 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [passwordError, setPasswordError] = useState('');
-  const [policyModal, setPolicyModal] = useState<'terms' | 'privacy' | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [policies, setPolicies] = useState<LegalPoliciesConfig | null>(null);
+
+  useEffect(() => {
+    getLegalPolicies().then(setPolicies).catch(() => setPolicies(null));
+    AsyncStorage.getItem(REMEMBER_ME_KEY)
+      .then((stored) => {
+        if (stored === 'true') setRememberMe(true);
+        if (stored === 'false') setRememberMe(false);
+      })
+      .catch(() => {});
+  }, []);
+
+  const onToggleRememberMe = () => {
+    const next = !rememberMe;
+    setRememberMe(next);
+    AsyncStorage.setItem(REMEMBER_ME_KEY, String(next)).catch(() => {});
+  };
+
+  const openPolicy = async (type: 'terms' | 'privacy') => {
+    const url = type === 'terms'
+      ? (policies?.termsUrl || DEFAULT_TERMS_URL)
+      : (policies?.privacyUrl || DEFAULT_PRIVACY_URL);
+
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert('Unable to open link', 'Please try again later.');
+    }
+  };
 
   const handleLogin = async () => {
-    // Clear previous errors
     setPasswordError('');
 
     if (!phone || !password) {
@@ -33,11 +78,10 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
-      await login(phone, password);
-      // Refresh user context and cart context before navigation
+      await login(phone, password, { rememberMe });
       await Promise.all([refreshProfile(), refreshCart()]);
       router.replace('/(tabs)');
-    } catch (error: any) {
+    } catch {
       setPasswordError('Invalid password. Please try again.');
     } finally {
       setLoading(false);
@@ -46,28 +90,26 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.container}>
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.scrollContent} bounces={false}>
-          
           <View style={styles.header}>
             <View style={styles.logoContainer}>
-               <Image 
-                 source={require('@/assets/images/hatod-logo.png')} 
-                 style={styles.logoImage} 
-                 resizeMode="contain"
-               />
+              <Image
+                source={require('@/assets/images/hatod-logo.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
             </View>
             <ThemedText style={styles.title}>HATOD LOGIN</ThemedText>
           </View>
 
           <View style={styles.formContainer}>
-            
             <View style={styles.inputContainer}>
               <View style={styles.iconContainer}>
-                 <IconSymbol size={20} name="phone" color="#f78734" />
+                <IconSymbol size={20} name="phone" color="#f78734" />
               </View>
               <TextInput
                 style={styles.input}
@@ -84,7 +126,7 @@ export default function LoginScreen() {
             <View>
               <View style={styles.inputContainer}>
                 <View style={styles.iconContainer}>
-                   <IconSymbol size={20} name="lock.fill" color="#f78734" />
+                  <IconSymbol size={20} name="lock.fill" color="#f78734" />
                 </View>
                 <TextInput
                   style={styles.input}
@@ -95,8 +137,11 @@ export default function LoginScreen() {
                     setPassword(text);
                     setPasswordError('');
                   }}
-                  secureTextEntry
+                  secureTextEntry={!showPassword}
                 />
+                <TouchableOpacity onPress={() => setShowPassword((prev) => !prev)} style={styles.showPasswordButton}>
+                  <ThemedText style={styles.showPasswordText}>{showPassword ? 'Hide' : 'Show'}</ThemedText>
+                </TouchableOpacity>
               </View>
               {passwordError ? (
                 <ThemedText style={styles.errorText}>{passwordError}</ThemedText>
@@ -104,18 +149,18 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.optionsRow}>
-                <TouchableOpacity style={styles.rememberRow} onPress={() => setRememberMe(!rememberMe)}>
-                    <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
-                        {rememberMe && <IconSymbol name="checkmark" size={12} color="#f78734" />}
-                    </View>
-                    <ThemedText style={styles.optionText}>Remember me</ThemedText>
-                </TouchableOpacity>
-                <TouchableOpacity>
-                   <ThemedText style={[styles.optionText, { textDecorationLine: 'underline' }]}>Forget password?</ThemedText>
-                </TouchableOpacity>
+              <TouchableOpacity style={styles.rememberRow} onPress={onToggleRememberMe}>
+                <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+                  {rememberMe && <IconSymbol name="checkmark" size={12} color="#f78734" />}
+                </View>
+                <ThemedText style={styles.optionText}>Remember me</ThemedText>
+              </TouchableOpacity>
+              <TouchableOpacity>
+                <ThemedText style={[styles.optionText, { textDecorationLine: 'underline' }]}>Forget password?</ThemedText>
+              </TouchableOpacity>
             </View>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.loginButton, loading && styles.loginButtonDisabled]}
               onPress={handleLogin}
               disabled={loading}
@@ -131,54 +176,19 @@ export default function LoginScreen() {
               <ThemedText style={styles.footerText}>Not a member?</ThemedText>
               <Link href="/signup" asChild>
                 <TouchableOpacity style={styles.signupButton}>
-                    <ThemedText style={styles.signupButtonText}>Create account</ThemedText>
+                  <ThemedText style={styles.signupButtonText}>Create account</ThemedText>
                 </TouchableOpacity>
               </Link>
             </View>
 
-            {/* Tappable Consent Notice */}
             <View style={styles.termsContainer}>
               <ThemedText style={styles.termsText}>
                 By logging in, you agree to our{' '}
-                <ThemedText style={styles.termsLink} onPress={() => setPolicyModal('terms')}>Terms of Service</ThemedText>
+                <ThemedText style={styles.termsLink} onPress={() => openPolicy('terms')}>Terms of Service</ThemedText>
                 {' '}and{' '}
-                <ThemedText style={styles.termsLink} onPress={() => setPolicyModal('privacy')}>Privacy Policy</ThemedText>
+                <ThemedText style={styles.termsLink} onPress={() => openPolicy('privacy')}>Privacy Policy</ThemedText>
               </ThemedText>
             </View>
-
-            {/* Policy Modal */}
-            <Modal visible={!!policyModal} transparent animationType="slide" onRequestClose={() => setPolicyModal(null)}>
-              <View style={styles.policyOverlay}>
-                <View style={styles.policySheet}>
-                  <View style={styles.policyHeader}>
-                    <ThemedText style={styles.policyTitle}>
-                      {policyModal === 'terms' ? 'ðŸ“„ Terms of Service' : 'ðŸ”’ Privacy Policy'}
-                    </ThemedText>
-                    <TouchableOpacity onPress={() => setPolicyModal(null)} style={styles.policyClose}>
-                      <ThemedText style={{ fontSize: 16, color: '#666', fontWeight: '700' }}>âœ•</ThemedText>
-                    </TouchableOpacity>
-                  </View>
-                  <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-                    {policyModal === 'terms' ? (
-                      <ThemedText style={styles.policyBody}>
-                        {`HATOD TERMS OF SERVICE\n\nEffective Date: February 2026\n\n1. ACCEPTANCE OF TERMS\nBy creating an account and using the HATOD app, you agree to be bound by these Terms of Service.\n\n2. USE OF SERVICE\nHATOD provides an on-demand delivery platform connecting customers with merchants and riders. You must be at least 18 years old to use this service.\n\n3. ACCOUNT RESPONSIBILITY\nYou are responsible for maintaining the confidentiality of your account credentials. You agree to notify us immediately of any unauthorized use.\n\n4. ORDERS AND PAYMENTS\nAll orders placed through HATOD are subject to merchant availability. Prices displayed are set by merchants and may vary.\n\n5. DELIVERY\nDelivery times are estimates and may vary based on demand, weather, and other factors. HATOD is not liable for delays outside its reasonable control.\n\n6. CANCELLATIONS\nOrders may be cancelled prior to merchant acceptance. Once accepted and being prepared, cancellations may not be possible.\n\n7. PROHIBITED CONDUCT\nYou agree not to misuse the platform, submit fraudulent orders, or engage in any conduct that disrupts the service.\n\n8. MODIFICATIONS\nHATOD reserves the right to modify these Terms at any time. Continued use of the service constitutes acceptance of the revised Terms.\n\n9. GOVERNING LAW\nThese Terms are governed by the laws of the Republic of the Philippines.\n\nFor questions, contact us at hatodservices@gmail.com`}
-                      </ThemedText>
-                    ) : (
-                      <ThemedText style={styles.policyBody}>
-                        {`HATOD PRIVACY POLICY\n\nEffective Date: February 2026\n\n1. INFORMATION WE COLLECT\nWe collect information you provide when registering: name, phone number, and delivery addresses. We also collect order history and usage data.\n\n2. HOW WE USE YOUR INFORMATION\nâ€¢ To process and fulfill your orders\nâ€¢ To communicate order status and updates\nâ€¢ To improve our services\nâ€¢ To comply with legal obligations\n\n3. DATA SHARING\nWe share your information with:\nâ€¢ Merchants â€” to fulfill your orders\nâ€¢ Riders â€” for delivery purposes (name and delivery address only)\nâ€¢ Payment processors â€” for transaction processing\n\nWe do NOT sell your personal data to third parties.\n\n4. DATA RETENTION\nWe retain your data for as long as your account is active or as required by law.\n\n5. YOUR RIGHTS\nUnder the Philippine Data Privacy Act of 2012 (R.A. 10173), you have the right to:\nâ€¢ Access your personal data\nâ€¢ Correct inaccurate data\nâ€¢ Request erasure of your data\nâ€¢ Object to processing\n\n6. DATA SECURITY\nWe implement appropriate technical and organizational measures to protect your personal data against unauthorized access.\n\n7. CONTACT US\nFor privacy concerns, contact our Data Protection Officer at hatodservices@gmail.com`}
-                      </ThemedText>
-                    )}
-                  </ScrollView>
-                  <TouchableOpacity
-                    style={styles.policyCloseBtn}
-                    onPress={() => setPolicyModal(null)}
-                  >
-                    <ThemedText style={styles.policyCloseBtnText}>Close</ThemedText>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </Modal>
-
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -189,7 +199,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#5c6cc9', // Splash screen color
+    backgroundColor: '#5c6cc9',
   },
   scrollContent: {
     flexGrow: 1,
@@ -205,7 +215,7 @@ const styles = StyleSheet.create({
     height: 300,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: -60, // Pull text closer to image
+    marginBottom: -60,
   },
   logoImage: {
     width: '100%',
@@ -229,7 +239,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1.5,
     borderColor: '#FFF',
-    borderRadius: 30, // Pill shape
+    borderRadius: 30,
     paddingHorizontal: 5,
     paddingVertical: 5,
     marginBottom: 20,
@@ -250,7 +260,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FFF',
     height: '100%',
-    paddingRight: 20,
+    paddingRight: 10,
+  },
+  showPasswordButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  showPasswordText: {
+    color: '#FFD700',
+    fontWeight: '800',
+    fontSize: 12,
   },
   optionsRow: {
     flexDirection: 'row',
@@ -282,7 +301,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   loginButton: {
-    backgroundColor: '#f78734', // Orange accent
+    backgroundColor: '#f78734',
     borderRadius: 30,
     height: 55,
     justifyContent: 'center',
@@ -348,22 +367,4 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
     fontSize: 12,
   },
-  // Policy Modal
-  policyOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
-  policySheet: {
-    backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    padding: 24, maxHeight: '85%',
-  },
-  policyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  policyTitle: { fontSize: 18, fontWeight: '900', color: '#222', flex: 1 },
-  policyClose: {
-    width: 32, height: 32, borderRadius: 16, backgroundColor: '#F5F5F5',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  policyBody: { fontSize: 13, color: '#444', lineHeight: 22, paddingBottom: 20 },
-  policyCloseBtn: {
-    backgroundColor: '#5c6cc9', borderRadius: 14, paddingVertical: 14,
-    alignItems: 'center', marginTop: 12,
-  },
-  policyCloseBtnText: { color: '#FFF', fontSize: 15, fontWeight: '900' }
 });

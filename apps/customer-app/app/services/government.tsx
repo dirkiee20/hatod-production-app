@@ -1,152 +1,232 @@
-import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Image, useWindowDimensions, View, ActivityIndicator } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Image, View, ActivityIndicator } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useEffect, useState } from 'react';
-import { getMenuItemsByMerchant } from '@/api/services';
+import { getGovernmentServiceConfig, getMenuItemsByMerchant } from '@/api/services';
 
 const GOV_MERCHANT_ID = '57d3838e-0678-4908-ba98-322960675688';
+const DEFAULT_UNAVAILABLE_MESSAGE =
+  'Government services are currently unavailable. Please check back later.';
 
 export default function GovernmentScreen() {
   const router = useRouter();
-  const { width: screenWidth } = useWindowDimensions();
   const [loading, setLoading] = useState(true);
+  const [serviceEnabled, setServiceEnabled] = useState(false);
+  const [unavailableMessage, setUnavailableMessage] = useState(DEFAULT_UNAVAILABLE_MESSAGE);
   const [groupedServices, setGroupedServices] = useState<any[]>([]);
 
   useEffect(() => {
+    let isMounted = true;
+
     async function fetchServices() {
-        setLoading(true);
+      setLoading(true);
+
+      try {
+        const config = await getGovernmentServiceConfig();
+        const enabled = config?.enabled ?? false;
+        if (!isMounted) return;
+
+        setServiceEnabled(enabled);
+        setUnavailableMessage(config?.message || DEFAULT_UNAVAILABLE_MESSAGE);
+
+        if (!enabled) {
+          setGroupedServices([]);
+          return;
+        }
+
         const items = await getMenuItemsByMerchant(GOV_MERCHANT_ID);
-        
-        // Group by category
-        const groups: any = {};
-        items.forEach(item => {
-            const catName = item.category?.name || 'Other Services';
-            if (!groups[catName]) {
-                groups[catName] = {
-                    title: catName,
-                    items: []
-                };
-            }
-            groups[catName].items.push(item);
+        if (!isMounted) return;
+
+        const groups: Record<string, { title: string; items: any[] }> = {};
+        items.forEach((item) => {
+          const catName = item.category?.name || 'Other Services';
+          if (!groups[catName]) {
+            groups[catName] = {
+              title: catName,
+              items: [],
+            };
+          }
+          groups[catName].items.push(item);
         });
-        
-        // Convert to array
+
         setGroupedServices(Object.values(groups));
-        setLoading(false);
+      } catch (error) {
+        console.error('Failed to load government services:', error);
+        if (!isMounted) return;
+        setServiceEnabled(false);
+        setUnavailableMessage(DEFAULT_UNAVAILABLE_MESSAGE);
+        setGroupedServices([]);
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
     }
+
     fetchServices();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   if (loading) {
-     return (
-        <ThemedView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-            <ActivityIndicator size="large" color="#5c6cc9" />
+    return (
+      <ThemedView style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color="#5c6cc9" />
+      </ThemedView>
+    );
+  }
+
+  if (!serviceEnabled) {
+    return (
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ThemedView style={styles.container}>
+          <ThemedView style={styles.headerBackground}>
+            <Image
+              source={{ uri: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=800' }}
+              style={styles.headerImage}
+            />
+            <View style={styles.headerOverlay} />
+
+            <View style={styles.headerSafeArea}>
+              <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+                <IconSymbol name="chevron.right" size={24} color="#FFF" style={{ transform: [{ rotate: '180deg' }] }} />
+              </TouchableOpacity>
+              <View style={styles.headerTextContainer}>
+                <ThemedText style={styles.headerTitle}>Government Services</ThemedText>
+                <ThemedText style={styles.headerSubtitle}>Currently unavailable</ThemedText>
+              </View>
+            </View>
+          </ThemedView>
+
+          <View style={styles.unavailableContainer}>
+            <View style={styles.unavailableIconBox}>
+              <IconSymbol name="building.2.fill" size={28} color="#B26A00" />
+            </View>
+            <ThemedText style={styles.unavailableTitle}>Service Unavailable</ThemedText>
+            <ThemedText style={styles.unavailableMessage}>{unavailableMessage}</ThemedText>
+
+            <TouchableOpacity
+              style={styles.backToServicesButton}
+              onPress={() => router.replace('/(tabs)/services' as any)}
+            >
+              <ThemedText style={styles.backToServicesButtonText}>Back to Services</ThemedText>
+            </TouchableOpacity>
+          </View>
         </ThemedView>
-     );
+      </>
+    );
   }
 
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false} bounces={false}>
-      {/* Sub-page Header */}
-      <ThemedView style={styles.headerBackground}>
-        <Image 
-          source={{ uri: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=800' }} 
-          style={styles.headerImage} 
-        />
-        <View style={styles.headerOverlay} />
-        
-        <View style={styles.headerSafeArea}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <IconSymbol name="chevron.right" size={24} color="#FFF" style={{ transform: [{ rotate: '180deg' }] }} />
-          </TouchableOpacity>
-          <View style={styles.headerTextContainer}>
-            <ThemedText style={styles.headerTitle}>Government Services</ThemedText>
-            <ThemedText style={styles.headerSubtitle}>Skip the line. We handle the delivery.</ThemedText>
+        <ThemedView style={styles.headerBackground}>
+          <Image
+            source={{ uri: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=800' }}
+            style={styles.headerImage}
+          />
+          <View style={styles.headerOverlay} />
+
+          <View style={styles.headerSafeArea}>
+            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+              <IconSymbol name="chevron.right" size={24} color="#FFF" style={{ transform: [{ rotate: '180deg' }] }} />
+            </TouchableOpacity>
+            <View style={styles.headerTextContainer}>
+              <ThemedText style={styles.headerTitle}>Government Services</ThemedText>
+              <ThemedText style={styles.headerSubtitle}>Skip the line. We handle the delivery.</ThemedText>
+            </View>
           </View>
-        </View>
-      </ThemedView>
+        </ThemedView>
 
-      <ThemedView style={styles.contentBody}>
-        <ThemedView style={styles.searchRow}>
-          <ThemedView style={styles.searchBar}>
-            <IconSymbol size={18} name="chevron.right" color="#777" style={{ transform: [{ rotate: '90deg' }], marginRight: 8 }} />
-            <TextInput
-              placeholder="Search services..."
-              style={styles.searchInput}
-              placeholderTextColor="#777"
-            />
+        <ThemedView style={styles.contentBody}>
+          <ThemedView style={styles.searchRow}>
+            <ThemedView style={styles.searchBar}>
+              <IconSymbol
+                size={18}
+                name="chevron.right"
+                color="#777"
+                style={{ transform: [{ rotate: '90deg' }], marginRight: 8 }}
+              />
+              <TextInput
+                placeholder="Search services..."
+                style={styles.searchInput}
+                placeholderTextColor="#777"
+              />
+            </ThemedView>
           </ThemedView>
-        </ThemedView>
-        <ThemedView style={styles.sectionContainer}>
-            <ThemedText style={styles.sectionTitle}>Business & Trade</ThemedText>
-            <ThemedView style={styles.itemsGrid}>
-                <TouchableOpacity 
-                    style={styles.serviceCard}
-                    onPress={() => router.push('/services/business-permit')}
-                >
-                    <ThemedView style={[styles.iconBox, { backgroundColor: '#E3F2FD' }]}>
-                        <IconSymbol size={24} name="building.2.fill" color="#1565C0" />
-                    </ThemedView>
-                    
-                    <ThemedView style={styles.cardInfo}>
-                        <ThemedText style={styles.itemName} numberOfLines={1}>Business Permits</ThemedText>
-                        <ThemedText style={styles.itemMeta} numberOfLines={1}>New or Renewal business application processing</ThemedText>
-                        
-                        <ThemedView style={styles.feeHighlight}>
-                            <ThemedText style={styles.feeText}>Quoted service fee</ThemedText>
-                        </ThemedView>
-                    </ThemedView>
-                    
-                    <IconSymbol size={18} name="chevron.right" color="#DDD" />
-                </TouchableOpacity>
-            </ThemedView>
-        </ThemedView>
 
-        {groupedServices.length === 0 ? (
-            <ThemedView style={{ padding: 20 }}>
-                <ThemedText>No additional services found.</ThemedText>
+          <ThemedView style={styles.sectionContainer}>
+            <ThemedText style={styles.sectionTitle}>Business and Trade</ThemedText>
+            <ThemedView style={styles.itemsGrid}>
+              <TouchableOpacity
+                style={styles.serviceCard}
+                onPress={() => router.push('/services/business-permit')}
+              >
+                <ThemedView style={[styles.iconBox, { backgroundColor: '#E3F2FD' }]}>
+                  <IconSymbol size={24} name="building.2.fill" color="#1565C0" />
+                </ThemedView>
+
+                <ThemedView style={styles.cardInfo}>
+                  <ThemedText style={styles.itemName} numberOfLines={1}>Business Permits</ThemedText>
+                  <ThemedText style={styles.itemMeta} numberOfLines={1}>
+                    New or renewal business application processing
+                  </ThemedText>
+
+                  <ThemedView style={styles.feeHighlight}>
+                    <ThemedText style={styles.feeText}>Quoted service fee</ThemedText>
+                  </ThemedView>
+                </ThemedView>
+
+                <IconSymbol size={18} name="chevron.right" color="#DDD" />
+              </TouchableOpacity>
             </ThemedView>
-        ) : (
+          </ThemedView>
+
+          {groupedServices.length === 0 ? (
+            <ThemedView style={{ padding: 20 }}>
+              <ThemedText>No additional services found.</ThemedText>
+            </ThemedView>
+          ) : (
             groupedServices.map((section, sIndex) => (
-            <ThemedView key={sIndex} style={styles.sectionContainer}>
+              <ThemedView key={sIndex} style={styles.sectionContainer}>
                 <ThemedText style={styles.sectionTitle}>{section.title}</ThemedText>
-                
+
                 <ThemedView style={styles.itemsGrid}>
-                {section.items.map((item: any) => (
-                    <TouchableOpacity 
-                    key={item.id} 
-                    style={styles.serviceCard}
-                    onPress={() => router.push(`/menu-item/${item.id}`)}
+                  {section.items.map((item: any) => (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={styles.serviceCard}
+                      onPress={() => router.push(`/menu-item/${item.id}`)}
                     >
-                    <ThemedView style={[styles.iconBox, { backgroundColor: '#E3F2FD' }]}>
-                        {/* Use item.image as icon name if possible, else default */}
-                        <IconSymbol size={24} name={(item.image as any) || "description"} color="#1565C0" />
-                    </ThemedView>
-                    
-                    <ThemedView style={styles.cardInfo}>
+                      <ThemedView style={[styles.iconBox, { backgroundColor: '#E3F2FD' }]}>
+                        <IconSymbol size={24} name={(item.image as any) || 'building.2.fill'} color="#1565C0" />
+                      </ThemedView>
+
+                      <ThemedView style={styles.cardInfo}>
                         <ThemedText style={styles.itemName} numberOfLines={1}>{item.name}</ThemedText>
                         <ThemedText style={styles.itemMeta} numberOfLines={1}>{item.description}</ThemedText>
-                        
+
                         <ThemedView style={styles.feeHighlight}>
-                        <ThemedText style={styles.feeText}>₱{item.price} service fee</ThemedText>
+                          <ThemedText style={styles.feeText}>PHP {item.price} service fee</ThemedText>
                         </ThemedView>
-                    </ThemedView>
-                    
-                    <IconSymbol size={18} name="chevron.right" color="#DDD" />
+                      </ThemedView>
+
+                      <IconSymbol size={18} name="chevron.right" color="#DDD" />
                     </TouchableOpacity>
-                ))}
+                  ))}
                 </ThemedView>
-            </ThemedView>
+              </ThemedView>
             ))
-        )}
-        
-        <ThemedView style={{ height: 100 }} />
-      </ThemedView>
-    </ScrollView>
+          )}
+
+          <ThemedView style={{ height: 100 }} />
+        </ThemedView>
+      </ScrollView>
     </>
   );
 }
@@ -155,6 +235,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFF',
+  },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerBackground: {
     height: 180,
@@ -200,6 +284,47 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontWeight: '500',
   },
+  unavailableContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    backgroundColor: '#F5F7FA',
+  },
+  unavailableIconBox: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    backgroundColor: '#FFF3E0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  unavailableTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#1F2937',
+  },
+  unavailableMessage: {
+    marginTop: 10,
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 20,
+    maxWidth: 320,
+  },
+  backToServicesButton: {
+    marginTop: 20,
+    backgroundColor: '#1565C0',
+    borderRadius: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  backToServicesButtonText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -229,7 +354,7 @@ const styles = StyleSheet.create({
   contentBody: {
     flex: 1,
     paddingTop: 20,
-    backgroundColor: '#F5F7FA', // distinct backing for lists
+    backgroundColor: '#F5F7FA',
   },
   sectionContainer: {
     marginBottom: 24,
