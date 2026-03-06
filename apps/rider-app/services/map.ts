@@ -1,4 +1,10 @@
-export const getRoute = async (start: [number, number], end: [number, number]): Promise<any> => {
+export type RouteData = {
+  geometry: any;
+  distance: number;
+  duration: number;
+};
+
+export const getRoute = async (start: [number, number], end: [number, number]): Promise<RouteData | null> => {
   try {
     const token = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
     if (!token) return null;
@@ -11,7 +17,12 @@ export const getRoute = async (start: [number, number], end: [number, number]): 
 
     const data = await response.json();
     if (data.routes && data.routes.length > 0) {
-      return data.routes[0].geometry;
+      const primaryRoute = data.routes[0];
+      return {
+        geometry: primaryRoute.geometry,
+        distance: typeof primaryRoute.distance === 'number' ? primaryRoute.distance : 0,
+        duration: typeof primaryRoute.duration === 'number' ? primaryRoute.duration : 0,
+      };
     }
     return null;
   } catch (error) {

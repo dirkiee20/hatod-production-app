@@ -1,11 +1,20 @@
 import axios from 'axios';
-import * as SecureStore from 'expo-secure-store';
-import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logout } from '@/api/client';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
+const PRODUCTION_API_URL = 'https://hatod-production-app-production.up.railway.app/api';
+
+const normalizeApiUrl = (url: string) => {
+  const normalised = url.replace(/\/+$/, '');
+  return normalised.endsWith('/api') ? normalised : `${normalised}/api`;
+};
+
+const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+const API_URL = envUrl ? normalizeApiUrl(envUrl) : PRODUCTION_API_URL;
 
 const api = axios.create({
   baseURL: API_URL,
+  timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -15,7 +24,7 @@ const api = axios.create({
 api.interceptors.request.use(
   async (config) => {
     try {
-      const token = await SecureStore.getItemAsync('authToken');
+      const token = await AsyncStorage.getItem('auth_token');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
@@ -33,8 +42,7 @@ api.interceptors.response.use(
   async (error) => {
     if (error.response?.status === 401) {
       // Token expired or invalid
-      await SecureStore.deleteItemAsync('authToken');
-      router.replace('/(auth)/login');
+      await logout();
     }
     return Promise.reject(error);
   }

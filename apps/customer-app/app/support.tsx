@@ -26,7 +26,7 @@ export default function SupportScreen() {
   };
 
   const handleEmailSupport = () => {
-    Linking.openURL('mailto:support@hatod.com');
+    Linking.openURL('mailto:hatodservices@gmail.com');
   };
 
   return (

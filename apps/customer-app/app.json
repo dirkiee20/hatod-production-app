@@ -19,7 +19,11 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.kridl.customerapp",
-      "usesCleartextTraffic": true
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ]
     },
     "web": {
       "output": "static",
@@ -46,7 +50,8 @@
           }
         }
       ],
-      "expo-location"
+      "expo-location",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

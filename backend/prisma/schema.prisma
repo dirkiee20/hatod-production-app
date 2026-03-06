@@ -3,6 +3,7 @@
 
 generator client {
   provider = "prisma-client-js"
+  engineType = "binary"
 }
 
 datasource db {
@@ -97,6 +98,10 @@ model Customer {
   firstName String
   lastName  String
   avatar    String?
+  termsOfServiceVersion String?
+  privacyPolicyVersion  String?
+  consentAcceptedAt     DateTime?
+  consentAppVersion     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   

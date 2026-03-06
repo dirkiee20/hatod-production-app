@@ -1,0 +1,2 @@
+export const TERMS_OF_SERVICE_VERSION = '2026-02-01';
+export const PRIVACY_POLICY_VERSION = '2026-02-01';

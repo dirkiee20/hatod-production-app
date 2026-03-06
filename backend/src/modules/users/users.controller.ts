@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards, Req } from '@nestjs/common';
+import { Controller, Delete, Get, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -17,6 +17,12 @@ export class UsersController {
   @ApiOperation({ summary: 'Get current user profile' })
   getMe(@Req() req: any) {
     return this.usersService.findMe(req.user.userId);
+  }
+
+  @Delete('me')
+  @ApiOperation({ summary: 'Deactivate current user account' })
+  deactivateMe(@Req() req: any) {
+    return this.usersService.deactivateMe(req.user.userId);
   }
 
   @Get()

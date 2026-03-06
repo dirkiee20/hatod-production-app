@@ -1,6 +1,22 @@
 import { publicFetch, authenticatedFetch } from './client';
 import { Merchant, MenuItem, Order } from './types';
 
+const devLog = (...args: unknown[]) => {
+  if (__DEV__) {
+    console.log(...args);
+  }
+};
+
+export interface LegalPoliciesConfig {
+  termsUrl: string;
+  privacyUrl: string;
+  termsVersion: string;
+  privacyVersion: string;
+  effectiveDate: string;
+  accountDeletionInfoUrl: string;
+  supportEmail: string;
+}
+
 // Merchant APIs
 export const getMerchants = async (): Promise<Merchant[]> => {
   try {
@@ -40,6 +56,31 @@ export const getProfile = async () => {
     console.error('Error fetching profile:', error);
     return null;
   }
+};
+
+export const getLegalPolicies = async (): Promise<LegalPoliciesConfig | null> => {
+  try {
+    const response = await publicFetch('/settings/legal');
+    if (!response.ok) {
+      throw new Error('Failed to fetch legal policies');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching legal policies:', error);
+    return null;
+  }
+};
+
+export const deleteMyAccount = async () => {
+  const response = await authenticatedFetch('/users/me', {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to delete account');
+  }
+
+  return response.json();
 };
 
 export const getMerchantById = async (id: string): Promise<Merchant | null> => {
@@ -246,26 +287,21 @@ export const getRoute = async (start: [number, number], end: [number, number]): 
 // Mapbox API
 export const reverseGeocode = async (latitude: number, longitude: number): Promise<string | null> => {
   try {
-    console.log('[reverseGeocode] Starting reverse geocode for:', { latitude, longitude });
-    
+    devLog('[reverseGeocode] Starting reverse geocode', { latitude, longitude });
+
     const token = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
-    console.log('[reverseGeocode] Mapbox token exists:', !!token);
-    console.log('[reverseGeocode] Mapbox token value:', token);
-    
+    devLog('[reverseGeocode] Mapbox token exists:', !!token);
+
     if (!token) {
       console.error('[reverseGeocode] No Mapbox access token found!');
       return null;
     }
 
     const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=${token}`;
-    console.log('[reverseGeocode] Request URL:', url);
-    
-    console.log('[reverseGeocode] Fetching from Mapbox API...');
     const response = await fetch(url);
-    
-    console.log('[reverseGeocode] Response status:', response.status);
-    console.log('[reverseGeocode] Response ok:', response.ok);
-    
+
+    devLog('[reverseGeocode] Response status:', response.status);
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error('[reverseGeocode] API error response:', errorText);
@@ -273,19 +309,16 @@ export const reverseGeocode = async (latitude: number, longitude: number): Promi
     }
     
     const data = await response.json();
-    console.log('[reverseGeocode] API response data:', JSON.stringify(data, null, 2));
-    
     if (data.features && data.features.length > 0) {
       const placeName = data.features[0].place_name;
-      console.log('[reverseGeocode] Address found:', placeName);
+      devLog('[reverseGeocode] Address found');
       return placeName;
     }
-    
-    console.log('[reverseGeocode] No features found in response');
+
+    devLog('[reverseGeocode] No features found in response');
     return null;
   } catch (error) {
     console.error('[reverseGeocode] Exception caught:', error);
-    console.error('[reverseGeocode] Error details:', JSON.stringify(error, null, 2));
     return null;
   }
 };

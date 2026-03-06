@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength, IsEnum, IsOptional, IsPhoneNumber } from 'class-validator';
+import { IsBoolean, IsDateString, IsEmail, IsEnum, IsOptional, IsPhoneNumber, IsString, MinLength } from 'class-validator';
 import { UserRole } from '@prisma/client';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -45,6 +45,31 @@ export class RegisterDto {
   @IsOptional()
   @IsString()
   city?: string;
+
+  @ApiProperty({ example: true, required: false })
+  @IsOptional()
+  @IsBoolean()
+  consentGiven?: boolean;
+
+  @ApiProperty({ example: '2026-02-01', required: false })
+  @IsOptional()
+  @IsString()
+  termsOfServiceVersion?: string;
+
+  @ApiProperty({ example: '2026-02-01', required: false })
+  @IsOptional()
+  @IsString()
+  privacyPolicyVersion?: string;
+
+  @ApiProperty({ example: '2026-03-05T12:00:00.000Z', required: false })
+  @IsOptional()
+  @IsDateString()
+  consentAcceptedAt?: string;
+
+  @ApiProperty({ example: '1.0.0', required: false })
+  @IsOptional()
+  @IsString()
+  consentAppVersion?: string;
 }
 
 export class LoginDto {

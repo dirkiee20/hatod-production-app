@@ -1,14 +1,14 @@
-import { StyleSheet, ScrollView, TouchableOpacity, View, Image, ActivityIndicator, Alert } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, View, ActivityIndicator, Alert, Linking } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getOrderDetails, updateOrderStatus, claimOrder } from '@/api/rider-service';
 import Mapbox from '@rnmapbox/maps';
 import { useLocationTracker } from '@/hooks/useLocationTracker';
-import { getRoute } from '@/services/map';
+import { getRoute, type RouteData } from '@/services/map';
 
 const formatVariant = (note: string) => {
   if (!note) return '';
@@ -31,14 +31,30 @@ const getCorrectedCoordinate = (lat: number, lng: number): [number, number] => {
   return [lng, lat];
 };
 
+const formatDistance = (meters: number) => {
+  if (meters >= 1000) return `${(meters / 1000).toFixed(1)} km`;
+  return `${Math.max(1, Math.round(meters))} m`;
+};
+
+const formatDuration = (seconds: number) => {
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  }
+  return `${minutes} min`;
+};
+
 export default function OrderDetailsScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState<any>(null);
-  const [routeGeoJSON, setRouteGeoJSON] = useState<any>(null);
+  const [routeData, setRouteData] = useState<RouteData | null>(null);
   const { location } = useLocationTracker(true);
+  const cameraRef = useRef<Mapbox.Camera>(null);
 
   useEffect(() => {
     if (id) {
@@ -46,33 +62,71 @@ export default function OrderDetailsScreen() {
     }
   }, [id]);
 
+  const activeDestination = useMemo(() => {
+    if (!order) return null;
+
+    if (order.status === 'READY_FOR_PICKUP' || order.status === 'PREPARING') {
+      if (typeof order.merchant?.latitude === 'number' && typeof order.merchant?.longitude === 'number') {
+        return {
+          type: 'pickup' as const,
+          coordinate: getCorrectedCoordinate(order.merchant.latitude, order.merchant.longitude),
+        };
+      }
+    }
+
+    if (order.status === 'PICKED_UP' || order.status === 'DELIVERING') {
+      if (typeof order.address?.latitude === 'number' && typeof order.address?.longitude === 'number') {
+        return {
+          type: 'dropoff' as const,
+          coordinate: getCorrectedCoordinate(order.address.latitude, order.address.longitude),
+        };
+      }
+    }
+
+    return null;
+  }, [order]);
+
   useEffect(() => {
-      if (!order || !location) return;
+    if (!location || !activeDestination) {
+      setRouteData(null);
+      return;
+    }
 
-      const fetchRoute = async () => {
-          const riderLoc: [number, number] = [location.coords.longitude, location.coords.latitude];
-          let endLoc: [number, number] | null = null;
+    const fetchRoute = async () => {
+      const riderLoc: [number, number] = [location.coords.longitude, location.coords.latitude];
+      const route = await getRoute(riderLoc, activeDestination.coordinate);
+      setRouteData(route);
+    };
 
-          if (order.status === 'READY_FOR_PICKUP' || order.status === 'PREPARING') {
-              // Target: Merchant
-              if (order.merchant?.longitude) {
-                  endLoc = [order.merchant.longitude, order.merchant.latitude];
-              }
-          } else if (order.status === 'PICKED_UP' || order.status === 'DELIVERING') {
-              // Target: Customer
-              if (order.address?.longitude) {
-                  endLoc = [order.address.longitude, order.address.latitude];
-              }
-          }
+    fetchRoute();
+  }, [location, activeDestination]);
 
-          if (endLoc && endLoc[0] && endLoc[1]) {
-               const route = await getRoute(riderLoc, endLoc);
-               if (route) setRouteGeoJSON(route);
-          }
-      };
-      
-      fetchRoute();
-  }, [order, location]);
+  useEffect(() => {
+    if (!activeDestination) return;
+
+    const points: [number, number][] = [activeDestination.coordinate];
+
+    if (location) {
+      points.unshift([location.coords.longitude, location.coords.latitude]);
+    }
+
+    if (points.length === 1) {
+      cameraRef.current?.setCamera({
+        centerCoordinate: points[0],
+        zoomLevel: 15,
+        animationDuration: 900,
+      });
+      return;
+    }
+
+    const longitudes = points.map((p) => p[0]);
+    const latitudes = points.map((p) => p[1]);
+
+    const ne: [number, number] = [Math.max(...longitudes), Math.max(...latitudes)];
+    const sw: [number, number] = [Math.min(...longitudes), Math.min(...latitudes)];
+
+    cameraRef.current?.fitBounds(ne, sw, [80, 40, 240, 40], 900);
+  }, [activeDestination, location, routeData]);
 
   const fetchOrderDetails = async () => {
     try {
@@ -136,10 +190,62 @@ export default function OrderDetailsScreen() {
   };
 
   const action = getActionBtn();
+  const customerPhone =
+    order?.customer?.user?.phone ||
+    order?.customer?.phone ||
+    order?.customer?.mobile ||
+    order?.customer?.mobileNumber ||
+    'No mobile number';
+  const navigationLabel = activeDestination?.type === 'pickup' ? 'Navigate to Pickup' : 'Navigate to Drop-off';
+
+  const handleOpenNavigation = async () => {
+    if (!activeDestination) {
+      Alert.alert('Navigation unavailable', 'No destination is available for this order status yet.');
+      return;
+    }
+
+    try {
+      const [destLng, destLat] = activeDestination.coordinate;
+      const destination = `${destLat},${destLng}`;
+      const origin = location
+        ? `${location.coords.latitude},${location.coords.longitude}`
+        : null;
+
+      const url = origin
+        ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=driving`
+        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destination)}`;
+
+      const canOpen = await Linking.canOpenURL(url);
+      if (!canOpen) {
+        Alert.alert('Navigation unavailable', 'Could not open a maps application on this device.');
+        return;
+      }
+
+      await Linking.openURL(url);
+    } catch (error) {
+      console.error('Error opening navigation:', error);
+      Alert.alert('Navigation unavailable', 'Failed to open navigation.');
+    }
+  };
+
+  const screenOptions = (
+    <Stack.Screen options={{ 
+      headerShown: true,
+      title: 'Order Details',
+      statusBarTranslucent: true,
+      headerTitleStyle: { fontWeight: '900', fontSize: 16 },
+      headerLeft: () => (
+        <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 10 }}>
+          <IconSymbol size={20} name="chevron.right" color="#000" style={{ transform: [{ rotate: '180deg' }] }} />
+        </TouchableOpacity>
+      ),
+    }} />
+  );
 
   if (loading) {
     return (
       <ThemedView style={[styles.container, styles.centerContent]}>
+        {screenOptions}
         <ActivityIndicator size="large" color="#C2185B" />
       </ThemedView>
     );
@@ -148,6 +254,7 @@ export default function OrderDetailsScreen() {
   if (!order) {
     return (
       <ThemedView style={[styles.container, styles.centerContent]}>
+        {screenOptions}
         <ThemedText>Order not found</ThemedText>
       </ThemedView>
     );
@@ -155,32 +262,24 @@ export default function OrderDetailsScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <Stack.Screen options={{ 
-        headerShown: true, 
-        title: 'Order Details',
-        headerTitleStyle: { fontWeight: '900', fontSize: 16 },
-        headerLeft: () => (
-          <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 10 }}>
-            <IconSymbol size={20} name="chevron.right" color="#000" style={{ transform: [{ rotate: '180deg' }] }} />
-          </TouchableOpacity>
-        ),
-      }} />
+      {screenOptions}
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         
         <View style={styles.mapContainer}>
              <Mapbox.MapView style={styles.map}>
                 <Mapbox.Camera
+                    ref={cameraRef}
                     zoomLevel={13}
                     centerCoordinate={
-                        order.address 
-                        ? getCorrectedCoordinate(order.address.latitude, order.address.longitude)
+                        activeDestination
+                        ? activeDestination.coordinate
                         : [120.9850, 14.6010]
                     }
                 />
                 
-                {routeGeoJSON && (
-                  <Mapbox.ShapeSource id="routeSource" shape={routeGeoJSON}>
+                {routeData?.geometry && (
+                  <Mapbox.ShapeSource id="routeSource" shape={routeData.geometry}>
                     <Mapbox.LineLayer
                       id="routeFill"
                       style={{
@@ -218,19 +317,22 @@ export default function OrderDetailsScreen() {
                     </Mapbox.PointAnnotation>
                  )}
              </Mapbox.MapView>
-        </View>
 
-        {/* Earnings Card */}
-        <View style={styles.earningsCard}>
-          <ThemedText style={styles.cardTitle}>Total Earnings</ThemedText>
-          <ThemedText style={styles.totalAmount}>₱{order.deliveryFee}</ThemedText>
-          
-          <View style={styles.divider} />
-          
-          <View style={styles.breakdownRow}>
-            <ThemedText style={styles.breakdownLabel}>Base Fare</ThemedText>
-            <ThemedText style={styles.breakdownValue}>₱{order.deliveryFee}</ThemedText>
-          </View>
+             {routeData && (
+               <View style={styles.routeInfoPill}>
+                 <IconSymbol size={14} name="map" color="#2E7D32" />
+                 <ThemedText style={styles.routeInfoText}>
+                   {formatDistance(routeData.distance)} • {formatDuration(routeData.duration)}
+                 </ThemedText>
+               </View>
+             )}
+
+             {activeDestination && (
+               <TouchableOpacity style={styles.navigateBtn} onPress={handleOpenNavigation}>
+                 <IconSymbol size={16} name="map" color="#FFF" />
+                 <ThemedText style={styles.navigateBtnText}>{navigationLabel}</ThemedText>
+               </TouchableOpacity>
+             )}
         </View>
 
         {/* Trip Details */}
@@ -263,6 +365,10 @@ export default function OrderDetailsScreen() {
                 <ThemedText style={styles.locationName}>
                   {order.customer?.firstName} {order.customer?.lastName}
                 </ThemedText>
+                <View style={styles.customerPhoneRow}>
+                  <IconSymbol size={14} name="phone" color="#666" />
+                  <ThemedText style={styles.customerPhoneText}>{customerPhone}</ThemedText>
+                </View>
                 <ThemedText style={styles.address}>
                   {order.address?.street}, {order.address?.city}
                 </ThemedText>
@@ -336,43 +442,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
   },
-  earningsCard: {
-    backgroundColor: '#333',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 24,
-  },
-  cardTitle: {
-    fontSize: 13,
-    color: '#AAA',
-    marginBottom: 4,
-    textTransform: 'uppercase',
-    fontWeight: '700',
-  },
-  totalAmount: {
-    fontSize: 32,
-    fontWeight: '900',
-    color: '#FFF',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#444',
-    marginVertical: 16,
-  },
-  breakdownRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  breakdownLabel: {
-    fontSize: 14,
-    color: '#CCC',
-  },
-  breakdownValue: {
-    fontSize: 14,
-    color: '#FFF',
-    fontWeight: '700',
-  },
   section: {
     marginBottom: 24,
   },
@@ -426,6 +495,17 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#333',
     marginBottom: 2,
+  },
+  customerPhoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  customerPhoneText: {
+    fontSize: 13,
+    color: '#555',
+    fontWeight: '600',
+    marginLeft: 6,
   },
   address: {
     fontSize: 13,
@@ -506,14 +586,56 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   mapContainer: {
-    height: 250,
+    height: 320,
     borderRadius: 16,
-    marginBottom: 24,
+    marginBottom: 16,
     overflow: 'hidden',
     backgroundColor: '#EEE',
   },
   map: {
     flex: 1,
+  },
+  routeInfoPill: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFFF0',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    gap: 6,
+  },
+  routeInfoText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#2E7D32',
+  },
+  navigateBtn: {
+    position: 'absolute',
+    right: 12,
+    bottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1976D2',
+    borderRadius: 22,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  navigateBtnText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '800',
+    textTransform: 'uppercase',
   },
   mainActionBtn: {
     padding: 16,

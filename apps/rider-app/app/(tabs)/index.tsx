@@ -3,7 +3,7 @@ import { ThemedText } from '@/components/themed-text';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { updateRiderStatus, updateRiderLocation } from '../../api/rider-service';
 import { getMe, getRiderOrders } from '../../api/client';
@@ -134,6 +134,69 @@ export default function DashboardScreen() {
     }
   };
 
+  const getTaskDetails = (order: any) => {
+    if (order?.isAvailableRequest) {
+      return {
+        title: 'New delivery request',
+        subtitle: 'Review details and claim this order',
+        badgeText: 'Request',
+        badgeBg: '#E8F5E9',
+        accentColor: '#2E7D32',
+        ctaText: 'View and Accept',
+      };
+    }
+
+    switch (order?.status) {
+      case 'PREPARING':
+        return {
+          title: 'Shopping in progress',
+          subtitle: 'Merchant is preparing the items',
+          badgeText: 'Preparing',
+          badgeBg: '#FFF8E1',
+          accentColor: '#F57C00',
+          ctaText: 'View Order Details',
+        };
+      case 'READY_FOR_PICKUP':
+        return {
+          title: 'Ready for pickup',
+          subtitle: 'Head to merchant and collect the order',
+          badgeText: 'Pickup',
+          badgeBg: '#FFF8E1',
+          accentColor: '#FBC02D',
+          ctaText: 'Start Pickup',
+        };
+      case 'PICKED_UP':
+        return {
+          title: 'Order picked up',
+          subtitle: 'Proceed to customer drop-off point',
+          badgeText: 'In Transit',
+          badgeBg: '#FFF3E0',
+          accentColor: '#FF9800',
+          ctaText: 'Navigate Delivery',
+        };
+      case 'DELIVERING':
+        return {
+          title: 'Final delivery step',
+          subtitle: 'Confirm handoff to complete this trip',
+          badgeText: 'Delivering',
+          badgeBg: '#E3F2FD',
+          accentColor: '#1976D2',
+          ctaText: 'Complete Delivery',
+        };
+      default:
+        return {
+          title: 'Delivery in progress',
+          subtitle: 'Open task details for the next step',
+          badgeText: 'Active',
+          badgeBg: '#F5F5F5',
+          accentColor: '#616161',
+          ctaText: 'View Details',
+        };
+    }
+  };
+
+  const taskDetails = activeOrder ? getTaskDetails(activeOrder) : null;
+
   const dashboardStats = [
     { label: 'Earnings', value: `₱${stats.earnings.toFixed(2)}`, icon: 'fees', color: '#388E3C' },
     { label: 'Orders', value: stats.orders.toString(), icon: 'orders', color: '#1976D2' },
@@ -189,50 +252,77 @@ export default function DashboardScreen() {
         {/* Current Task (if online) */}
         {isOnline && (
           <View style={styles.currentTaskCard}>
-            <ThemedText style={styles.sectionTitle}>Current Task</ThemedText>
-            {activeOrder ? (
-                 <View style={styles.taskContent}>
-                    <View style={{ alignItems: 'flex-start', width: '100%', marginBottom: 10 }}>
-                        <ThemedText style={{ fontSize: 18, fontWeight: '800', color: activeOrder.isAvailableRequest ? '#2E7D32' : '#333' }}>
-                            {activeOrder.isAvailableRequest 
-                                ? 'New Delivery Request' 
-                                : (
-                                  activeOrder.status === 'PREPARING' ? 'Shopping in Progress' 
-                                  : activeOrder.status === 'READY_FOR_PICKUP' ? 'Prepare for Pickup' 
-                                  : 'Delivery in Progress'
-                                )
-                            }
-                        </ThemedText>
-                        <ThemedText style={{ color: '#666' }}>ID: #{activeOrder.id.slice(0,8)}</ThemedText>
-                    </View>
-                    
-                    <View style={{ width: '100%', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
-                         <View>
-                              <ThemedText style={{ fontSize: 12, color: '#888' }}>Merchant</ThemedText>
-                              <ThemedText style={{ fontWeight: '600' }}>{activeOrder.merchant?.name}</ThemedText>
-                         </View>
-                         <View style={{ alignItems: 'flex-end' }}>
-                              <ThemedText style={{ fontSize: 12, color: '#888' }}>Customer</ThemedText>
-                              <ThemedText style={{ fontWeight: '600' }}>{activeOrder.customer?.firstName}</ThemedText>
-                         </View>
-                    </View>
+            <View style={styles.currentTaskHeader}>
+              <ThemedText style={styles.sectionTitle}>Current Task</ThemedText>
+              {activeOrder && taskDetails && (
+                <View style={[styles.taskStatusPill, { backgroundColor: taskDetails.badgeBg }]}>
+                  <View style={[styles.taskStatusDot, { backgroundColor: taskDetails.accentColor }]} />
+                  <ThemedText style={[styles.taskStatusPillText, { color: taskDetails.accentColor }]}>
+                    {taskDetails.badgeText}
+                  </ThemedText>
+                </View>
+              )}
+            </View>
 
-                    <TouchableOpacity 
-                        style={[styles.actionBtn, activeOrder.isAvailableRequest && { backgroundColor: '#2E7D32' }]}
-                        onPress={() => router.push(`/order-details/${activeOrder.id}`)}
-                    >
-                        <ThemedText style={styles.actionBtnText}>
-                            {activeOrder.isAvailableRequest ? 'View & Accept' : 'View Details / Proceed'}
-                        </ThemedText>
-                    </TouchableOpacity>
-                 </View>
+            {activeOrder && taskDetails ? (
+              <View style={styles.taskContent}>
+                <View style={styles.taskCompactTop}>
+                  <View style={[styles.taskHeadlineIcon, { backgroundColor: `${taskDetails.accentColor}18` }]}>
+                    <IconSymbol
+                      size={16}
+                      name={activeOrder.isAvailableRequest ? 'orders' : 'map'}
+                      color={taskDetails.accentColor}
+                    />
+                  </View>
+                  <View style={styles.taskCompactMain}>
+                    <View style={styles.taskCompactTitleRow}>
+                      <ThemedText style={styles.taskTitleCompact} numberOfLines={1}>
+                        {taskDetails.title}
+                      </ThemedText>
+                      {typeof activeOrder.deliveryFee === 'number' && (
+                        <ThemedText style={styles.taskFeeText}>PHP {activeOrder.deliveryFee.toFixed(2)}</ThemedText>
+                      )}
+                    </View>
+                    <ThemedText style={styles.taskSubtitleCompact} numberOfLines={1}>
+                      #{activeOrder.id?.slice(0, 8) || '--------'}
+                    </ThemedText>
+                  </View>
+                </View>
+
+                <View style={styles.taskStopsInline}>
+                  <View style={styles.taskStopChip}>
+                    <View style={[styles.taskStopMarker, { backgroundColor: '#F57C00' }]} />
+                    <ThemedText style={styles.taskStopChipText} numberOfLines={1}>
+                      {activeOrder.merchant?.name || 'Unknown merchant'}
+                    </ThemedText>
+                  </View>
+                  <IconSymbol size={12} name="chevron.right" color="#999" />
+                  <View style={styles.taskStopChip}>
+                    <View style={[styles.taskStopMarker, { backgroundColor: '#1976D2' }]} />
+                    <ThemedText style={styles.taskStopChipText} numberOfLines={1}>
+                      {activeOrder.customer?.firstName || 'Customer'}
+                    </ThemedText>
+                  </View>
+                </View>
+
+                <View style={styles.taskFooterRow}>
+                  <TouchableOpacity
+                    style={[styles.taskMiniBtn, { backgroundColor: taskDetails.accentColor }]}
+                    onPress={() => router.push(`/order-details/${activeOrder.id}`)}
+                  >
+                    <ThemedText style={styles.taskMiniBtnText}>
+                      {activeOrder.isAvailableRequest ? 'Accept' : 'Open'}
+                    </ThemedText>
+                  </TouchableOpacity>
+                </View>
+              </View>
             ) : (
-                <View style={styles.taskContent}>
-                <ThemedText style={styles.waitingText}>Scanning for assigned orders...</ThemedText>
-                <View style={styles.radarAnimation}>
-                    <IconSymbol size={32} name="map" color="#C2185B" />
+              <View style={styles.taskEmptyStateCompact}>
+                <View style={styles.radarAnimationCompact}>
+                  <IconSymbol size={18} name="map" color="#C2185B" />
                 </View>
-                </View>
+                <ThemedText style={styles.waitingTextCompact}>Waiting for assignment</ThemedText>
+              </View>
             )}
           </View>
         )}
@@ -349,26 +439,139 @@ const styles = StyleSheet.create({
   },
   currentTaskCard: {
     backgroundColor: '#FFF',
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 14,
+    padding: 12,
     marginBottom: 20,
     borderWidth: 1,
     borderColor: '#EEE',
+  },
+  currentTaskHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 8,
   },
   taskContent: {
+    width: '100%',
+  },
+  taskStatusPill: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 20,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    gap: 4,
   },
-  waitingText: {
+  taskStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  taskStatusPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  taskCompactTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  taskHeadlineIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  taskCompactMain: {
+    flex: 1,
+    minWidth: 0,
+  },
+  taskCompactTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  taskTitleCompact: {
+    flex: 1,
     fontSize: 14,
-    color: '#666',
-    marginBottom: 16,
+    fontWeight: '800',
+    color: '#222',
   },
-  radarAnimation: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+  taskSubtitleCompact: {
+    fontSize: 11,
+    color: '#777',
+    marginTop: 2,
+  },
+  taskFeeText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#2E7D32',
+  },
+  taskStopsInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  taskStopChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+    backgroundColor: '#FAFAFA',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    minWidth: 0,
+  },
+  taskStopMarker: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  taskStopChipText: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#444',
+  },
+  taskFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  taskMiniBtn: {
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    minWidth: 72,
+    alignItems: 'center',
+  },
+  taskMiniBtnText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  taskEmptyStateCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+  },
+  waitingTextCompact: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '700',
+    marginLeft: 8,
+  },
+  radarAnimationCompact: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: '#FCE4EC',
     justifyContent: 'center',
     alignItems: 'center',
@@ -434,19 +637,5 @@ const styles = StyleSheet.create({
     color: '#999',
     marginTop: 20,
     fontStyle: 'italic',
-  },
-  actionBtn: {
-    backgroundColor: '#C2185B',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    marginTop: 10,
-    width: '100%',
-    alignItems: 'center',
-  },
-  actionBtnText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '800',
   },
 });

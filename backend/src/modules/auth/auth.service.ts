@@ -50,11 +50,31 @@ export class AuthService {
 
       // Role based profile creation
       if (dto.role === UserRole.CUSTOMER) {
+        if (
+          dto.consentGiven !== true ||
+          !dto.termsOfServiceVersion ||
+          !dto.privacyPolicyVersion ||
+          !dto.consentAcceptedAt
+        ) {
+          throw new BadRequestException(
+            'Terms and privacy consent metadata is required for customer registration',
+          );
+        }
+
+        const consentAcceptedAt = new Date(dto.consentAcceptedAt);
+        if (Number.isNaN(consentAcceptedAt.getTime())) {
+          throw new BadRequestException('Invalid consent acceptance timestamp');
+        }
+
         await tx.customer.create({
           data: {
             userId: user.id,
             firstName: dto.firstName,
             lastName: dto.lastName,
+            termsOfServiceVersion: dto.termsOfServiceVersion,
+            privacyPolicyVersion: dto.privacyPolicyVersion,
+            consentAcceptedAt,
+            consentAppVersion: dto.consentAppVersion ?? null,
           },
         });
       } else if (dto.role === UserRole.RIDER) {

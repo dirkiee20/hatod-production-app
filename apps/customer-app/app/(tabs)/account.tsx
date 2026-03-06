@@ -1,15 +1,17 @@
-import { useState, useCallback } from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity, Image, Alert, RefreshControl } from 'react-native';
+import { useState } from 'react';
+import { StyleSheet, ScrollView, TouchableOpacity, Alert, RefreshControl, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useUser } from '@/context/UserContext';
+import { deleteMyAccount } from '@/api/services';
 
 export default function AccountScreen() {
   const router = useRouter();
   const { user, refreshProfile, logoutUser } = useUser();
   const [refreshing, setRefreshing] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -23,6 +25,7 @@ export default function AccountScreen() {
     { icon: 'grocery', label: 'My Grocery Orders', color: '#4CAF50' },
     { icon: 'bag.fill', label: 'My Pabili Requests', color: '#f78734' },
     { icon: 'government', label: 'Government Transcripts', color: '#4CD964' },
+    { icon: 'services', label: 'Legal & Deletion', color: '#5c6cc9' },
     { icon: 'paperplane.fill', label: 'Support & Feedback', color: '#FF9500' },
   ];
 
@@ -42,6 +45,34 @@ export default function AccountScreen() {
              logoutUser();
           }
         }
+      ]
+    );
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Delete Account",
+      "This will deactivate your account and sign you out. Continue?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setDeletingAccount(true);
+              await deleteMyAccount();
+              await logoutUser();
+            } catch {
+              Alert.alert("Error", "Unable to delete account right now. Please try again.");
+            } finally {
+              setDeletingAccount(false);
+            }
+          },
+        },
       ]
     );
   };
@@ -101,6 +132,8 @@ export default function AccountScreen() {
                 router.push('/pabili-orders');
               } else if (item.label === 'Government Transcripts') {
                 router.push('/government-transcripts');
+              } else if (item.label === 'Legal & Deletion') {
+                router.push('/legal-and-deletion' as any);
               } else if (item.label === 'Support & Feedback') {
                 router.push('/support');
               }
@@ -117,6 +150,18 @@ export default function AccountScreen() {
 
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
         <ThemedText style={styles.logoutText}>Log Out</ThemedText>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.deleteAccountButton, deletingAccount && { opacity: 0.7 }]}
+        onPress={handleDeleteAccount}
+        disabled={deletingAccount}
+      >
+        {deletingAccount ? (
+          <ActivityIndicator size="small" color="#B71C1C" />
+        ) : (
+          <ThemedText style={styles.deleteAccountText}>Delete Account</ThemedText>
+        )}
       </TouchableOpacity>
 
       <ThemedView style={styles.footerInfo}>
@@ -211,6 +256,21 @@ const styles = StyleSheet.create({
   },
   logoutText: {
     color: '#D81B60',
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  deleteAccountButton: {
+    marginTop: 10,
+    marginHorizontal: 16,
+    padding: 12,
+    backgroundColor: '#FFF5F5',
+    borderRadius: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FFDDDD',
+  },
+  deleteAccountText: {
+    color: '#B71C1C',
     fontWeight: '800',
     fontSize: 14,
   },

@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+﻿import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { RedisService } from '../redis/redis.service';
 
 const TYPHOON_KEY = 'system:typhoon_mode';
@@ -13,6 +14,16 @@ export interface TyphoonConfig {
   suspendDeliveries: boolean;
 }
 
+export interface LegalPoliciesConfig {
+  termsUrl: string;
+  privacyUrl: string;
+  termsVersion: string;
+  privacyVersion: string;
+  effectiveDate: string;
+  accountDeletionInfoUrl: string;
+  supportEmail: string;
+}
+
 const DEFAULT_CONFIG: TyphoonConfig = {
   enabled: false,
   message: 'Service is temporarily suspended due to typhoon. Please stay safe.',
@@ -25,7 +36,10 @@ const DEFAULT_CONFIG: TyphoonConfig = {
 
 @Injectable()
 export class SettingsService {
-  constructor(private redis: RedisService) {}
+  constructor(
+    private redis: RedisService,
+    private configService: ConfigService,
+  ) {}
 
   async getTyphoonMode(): Promise<TyphoonConfig> {
     const cached = await this.redis.getJson<TyphoonConfig>(TYPHOON_KEY);
@@ -45,5 +59,28 @@ export class SettingsService {
     };
     await this.redis.setJson(TYPHOON_KEY, updated);
     return updated;
+  }
+
+  getLegalPolicies(): LegalPoliciesConfig {
+    return {
+      termsUrl:
+        this.configService.get<string>('LEGAL_TERMS_URL') ??
+        'https://hatod.app/terms',
+      privacyUrl:
+        this.configService.get<string>('LEGAL_PRIVACY_URL') ??
+        'https://hatod.app/privacy',
+      termsVersion:
+        this.configService.get<string>('LEGAL_TERMS_VERSION') ?? '2026-02-01',
+      privacyVersion:
+        this.configService.get<string>('LEGAL_PRIVACY_VERSION') ?? '2026-02-01',
+      effectiveDate:
+        this.configService.get<string>('LEGAL_EFFECTIVE_DATE') ?? '2026-02-01',
+      accountDeletionInfoUrl:
+        this.configService.get<string>('LEGAL_ACCOUNT_DELETION_URL') ??
+        'https://hatod.app/account-deletion',
+      supportEmail:
+        this.configService.get<string>('LEGAL_SUPPORT_EMAIL') ??
+        'hatodservices@gmail.com',
+    };
   }
 }

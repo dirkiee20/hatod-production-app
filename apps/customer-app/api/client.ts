@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
+import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 const PRODUCTION_API_URL = 'https://hatod-production-app-production.up.railway.app/api';
@@ -39,10 +40,37 @@ const preferredApiUrl = envUrl
 let currentApiUrl = preferredApiUrl;
 export let API_BASE = currentApiUrl;
 
-console.log('Customer App preferred API URL:', preferredApiUrl);
+if (__DEV__) {
+  console.log('Customer App preferred API URL:', preferredApiUrl);
+}
 
 let authToken: string | null = null;
 let logoutCallback: (() => void) | null = null;
+const AUTH_TOKEN_KEY = 'auth_token';
+
+const loadAuthTokenFromStorage = async () => {
+  const secureToken = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+  if (secureToken) return secureToken;
+
+  // Backward compatibility for existing installs that stored token in AsyncStorage.
+  const legacyToken = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+  if (legacyToken) {
+    await SecureStore.setItemAsync(AUTH_TOKEN_KEY, legacyToken);
+    await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
+  }
+
+  return legacyToken;
+};
+
+const persistAuthToken = async (token: string) => {
+  await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token);
+  await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
+};
+
+const clearAuthToken = async () => {
+  await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+  await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
+};
 
 export const registerLogoutCallback = (callback: () => void) => {
   logoutCallback = callback;
@@ -51,7 +79,7 @@ export const registerLogoutCallback = (callback: () => void) => {
 export const getAuthToken = async () => {
   if (authToken) return authToken;
   try {
-    authToken = await AsyncStorage.getItem('auth_token');
+    authToken = await loadAuthTokenFromStorage();
   } catch (e) {
     console.error('Failed to load auth token', e);
   }
@@ -79,7 +107,7 @@ export const login = async (phone: string, password: string) => {
 
     const data = await response.json();
     authToken = data.access_token;
-    await AsyncStorage.setItem('auth_token', data.access_token);
+    await persistAuthToken(data.access_token);
     return data;
   } catch (error) {
     console.error('Error logging in:', error);
@@ -87,18 +115,63 @@ export const login = async (phone: string, password: string) => {
   }
 };
 
-export const register = async (userData: { firstName: string; lastName: string; phone: string; password: string; email: string }) => {
+export const register = async (userData: {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  password: string;
+  email: string;
+  consentGiven?: boolean;
+  termsOfServiceVersion?: string;
+  privacyPolicyVersion?: string;
+  consentAcceptedAt?: string;
+  consentAppVersion?: string;
+}) => {
+  const buildPayload = (data: typeof userData) => ({
+    ...data,
+    role: 'CUSTOMER',
+  });
+
+  const buildLegacyPayload = (data: typeof userData) => ({
+    firstName: data.firstName,
+    lastName: data.lastName,
+    phone: data.phone,
+    password: data.password,
+    email: data.email,
+    role: 'CUSTOMER',
+  });
+
+  const shouldRetryLegacyRegister = (errorText: string) => {
+    const normalized = errorText.toLowerCase();
+    return normalized.includes('should not exist') &&
+      (normalized.includes('consent') || normalized.includes('termsofserviceversion') || normalized.includes('privacypolicyversion'));
+  };
+
   try {
-    const response = await requestWithAutoFallback('/auth/register', {
+    let response = await requestWithAutoFallback('/auth/register', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        ...userData,
-        role: 'CUSTOMER',
-      }),
+      body: JSON.stringify(buildPayload(userData)),
     });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      if (shouldRetryLegacyRegister(errorText)) {
+        console.warn('Register endpoint is older than app payload. Retrying with legacy payload.');
+        response = await requestWithAutoFallback('/auth/register', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(buildLegacyPayload(userData)),
+        });
+      } else {
+        console.error('Failed to register', errorText);
+        throw new Error(errorText || 'Registration failed');
+      }
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -115,14 +188,26 @@ export const register = async (userData: { firstName: string; lastName: string; 
 
 export const logout = async () => {
   authToken = null;
-  await AsyncStorage.removeItem('auth_token');
+  await clearAuthToken();
   if (logoutCallback) logoutCallback();
+};
+
+const FETCH_TIMEOUT_MS = 12000;
+
+const fetchWithTimeout = async (url: string, options: RequestInit, timeoutMs = FETCH_TIMEOUT_MS): Promise<Response> => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
 };
 
 // Helper for retry logic
 const fetchWithRetry = async (url: string, options: RequestInit, retries = 3, delay = 1000): Promise<Response> => {
   try {
-    const res = await fetch(url, options);
+    const res = await fetchWithTimeout(url, options);
     return res;
   } catch (error) {
     if (retries > 0) {
@@ -175,16 +260,20 @@ export const authenticatedFetch = async (endpoint: string, options: RequestInit 
     
     if (!res.ok) {
         console.error(`[API Error] ${endpoint} failed with status ${res.status}`);
-        try {
-            const text = await res.clone().text();
-            console.error(`[API Error Body]`, text);
-        } catch (e) {
-            console.error('[API Error] Could not read error body');
+        if (__DEV__) {
+            try {
+                const text = await res.clone().text();
+                console.error(`[API Error Body]`, text);
+            } catch (e) {
+                console.error('[API Error] Could not read error body');
+            }
         }
     }
 
     if (res.status === 401) {
-        console.log('Received 401 Unauthorized. Logging out automatically...');
+        if (__DEV__) {
+            console.log('Received 401 Unauthorized. Logging out automatically...');
+        }
         await logout();
     }
     
@@ -210,11 +299,13 @@ export const publicFetch = async (endpoint: string, options: RequestInit = {}) =
       
     if (!res.ok) {
         console.error(`[Public API Error] ${endpoint} failed with status ${res.status}`);
-        try {
-            const text = await res.clone().text();
-            console.error(`[Public API Error Body]`, text);
-        } catch (e) {
-            console.error('[Public API Error] Could not read error body');
+        if (__DEV__) {
+            try {
+                const text = await res.clone().text();
+                console.error(`[Public API Error Body]`, text);
+            } catch (e) {
+                console.error('[Public API Error] Could not read error body');
+            }
         }
     }
     

@@ -1,41 +1,43 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Constants from 'expo-constants';
-import { Platform } from 'react-native';
 
 const PRODUCTION_API_URL = 'https://hatod-production-app-production.up.railway.app/api';
+const REQUEST_TIMEOUT_MS = 10000;
 
 const normalizeApiUrl = (url: string) => {
   const normalised = url.replace(/\/+$/, '');
   return normalised.endsWith('/api') ? normalised : `${normalised}/api`;
 };
 
-const getLocalDevApiUrl = () => {
-  if (!__DEV__) return null;
-  if (Platform.OS === 'android' && !Constants.isDevice) {
-    return 'http://10.0.2.2:3000/api';
-  }
-  const hostUri = Constants.expoConfig?.hostUri;
-  if (hostUri) {
-    const ip = hostUri.split(':')[0];
-    return `http://${ip}:3000/api`;
-  }
-  if (Platform.OS === 'ios') {
-    return 'http://localhost:3000/api';
-  }
-  return null;
-};
-
 const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
 const preferredApiUrl = envUrl
   ? normalizeApiUrl(envUrl)
-  : getLocalDevApiUrl() ?? PRODUCTION_API_URL;
+  : PRODUCTION_API_URL;
 
 let currentApiUrl = preferredApiUrl;
 console.log('Rider App preferred API URL:', preferredApiUrl);
 
-const fetchWithRetry = async (url: string, options: RequestInit, retries = 3, delay = 1000): Promise<Response> => {
+const fetchWithTimeout = async (url: string, options: RequestInit, timeoutMs = REQUEST_TIMEOUT_MS): Promise<Response> => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
-    return await fetch(url, options);
+    return await fetch(url, {
+      ...options,
+      signal: options.signal ?? controller.signal,
+    });
+  } catch (error: any) {
+    if (error?.name === 'AbortError') {
+      throw new Error(`Request timed out after ${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const fetchWithRetry = async (url: string, options: RequestInit, retries = 1, delay = 1000): Promise<Response> => {
+  try {
+    return await fetchWithTimeout(url, options);
   } catch (error) {
     if (retries > 0) {
       await new Promise(resolve => setTimeout(resolve, delay));

@@ -23,6 +23,10 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => {
     const initSocket = async () => {
       const token = await getAuthToken();
+      if (!token) {
+        // No auth token yet (login/signup flow), so skip socket init.
+        return;
+      }
       
       // Extract base URL without the /api suffix for socket connection if needed
       let baseUrl = API_BASE.replace(/\/api\/?$/, '');

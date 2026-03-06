@@ -152,7 +152,7 @@ function ReviewsSheet({
                     <StarRow filled={review.rating} size={13} />
                   </View>
                   {review.comment ? (
-                    <ThemedText style={rvStyles.comment}>"{review.comment}"</ThemedText>
+                    <ThemedText style={rvStyles.comment}>&ldquo;{review.comment}&rdquo;</ThemedText>
                   ) : null}
                 </View>
               ))}

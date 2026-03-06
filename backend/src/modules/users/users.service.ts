@@ -45,4 +45,30 @@ export class UsersService {
       },
     });
   }
+
+  async deactivateMe(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, isActive: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.refreshToken.deleteMany({ where: { userId } }),
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { isActive: false },
+      }),
+    ]);
+
+    return {
+      success: true,
+      message: user.isActive
+        ? 'Account deactivated successfully'
+        : 'Account is already deactivated',
+    };
+  }
 }

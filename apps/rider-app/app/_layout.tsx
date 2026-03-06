@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useRouter, Stack } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { StatusBar } from 'expo-status-bar';
@@ -21,7 +21,7 @@ export default function RootLayout() {
     });
 
     // fast check for token
-    SecureStore.getItemAsync('authToken').then(token => {
+    AsyncStorage.getItem('auth_token').then(token => {
       if (!token) {
         router.replace('/(auth)/login');
       }
