@@ -5,11 +5,13 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useUser } from '@/context/UserContext';
+import { usePlace } from '@/context/PlaceContext';
 import { deleteMyAccount } from '@/api/services';
 
 export default function AccountScreen() {
   const router = useRouter();
   const { user, refreshProfile, logoutUser } = useUser();
+  const { selectedPlaceLabel } = usePlace();
   const [refreshing, setRefreshing] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
 
@@ -21,6 +23,7 @@ export default function AccountScreen() {
 
   const menuItems = [
     { icon: 'person', label: 'Profile Information', color: '#f78734' },
+    { icon: 'location.fill', label: 'Delivery Place', color: '#5c6cc9' },
     { icon: 'cart', label: 'My Food Orders', color: '#5856D6' },
     { icon: 'grocery', label: 'My Grocery Orders', color: '#4CAF50' },
     { icon: 'bag.fill', label: 'My Pabili Requests', color: '#f78734' },
@@ -124,6 +127,8 @@ export default function AccountScreen() {
             onPress={() => {
               if (item.label === 'Profile Information') {
                 router.push('/profile-info');
+              } else if (item.label === 'Delivery Place') {
+                router.push('/select-place');
               } else if (item.label === 'My Food Orders') {
                 router.push('/food-orders');
               } else if (item.label === 'My Grocery Orders') {
@@ -143,6 +148,9 @@ export default function AccountScreen() {
               <IconSymbol size={20} name={item.icon as any} color={item.color} />
             </ThemedView>
             <ThemedText style={styles.menuLabel}>{item.label}</ThemedText>
+            {item.label === 'Delivery Place' && (
+              <ThemedText style={styles.menuMeta}>{selectedPlaceLabel}</ThemedText>
+            )}
             <IconSymbol size={16} name="chevron.right" color="#DDD" />
           </TouchableOpacity>
         ))}
@@ -243,6 +251,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#333',
+  },
+  menuMeta: {
+    fontSize: 12,
+    color: '#888',
+    marginRight: 8,
   },
   logoutButton: {
     marginTop: 30,

@@ -12,6 +12,8 @@ import { getMerchants, getMyOrders, getTyphoonMode, TyphoonConfig } from '@/api/
 import { Merchant } from '@/api/types';
 import { resolveImageUrl } from '@/api/client';
 import { isMerchantOpen } from '@/utils/time';
+import { usePlace } from '@/context/PlaceContext';
+import { merchantMatchesOrderPlace } from '@/utils/place';
 
 const PLACEHOLDER_BANNER = 'https://placehold.co/400x225/f0f0f0/aaaaaa?text=No+Image';
 
@@ -56,6 +58,7 @@ export default function GroceryScreen() {
     deliveryFee?: number;
   }>>([]);
   const [typhoon, setTyphoon] = useState<TyphoonConfig | null>(null);
+  const { selectedPlace, selectedPlaceLabel } = usePlace();
 
   const loadMerchants = async () => {
     setLoading(true);
@@ -64,7 +67,13 @@ export default function GroceryScreen() {
         setTimeout(() => reject(new Error('timeout')), 10_000)
       );
       const data = await Promise.race([getMerchants(), timeout]);
-      setMerchants(data.filter((m: Merchant) => m.type === 'GROCERY' || m.type === 'PHARMACY'));
+      setMerchants(
+        data.filter(
+          (m: Merchant) =>
+            (m.type === 'GROCERY' || m.type === 'PHARMACY') &&
+            merchantMatchesOrderPlace(m, selectedPlace),
+        ),
+      );
     } catch (e: any) {
       console.warn('loadMerchants failed:', e?.message);
       setMerchants([]);
@@ -84,6 +93,7 @@ export default function GroceryScreen() {
           if (!order.merchant) continue;
           const t = order.merchant.type;
           if (t !== 'GROCERY' && t !== 'PHARMACY') continue;
+          if (!merchantMatchesOrderPlace(order.merchant, selectedPlace)) continue;
           for (const item of (order.items ?? [])) {
             if (!item.menuItem || seen.has(item.menuItemId)) continue;
             seen.add(item.menuItemId);
@@ -106,7 +116,7 @@ export default function GroceryScreen() {
       }).catch(() => {});
       // Typhoon mode status
       getTyphoonMode().then(t => setTyphoon(t)).catch(() => {});
-    }, [])
+    }, [selectedPlace])
   );
 
   const filteredMerchants = merchants.filter(m => {
@@ -290,8 +300,16 @@ export default function GroceryScreen() {
         ) : merchants.length === 0 ? (
           <ThemedView style={styles.emptyContainer}>
             <IconSymbol size={48} name="cart" color="#CCC" />
-            <ThemedText style={styles.emptyText}>Could not load stores</ThemedText>
-            <ThemedText style={styles.emptySubtext}>The server may be waking up. Tap to retry.</ThemedText>
+            <ThemedText style={styles.emptyText}>
+              {selectedPlace
+                ? `No stores available in ${selectedPlaceLabel}`
+                : 'Could not load stores'}
+            </ThemedText>
+            <ThemedText style={styles.emptySubtext}>
+              {selectedPlace
+                ? 'Try switching your delivery place in the Account tab.'
+                : 'The server may be waking up. Tap to retry.'}
+            </ThemedText>
             <TouchableOpacity style={styles.retryBtn} onPress={loadMerchants}>
               <ThemedText style={styles.retryText}>Retry</ThemedText>
             </TouchableOpacity>

@@ -8,6 +8,7 @@ import { CartProvider } from '@/context/CartContext';
 import { SocketProvider } from '@/context/SocketContext';
 
 import { UserProvider } from '@/context/UserContext';
+import { PlaceProvider } from '@/context/PlaceContext';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -19,17 +20,20 @@ export default function RootLayout() {
   return (
     <SocketProvider>
       <UserProvider>
-        <CartProvider>
-          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="login" options={{ headerShown: false }} />
-            <Stack.Screen name="signup" options={{ headerShown: false }} />
-            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-          </Stack>
-          <StatusBar style="auto" />
-        </ThemeProvider>
-        </CartProvider>
+        <PlaceProvider>
+          <CartProvider>
+            <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+              <Stack>
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen name="login" options={{ headerShown: false }} />
+                <Stack.Screen name="signup" options={{ headerShown: false }} />
+                <Stack.Screen name="select-place" options={{ headerShown: false }} />
+                <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+              </Stack>
+              <StatusBar style="auto" />
+            </ThemeProvider>
+          </CartProvider>
+        </PlaceProvider>
       </UserProvider>
     </SocketProvider>
   );

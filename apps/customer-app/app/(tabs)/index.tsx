@@ -11,6 +11,8 @@ import { resolveImageUrl } from '@/api/client';
 import { isMerchantOpen } from '@/utils/time';
 import { useSocket } from '@/context/SocketContext';
 import { useCart } from '@/context/CartContext';
+import { usePlace } from '@/context/PlaceContext';
+import { merchantMatchesOrderPlace } from '@/utils/place';
 
 const PLACEHOLDER_BANNER = 'https://placehold.co/400x225/f0f0f0/aaaaaa?text=No+Image';
 const LOCAL_CATEGORY_FALLBACK = require('../../assets/images/hatod-logo.png');
@@ -92,6 +94,7 @@ export default function FoodScreen() {
   const [configuredCategories, setConfiguredCategories] = useState<FoodCategorySetting[]>([]);
   const [deliveryEstimates, setDeliveryEstimates] = useState<Record<string, { fee: number; distance: number; duration: number }>>({});
   const { deliveryAddress, items } = useCart();
+  const { selectedPlace, selectedPlaceLabel } = usePlace();
 
   const { socket } = useSocket();
 
@@ -119,6 +122,7 @@ export default function FoodScreen() {
         const items: typeof recentItems = [];
         for (const order of orders) {
           if (!order.merchant || (order.merchant.type && order.merchant.type !== 'RESTAURANT')) continue;
+          if (!merchantMatchesOrderPlace(order.merchant, selectedPlace)) continue;
           for (const item of (order.items ?? [])) {
             if (!item.menuItem || seen.has(item.menuItemId)) continue;
             seen.add(item.menuItemId);
@@ -142,7 +146,7 @@ export default function FoodScreen() {
       // Fetch typhoon mode status
       getTyphoonMode().then(t => setTyphoon(t)).catch(() => {});
       getFoodCategories().then(setConfiguredCategories).catch(() => {});
-    }, [])
+    }, [selectedPlace])
   );
 
   const loadMerchants = async () => {
@@ -154,7 +158,10 @@ export default function FoodScreen() {
         setTimeout(() => reject(new Error('timeout')), 10_000)
       );
       const data = await Promise.race([getMerchants(), timeout]);
-      setMerchants(data);
+      const placeFiltered = data.filter((merchant) =>
+        merchantMatchesOrderPlace(merchant, selectedPlace)
+      );
+      setMerchants(placeFiltered);
     } catch (e: any) {
       console.warn('loadMerchants failed/timed-out:', e?.message);
       setMerchants([]);
@@ -552,8 +559,16 @@ export default function FoodScreen() {
         ) : merchants.filter(m => !m.type || m.type === 'RESTAURANT').length === 0 ? (
           <ThemedView style={styles.emptyContainer}>
             <IconSymbol size={48} name="fork.knife" color="#CCC" />
-            <ThemedText style={styles.emptyText}>Could not load restaurants</ThemedText>
-            <ThemedText style={styles.emptySubtext}>The server may be waking up. Tap to retry.</ThemedText>
+            <ThemedText style={styles.emptyText}>
+              {selectedPlace
+                ? `No restaurants available in ${selectedPlaceLabel}`
+                : 'Could not load restaurants'}
+            </ThemedText>
+            <ThemedText style={styles.emptySubtext}>
+              {selectedPlace
+                ? 'Try switching your delivery place in the Account tab.'
+                : 'The server may be waking up. Tap to retry.'}
+            </ThemedText>
             <TouchableOpacity style={styles.retryBtn} onPress={loadMerchants}>
               <ThemedText style={styles.retryText}>Retry</ThemedText>
             </TouchableOpacity>

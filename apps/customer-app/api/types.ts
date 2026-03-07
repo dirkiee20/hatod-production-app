@@ -3,6 +3,7 @@
 export interface Merchant {
   id: string;
   name: string;
+  city?: string;
   description?: string;
   address?: string;
   phone?: string;

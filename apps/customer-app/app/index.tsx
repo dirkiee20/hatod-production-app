@@ -2,10 +2,12 @@ import { Redirect } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { getAuthToken } from '@/api/client';
+import { usePlace } from '@/context/PlaceContext';
 
 export default function Index() {
   const [loading, setLoading] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
+  const { selectedPlace, loading: placeLoading } = usePlace();
 
   useEffect(() => {
     checkAuth();
@@ -17,7 +19,7 @@ export default function Index() {
     setLoading(false);
   };
 
-  if (loading) {
+  if (loading || placeLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color="#5c6cc9" />
@@ -25,5 +27,13 @@ export default function Index() {
     );
   }
 
-  return <Redirect href={authenticated ? "/(tabs)" : "/login"} />;
+  if (!authenticated) {
+    return <Redirect href="/login" />;
+  }
+
+  if (!selectedPlace) {
+    return <Redirect href="/select-place" />;
+  }
+
+  return <Redirect href="/(tabs)" />;
 }

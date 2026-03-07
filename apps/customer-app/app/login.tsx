@@ -78,7 +78,7 @@ export default function LoginScreen() {
     try {
       await login(phone, password, { rememberMe });
       await Promise.all([refreshProfile(), refreshCart()]);
-      router.replace('/(tabs)');
+      router.replace('/select-place');
     } catch (error) {
       setPasswordError(
         getFriendlyErrorMessage(error, 'Unable to log in right now. Please try again.'),
