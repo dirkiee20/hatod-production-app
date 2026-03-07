@@ -2,11 +2,13 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException 
 import { PrismaService } from '../prisma/prisma.service';
 import { SocketGateway } from '../socket/socket.gateway';
 import { CreateOrderDto, UpdateOrderStatusDto } from './dto/order.dto';
-import { OrderStatus, UserRole, RiderStatus } from '@prisma/client';
+import { OrderStatus, UserRole, RiderStatus, PaymentMethod } from '@prisma/client';
 import { DeliveryFeeService } from '../delivery-fee/delivery-fee.service';
 
 @Injectable()
 export class OrdersService {
+  private readonly codCurrentLocationToleranceKm = 0.5;
+
   constructor(
     private prisma: PrismaService,
     private socketGateway: SocketGateway,
@@ -15,6 +17,32 @@ export class OrdersService {
 
   private roundMoney(value: number): number {
     return Math.round(value * 100) / 100;
+  }
+
+  private haversineDistanceKm(
+    origin: { lat: number; lng: number },
+    destination: { lat: number; lng: number },
+  ): number {
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const earthRadiusKm = 6371;
+    const dLat = toRad(destination.lat - origin.lat);
+    const dLng = toRad(destination.lng - origin.lng);
+    const lat1 = toRad(origin.lat);
+    const lat2 = toRad(destination.lat);
+
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return earthRadiusKm * c;
+  }
+
+  private async getMaximumConfiguredDistanceKm(): Promise<number | null> {
+    const result = await this.prisma.deliveryFeeConfig.aggregate({
+      _max: { maxDistance: true },
+    });
+    return result._max.maxDistance ?? null;
   }
 
   // Merchant-facing revenue should be based on the merchant's original menu price,
@@ -130,6 +158,35 @@ export class OrdersService {
       throw new BadRequestException('Invalid delivery address: No address found for this customer');
     }
 
+    const paymentMethod = dto.paymentMethod ?? PaymentMethod.CASH_ON_DELIVERY;
+    const isCashOnDelivery = paymentMethod === PaymentMethod.CASH_ON_DELIVERY;
+
+    if (isCashOnDelivery) {
+      const label = String(address.label || '').trim().toLowerCase();
+      if (label !== 'current location') {
+        throw new BadRequestException(
+          'Cash on Delivery is only available when using your current location address.',
+        );
+      }
+
+      if (dto.customerLatitude == null || dto.customerLongitude == null) {
+        throw new BadRequestException(
+          'Current location is required for Cash on Delivery. Please enable location services and try again.',
+        );
+      }
+
+      const deviceToAddressKm = this.haversineDistanceKm(
+        { lat: dto.customerLatitude, lng: dto.customerLongitude },
+        { lat: address.latitude, lng: address.longitude },
+      );
+
+      if (deviceToAddressKm > this.codCurrentLocationToleranceKm) {
+        throw new BadRequestException(
+          'Selected delivery address is not your current location. Please use your current location to continue with Cash on Delivery.',
+        );
+      }
+    }
+
     // Calculate totals
     let subtotal = 0;
     const orderItemsData = [];
@@ -188,15 +245,28 @@ export class OrdersService {
         }
         subtotal = this.roundMoney(subtotal);
 
-        // Calculate Delivery Fee using DeliveryFeeService
+        // Calculate Delivery Fee using DeliveryFeeService and enforce max admin distance.
         const origin = { lat: merchant.latitude, lng: merchant.longitude };
         const destination = { lat: address.latitude, lng: address.longitude };
-        
+        const maxConfiguredDistanceKm = await this.getMaximumConfiguredDistanceKm();
+        const directDistanceKm = this.haversineDistanceKm(origin, destination);
+        let computedDistanceKm = directDistanceKm;
+
         try {
           const feeResult = await this.deliveryFeeService.calculateDeliveryFee(origin, destination, subtotal);
           deliveryFee = feeResult.fee;
+          if (feeResult.distance > 0) {
+            computedDistanceKm = feeResult.distance;
+          }
         } catch (error) {
           console.error('Failed to calculate delivery fee, using default:', error);
+        }
+
+        if (maxConfiguredDistanceKm != null && computedDistanceKm > maxConfiguredDistanceKm) {
+          const merchantName = merchant?.name || 'This merchant';
+          throw new BadRequestException(
+            `${merchantName} is not available at your area.`,
+          );
         }
     }
     
@@ -209,6 +279,7 @@ export class OrdersService {
       subtotal,
       deliveryFee,
       total,
+      paymentMethod,
       specialInstructions: dto.specialInstructions,
     };
 

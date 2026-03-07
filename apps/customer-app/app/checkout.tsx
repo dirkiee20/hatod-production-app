@@ -6,6 +6,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import React, { useState, useEffect } from 'react';
 import { useCart } from '@/context/CartContext';
 import { createOrder, createAddress, getPabiliRequestById, getTyphoonMode, TyphoonConfig } from '@/api/services';
+import * as Location from 'expo-location';
 
 export default function CheckoutScreen() {
   const router = useRouter();
@@ -54,11 +55,44 @@ export default function CheckoutScreen() {
 
     setLoading(true);
     try {
+      if (selectedPayment !== 'COD') {
+        Alert.alert('Payment Unavailable', 'This payment method is not yet available. Please contact the admin to continue.');
+        setLoading(false);
+        return;
+      }
+
       if (!deliveryAddress) {
           Alert.alert('Missing Address', 'Please select a delivery address.');
           setLoading(false);
           return;
       }
+
+      const isCurrentLocationAddress =
+        deliveryAddress.id === 'temp-current' ||
+        String(deliveryAddress.label || '').trim().toLowerCase() === 'current location';
+
+      if (!isCurrentLocationAddress) {
+        Alert.alert(
+          'Current Location Required',
+          'Cash on Delivery is only available for your current location. Please tap "Edit" and use current location.',
+        );
+        setLoading(false);
+        return;
+      }
+
+      const locationPermission = await Location.requestForegroundPermissionsAsync();
+      if (locationPermission.status !== 'granted') {
+        Alert.alert(
+          'Location Permission Required',
+          'Please enable location permission to place a Cash on Delivery order using your current location.',
+        );
+        setLoading(false);
+        return;
+      }
+
+      const currentPosition = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
 
       let resolvedAddressId = deliveryAddress.id;
 
@@ -86,6 +120,9 @@ export default function CheckoutScreen() {
 
       const orderData: any = {
         addressId: resolvedAddressId,
+        paymentMethod: 'CASH_ON_DELIVERY',
+        customerLatitude: currentPosition.coords.latitude,
+        customerLongitude: currentPosition.coords.longitude,
       };
 
       if (isPabili) {
@@ -104,16 +141,15 @@ export default function CheckoutScreen() {
       console.log('Placing order with data:', JSON.stringify(orderData, null, 2));
 
       const order = await createOrder(orderData);
-
-      if (order) {
-         clearCart();
-         router.replace({ pathname: '/order-summary', params: { id: order.id } });
-      } else {
-         Alert.alert('Order Failed', 'Could not place order. Please check your connection and try again.');
-      }
+      clearCart();
+      router.replace({ pathname: '/order-summary', params: { id: order.id } });
     } catch (error) {
        console.error('Checkout error:', error);
-       Alert.alert('Error', 'An unexpected error occurred while placing your order.');
+       const message =
+         error instanceof Error && error.message
+           ? error.message
+           : 'An unexpected error occurred while placing your order.';
+       Alert.alert('Order Failed', message);
     } finally {
        setLoading(false);
     }
@@ -127,9 +163,9 @@ export default function CheckoutScreen() {
   };
 
   const paymentMethods = [
-    { id: 'COD', name: 'Cash on Delivery', icon: 'person', subtitle: 'Pay when your order arrives' },
-    { id: 'GCASH', name: 'GCash', icon: 'paperplane.fill', subtitle: 'Pay via GCash app' },
-    { id: 'CARD', name: 'Credit/Debit Card', icon: 'grocery', subtitle: 'Visa, Mastercard' },
+    { id: 'COD', name: 'Cash on Delivery', icon: 'person', subtitle: 'Pay when your order arrives', available: true },
+    { id: 'GCASH', name: 'GCash', icon: 'paperplane.fill', subtitle: 'Not yet available', available: false },
+    { id: 'CARD', name: 'Credit/Debit Card', icon: 'grocery', subtitle: 'Not yet available', available: false },
   ];
 
   return (
@@ -209,7 +245,13 @@ export default function CheckoutScreen() {
             <TouchableOpacity 
               key={method.id} 
               style={[styles.paymentRow, selectedPayment === method.id && styles.paymentRowActive]}
-              onPress={() => setSelectedPayment(method.id)}
+              onPress={() => {
+                if (!method.available) {
+                  Alert.alert('Payment Unavailable', `${method.name} is not yet available. Please contact the admin to continue.`);
+                  return;
+                }
+                setSelectedPayment(method.id);
+              }}
             >
               <ThemedView style={styles.methodMain}>
                 <ThemedView style={styles.methodIcon}>

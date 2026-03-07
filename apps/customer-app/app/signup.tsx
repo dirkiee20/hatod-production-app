@@ -15,7 +15,7 @@ import {
 import { useRouter, Link } from 'expo-router';
 import Constants from 'expo-constants';
 import { ThemedText } from '@/components/themed-text';
-import { register } from '@/api/client';
+import { getFriendlyErrorMessage, register } from '@/api/client';
 import { getLegalPolicies, LegalPoliciesConfig } from '@/api/services';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { PRIVACY_POLICY_VERSION, TERMS_OF_SERVICE_VERSION } from '@/constants/legal';
@@ -117,9 +117,10 @@ export default function SignupScreen() {
       });
       router.replace('/login');
     } catch (error: any) {
-      const message =
-        error?.message?.trim?.() ||
-        'Signup failed. Please check your internet connection and try again.';
+      const message = getFriendlyErrorMessage(
+        error,
+        'Signup failed. Please check your internet connection and try again.',
+      );
       Alert.alert('Signup Failed', message);
     } finally {
       setLoading(false);

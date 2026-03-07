@@ -410,20 +410,11 @@ export default function RestaurantDetailScreen() {
         </View>
       </Animated.View>
 
-      {/* Floating Buttons (Fades out on scroll) */}
+      {/* Floating Back Button (Fades out on scroll) */}
       <Animated.View style={[styles.floatingControls, { opacity: controlOpacity }]}>
         <TouchableOpacity style={styles.floatingButton} onPress={() => router.back()}>
           <IconSymbol size={20} name="chevron.right" color="#000" style={{transform: [{rotate: '180deg'}]}} />
         </TouchableOpacity>
-        
-        <ThemedView style={styles.rightActions}>
-          <TouchableOpacity style={styles.floatingButton}>
-            <IconSymbol size={18} name="heart" color="#000" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.floatingButton}>
-            <IconSymbol size={18} name="share" color="#000" />
-          </TouchableOpacity>
-        </ThemedView>
       </Animated.View>
 
       <Animated.ScrollView 
@@ -677,10 +668,6 @@ const styles = StyleSheet.create({
     zIndex: 90,
     backgroundColor: 'transparent',
   },
-  rightActions: {
-    flexDirection: 'row',
-    backgroundColor: 'transparent',
-  },
   floatingButton: {
     width: 32,
     height: 32,
@@ -688,7 +675,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.95)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 8,
   },
   bannerContainer: {
     width: '100%',

@@ -33,6 +33,7 @@ const MAPPING = {
   'services': 'grid-view',
   'map': 'map',
   'pabili': 'shopping-bag',
+  'bag.fill': 'shopping-bag',
   'trash.fill': 'delete',
   'checkmark': 'check',
   'building.2.fill': 'business',

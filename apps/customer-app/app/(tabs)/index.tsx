@@ -380,9 +380,6 @@ export default function FoodScreen() {
           style={[styles.restaurantImage, typhoon?.enabled && { opacity: 0.45 }]}
           placeholder={PLACEHOLDER_BANNER}
         />
-        <ThemedView style={styles.heartIcon}>
-          <IconSymbol size={14} name="heart" color="#000" />
-        </ThemedView>
         {typhoon?.enabled ? (
           <ThemedView style={styles.typhoonCardOverlay}>
             <ThemedText style={styles.typhoonCardIcon}>🌀</ThemedText>
@@ -813,17 +810,6 @@ const styles = StyleSheet.create({
   restaurantImage: {
     width: '100%',
     height: '100%',
-  },
-  heartIcon: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   cardInfo: {
     paddingTop: 6,

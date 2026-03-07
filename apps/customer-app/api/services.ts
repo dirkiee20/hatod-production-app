@@ -7,6 +7,27 @@ const devLog = (...args: unknown[]) => {
   }
 };
 
+const readErrorMessage = async (
+  response: Response,
+  fallbackMessage: string,
+): Promise<string> => {
+  try {
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const payload = await response.clone().json();
+      const message = payload?.message;
+      if (Array.isArray(message)) return message.join(', ');
+      if (typeof message === 'string') return message;
+      if (typeof payload?.error === 'string') return payload.error;
+    }
+
+    const text = await response.clone().text();
+    return text || fallbackMessage;
+  } catch {
+    return fallbackMessage;
+  }
+};
+
 export interface LegalPoliciesConfig {
   termsUrl: string;
   privacyUrl: string;
@@ -178,23 +199,28 @@ export const getMenuItemById = async (id: string): Promise<MenuItem | null> => {
 
 // Order APIs
 export const createOrder = async (orderData: {
-  merchantId: string;
+  merchantId?: string;
   addressId: string;
-  items: { menuItemId: string; quantity: number; notes?: string; options?: any }[];
+  items?: { menuItemId: string; quantity: number; notes?: string; options?: any }[];
   specialInstructions?: string;
-}): Promise<Order | null> => {
+  pabiliRequestId?: string;
+  paymentMethod?: 'CASH_ON_DELIVERY' | 'ONLINE_PAYMENT';
+  customerLatitude?: number;
+  customerLongitude?: number;
+}): Promise<Order> => {
   try {
     const response = await authenticatedFetch('/orders', {
       method: 'POST',
       body: JSON.stringify(orderData),
     });
     if (!response.ok) {
-      throw new Error('Failed to create order');
+      const errorMessage = await readErrorMessage(response, 'Failed to create order');
+      throw new Error(errorMessage);
     }
     return await response.json();
   } catch (error) {
     console.error('Error creating order:', error);
-    return null;
+    throw error;
   }
 };
 

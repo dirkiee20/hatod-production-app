@@ -1,6 +1,7 @@
-import { IsString, IsArray, ValidateNested, IsNumber, IsOptional, IsUUID, IsObject } from 'class-validator';
+import { IsString, IsArray, ValidateNested, IsNumber, IsOptional, IsObject, IsEnum } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
+import { PaymentMethod } from '@prisma/client';
 
 class OrderItemDto {
   @ApiProperty()
@@ -48,6 +49,21 @@ export class CreateOrderDto {
   @IsOptional()
   @IsString()
   pabiliRequestId?: string;
+
+  @ApiProperty({ required: false, enum: PaymentMethod, default: PaymentMethod.CASH_ON_DELIVERY })
+  @IsOptional()
+  @IsEnum(PaymentMethod)
+  paymentMethod?: PaymentMethod;
+
+  @ApiProperty({ required: false, description: 'Customer live location latitude for COD validation' })
+  @IsOptional()
+  @IsNumber()
+  customerLatitude?: number;
+
+  @ApiProperty({ required: false, description: 'Customer live location longitude for COD validation' })
+  @IsOptional()
+  @IsNumber()
+  customerLongitude?: number;
 }
 
 export class UpdateOrderStatusDto {

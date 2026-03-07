@@ -15,7 +15,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, Link } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
-import { login } from '@/api/client';
+import { getFriendlyErrorMessage, login } from '@/api/client';
 import { getLegalPolicies, LegalPoliciesConfig } from '@/api/services';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
@@ -70,9 +70,7 @@ export default function LoginScreen() {
     setPasswordError('');
 
     if (!phone || !password) {
-      if (!password) {
-        setPasswordError('Password is required');
-      }
+      setPasswordError('Phone number and password are required.');
       return;
     }
 
@@ -81,8 +79,10 @@ export default function LoginScreen() {
       await login(phone, password, { rememberMe });
       await Promise.all([refreshProfile(), refreshCart()]);
       router.replace('/(tabs)');
-    } catch {
-      setPasswordError('Invalid password. Please try again.');
+    } catch (error) {
+      setPasswordError(
+        getFriendlyErrorMessage(error, 'Unable to log in right now. Please try again.'),
+      );
     } finally {
       setLoading(false);
     }

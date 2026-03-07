@@ -4,10 +4,128 @@ import * as SecureStore from 'expo-secure-store';
 const PRODUCTION_API_URL = 'https://hatod-production-app-production.up.railway.app/api';
 const currentApiUrl = PRODUCTION_API_URL;
 export const API_BASE = PRODUCTION_API_URL;
+export const NETWORK_UNAVAILABLE_MESSAGE = 'No internet connection. Please turn on mobile data or Wi-Fi and try again.';
 
 let authToken: string | null = null;
 let logoutCallback: (() => void) | null = null;
 const AUTH_TOKEN_KEY = 'auth_token';
+const REQUEST_TIMEOUT_MESSAGE = 'Request timed out. Please check your internet connection and try again.';
+const DEFAULT_REQUEST_ERROR_MESSAGE = 'Something went wrong. Please try again.';
+
+class ClientError extends Error {
+  status?: number;
+
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = 'ClientError';
+    this.status = status;
+  }
+}
+
+const getErrorText = async (response: Response): Promise<string> => {
+  try {
+    const contentType = response.headers.get('content-type') || '';
+
+    if (contentType.includes('application/json')) {
+      const payload = await response.clone().json();
+      const message = payload?.message;
+
+      if (Array.isArray(message)) return message.join(', ');
+      if (typeof message === 'string') return message;
+      if (typeof payload?.error === 'string') return payload.error;
+    }
+
+    return await response.clone().text();
+  } catch {
+    return '';
+  }
+};
+
+const includesAny = (message: string, needles: string[]) =>
+  needles.some((needle) => message.includes(needle));
+
+const isTimeoutError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) return false;
+  const msg = error.message.toLowerCase();
+  return error.name === 'AbortError' || includesAny(msg, ['timeout', 'timed out', 'aborted']);
+};
+
+const isNetworkError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) return false;
+  const msg = error.message.toLowerCase();
+  return includesAny(msg, [
+    'network request failed',
+    'failed to fetch',
+    'fetch failed',
+    'network error',
+    'socket hang up',
+    'enotfound',
+    'econnrefused',
+    'econnreset',
+  ]);
+};
+
+const normalizeClientError = (error: unknown, fallbackMessage: string): Error => {
+  if (error instanceof ClientError) return error;
+  if (isTimeoutError(error)) return new ClientError(REQUEST_TIMEOUT_MESSAGE);
+  if (isNetworkError(error)) return new ClientError(NETWORK_UNAVAILABLE_MESSAGE);
+  return new ClientError(fallbackMessage || DEFAULT_REQUEST_ERROR_MESSAGE);
+};
+
+const mapLoginErrorMessage = (status: number, rawError: string): string => {
+  const msg = rawError.toLowerCase();
+
+  if (status === 400 || status === 401 || msg.includes('invalid credentials')) {
+    return 'Invalid phone number or password.';
+  }
+  if (status === 403 || msg.includes('deactivated')) {
+    return 'Your account is deactivated. Please contact support.';
+  }
+  if (status === 429) {
+    return 'Too many login attempts. Please try again later.';
+  }
+  if (status >= 500) {
+    return 'Server is currently unavailable. Please try again later.';
+  }
+  return 'Unable to log in right now. Please try again.';
+};
+
+const mapRegisterErrorMessage = (status: number, rawError: string): string => {
+  const msg = rawError.toLowerCase();
+
+  if (status === 409 || msg.includes('already exists')) {
+    return 'This phone number is already registered.';
+  }
+  if (status === 400) {
+    if (msg.includes('consent') || msg.includes('terms') || msg.includes('privacy')) {
+      return 'Please agree to Terms of Service and Privacy Policy to continue.';
+    }
+    if (msg.includes('phone')) {
+      return 'Please enter a valid phone number.';
+    }
+    if (msg.includes('password')) {
+      return 'Please enter a valid password.';
+    }
+    return 'Please check your details and try again.';
+  }
+  if (status === 429) {
+    return 'Too many signup attempts. Please try again later.';
+  }
+  if (status >= 500) {
+    return 'Server is currently unavailable. Please try again later.';
+  }
+  return 'Unable to sign up right now. Please try again.';
+};
+
+export const getFriendlyErrorMessage = (
+  error: unknown,
+  fallbackMessage = DEFAULT_REQUEST_ERROR_MESSAGE,
+): string => {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  return fallbackMessage;
+};
 
 const loadAuthTokenFromStorage = async () => {
   const secureToken = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
@@ -67,9 +185,9 @@ export const login = async (
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
+      const errorText = await getErrorText(response);
       console.error('Failed to login', errorText);
-      throw new Error(errorText || 'Login failed');
+      throw new ClientError(mapLoginErrorMessage(response.status, errorText), response.status);
     }
 
     const data = await response.json();
@@ -83,7 +201,7 @@ export const login = async (
     return data;
   } catch (error) {
     console.error('Error logging in:', error);
-    throw error;
+    throw normalizeClientError(error, 'Unable to log in right now. Please try again.');
   }
 };
 
@@ -129,7 +247,7 @@ export const register = async (userData: {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
+      const errorText = await getErrorText(response);
       if (shouldRetryLegacyRegister(errorText)) {
         console.warn('Register endpoint is older than app payload. Retrying with legacy payload.');
         response = await requestApi('/auth/register', {
@@ -141,20 +259,26 @@ export const register = async (userData: {
         });
       } else {
         console.error('Failed to register', errorText);
-        throw new Error(errorText || 'Registration failed');
+        throw new ClientError(
+          mapRegisterErrorMessage(response.status, errorText),
+          response.status,
+        );
       }
     }
 
     if (!response.ok) {
-      const errorText = await response.text();
+      const errorText = await getErrorText(response);
       console.error('Failed to register', errorText);
-      throw new Error(errorText || 'Registration failed');
+      throw new ClientError(
+        mapRegisterErrorMessage(response.status, errorText),
+        response.status,
+      );
     }
 
     return await response.json();
   } catch (error) {
     console.error('Error registering:', error);
-    throw error;
+    throw normalizeClientError(error, 'Unable to sign up right now. Please try again.');
   }
 };
 
@@ -236,7 +360,7 @@ export const authenticatedFetch = async (endpoint: string, options: RequestInit 
     return res;
   } catch (error) {
     console.error(`[API Network Error] ${endpoint}`, error);
-    throw error;
+    throw normalizeClientError(error, DEFAULT_REQUEST_ERROR_MESSAGE);
   }
 };
 
@@ -268,7 +392,7 @@ export const publicFetch = async (endpoint: string, options: RequestInit = {}) =
     return res;
   } catch (error) {
     console.error(`[Public API Network Error] ${endpoint}`, error);
-    throw error;
+    throw normalizeClientError(error, DEFAULT_REQUEST_ERROR_MESSAGE);
   }
 };
 

@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "customer-app",
+    "name": "Hatod Delivery Services",
     "slug": "customer-app",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/hatod-logo.png",
     "scheme": "customerapp",
@@ -19,6 +19,7 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.kridl.customerapp",
+      "versionCode": 2,
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
