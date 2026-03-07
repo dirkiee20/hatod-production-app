@@ -1,144 +1,239 @@
-import { StyleSheet, View, TouchableOpacity, ScrollView } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import {
+  StyleSheet,
+  View,
+  TouchableOpacity,
+  ScrollView,
+  Image,
+  ActivityIndicator,
+  RefreshControl,
+} from 'react-native';
+import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
+import { getMyOrders } from '@/api/services';
+import { resolveImageUrl } from '@/api/client';
 
 export default function GroceryOrdersScreen() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'Active' | 'Past'>('Active');
+  const [orders, setOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const activeOrders = [
-    {
-       id: 'GRO-5521',
-       store: 'All Day Supermarket',
-       status: 'Picker is shopping',
-       items: '15 items',
-       desc: 'Milk, Eggs, Bread, 2kg Rice...',
-       total: 1250,
-       date: 'Today, 2:00 PM',
-       icon: 'grocery'
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, []),
+  );
+
+  const loadData = async (isRefreshing = false) => {
+    if (!isRefreshing && orders.length === 0) setLoading(true);
+    try {
+      const data = await getMyOrders();
+      if (Array.isArray(data)) setOrders(data);
+    } catch (error) {
+      console.error('Failed to load grocery orders:', error);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
-  const pastOrders = [
-    {
-       id: 'GRO-4300',
-       store: 'Puregold - City Mall',
-       status: 'Delivered',
-       items: '4 items',
-       desc: 'Shampoo, Soap, Toothpaste, Tissue',
-       total: 450,
-       date: 'Jan 18, 5:30 PM',
-       icon: 'grocery'
-    },
-    {
-       id: 'GRO-3120',
-       store: 'Robinsons Easymart',
-       status: 'Canceled',
-       items: '8 items',
-       desc: 'Canned Goods, Noodles, Coffee...',
-       total: 890,
-       date: 'Jan 10, 11:00 AM',
-       icon: 'grocery'
-    }
-  ];
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadData(true);
+    setRefreshing(false);
+  }, []);
 
-  const renderOrderCard = (order: any, isPast: boolean) => (
-    <TouchableOpacity key={order.id} style={styles.card} onPress={() => {}}>
+  const groceryOrders = orders.filter((o) => {
+    const type = o?.merchant?.type;
+    return type === 'GROCERY' || type === 'PHARMACY';
+  });
+
+  const isPastStatus = (status?: string) =>
+    ['DELIVERED', 'COMPLETED', 'CANCELLED', 'CANCELED'].includes(String(status || '').toUpperCase());
+
+  const activeOrders = groceryOrders.filter((o) => !isPastStatus(o.status));
+  const pastOrders = groceryOrders.filter((o) => isPastStatus(o.status));
+
+  const formatStatus = (status?: string) =>
+    String(status || 'PENDING')
+      .toLowerCase()
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+
+  const formatDate = (date: string) =>
+    new Date(date).toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+  const renderOrderCard = (order: any, isPast: boolean) => {
+    const status = String(order.status || '').toUpperCase();
+    const itemCount = Array.isArray(order.items) ? order.items.length : 0;
+    const itemLabel = `${itemCount} item${itemCount === 1 ? '' : 's'}`;
+    const itemSummary =
+      Array.isArray(order.items) && order.items.length > 0
+        ? order.items
+            .map((item: any) => `${item.quantity}x ${item.menuItem?.name || 'Item'}`)
+            .join(', ')
+        : 'No item details';
+    const isDelivered = status === 'DELIVERED';
+    const isCancelled = status === 'CANCELLED' || status === 'CANCELED';
+    const logoUrl = resolveImageUrl(order?.merchant?.logo);
+
+    return (
+      <TouchableOpacity
+        key={order.id}
+        style={styles.card}
+        activeOpacity={0.95}
+        onPress={() => router.push({ pathname: '/order-summary', params: { id: order.id } })}
+      >
         <View style={styles.cardHeader}>
-            <View style={styles.storeRow}>
-                <View style={styles.iconBox}>
-                    <IconSymbol size={20} name={order.icon} color="#4CAF50" />
-                </View>
-                <View>
-                    <ThemedText style={styles.storeName}>{order.store}</ThemedText>
-                    <ThemedText style={styles.dateText}>{order.date}</ThemedText>
-                </View>
+          <View style={styles.storeRow}>
+            <View style={styles.iconBox}>
+              {logoUrl ? (
+                <Image source={{ uri: logoUrl }} style={styles.storeLogo} resizeMode="cover" />
+              ) : (
+                <IconSymbol size={20} name="grocery" color="#4CAF50" />
+              )}
             </View>
-            <View style={[styles.statusBadge, 
-                order.status === 'Delivered' ? styles.statusSuccess : 
-                order.status === 'Canceled' ? styles.statusError : styles.statusInfo
-            ]}>
-                <ThemedText style={[styles.statusText,
-                     order.status === 'Delivered' ? styles.statusTextSuccess : 
-                     order.status === 'Canceled' ? styles.statusTextError : styles.statusTextInfo
-                ]}>{order.status}</ThemedText>
+            <View>
+              <ThemedText style={styles.storeName}>{order?.merchant?.name || 'Grocery Store'}</ThemedText>
+              <ThemedText style={styles.dateText}>{formatDate(order.createdAt)}</ThemedText>
             </View>
-        </View>
-        
-        <View style={styles.divider} />
-        
-        <View style={styles.itemsContainer}>
-            <View style={styles.itemCountBadge}>
-                <ThemedText style={styles.itemCountText}>{order.items}</ThemedText>
-            </View>
-            <ThemedText style={styles.itemsDesc} numberOfLines={1}>
-                {order.desc}
+          </View>
+          <View
+            style={[
+              styles.statusBadge,
+              isDelivered ? styles.statusSuccess : isCancelled ? styles.statusError : styles.statusInfo,
+            ]}
+          >
+            <ThemedText
+              style={[
+                styles.statusText,
+                isDelivered
+                  ? styles.statusTextSuccess
+                  : isCancelled
+                    ? styles.statusTextError
+                    : styles.statusTextInfo,
+              ]}
+            >
+              {formatStatus(status)}
             </ThemedText>
+          </View>
+        </View>
+
+        <View style={styles.divider} />
+
+        <View style={styles.itemsContainer}>
+          <View style={styles.itemCountBadge}>
+            <ThemedText style={styles.itemCountText}>{itemLabel}</ThemedText>
+          </View>
+          <ThemedText style={styles.itemsDesc} numberOfLines={1}>
+            {itemSummary}
+          </ThemedText>
         </View>
 
         <View style={styles.cardFooter}>
-            <ThemedText style={styles.totalText}>Total: ₱{order.total}</ThemedText>
-            {isPast && order.status === 'Delivered' && (
-                <TouchableOpacity style={styles.reorderBtn}>
-                    <ThemedText style={styles.reorderText}>Buy Again</ThemedText>
-                </TouchableOpacity>
-            )}
-            {!isPast && (
-                 <TouchableOpacity style={styles.trackBtn} onPress={() => router.push('/order-tracking')}>
-                    <ThemedText style={styles.trackText}>Track Status</ThemedText>
-                </TouchableOpacity>
-            )}
+          <ThemedText style={styles.totalText}>Total: P{Number(order.total || 0).toFixed(2)}</ThemedText>
+
+          {!isPast && (
+            <TouchableOpacity
+              style={styles.trackBtn}
+              onPress={() => router.push({ pathname: '/order-summary', params: { id: order.id } })}
+            >
+              <ThemedText style={styles.trackText}>Summary</ThemedText>
+            </TouchableOpacity>
+          )}
+
+          {isPast && isDelivered && order.merchantId && (
+            <TouchableOpacity
+              style={styles.reorderBtn}
+              onPress={() => router.push(`/grocery-store/${order.merchantId}`)}
+            >
+              <ThemedText style={styles.reorderText}>Buy Again</ThemedText>
+            </TouchableOpacity>
+          )}
+
+          {isPast && isCancelled && order.merchantId && (
+            <TouchableOpacity
+              style={styles.reorderBtn}
+              onPress={() => router.push(`/grocery-store/${order.merchantId}`)}
+            >
+              <ThemedText style={styles.reorderText}>Visit Store</ThemedText>
+            </TouchableOpacity>
+          )}
         </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
+
+  const currentList = activeTab === 'Active' ? activeOrders : pastOrders;
 
   return (
     <ThemedView style={styles.container}>
-       <Stack.Screen options={{ 
-        headerShown: true, 
-        title: 'My Grocery Orders',
-        headerTitleStyle: { fontWeight: '900', fontSize: 16 },
-        headerLeft: () => (
-          <TouchableOpacity onPress={() => router.back()}>
-            <IconSymbol size={20} name="chevron.right" color="#000" style={{ transform: [{ rotate: '180deg' }] }} />
-          </TouchableOpacity>
-        ),
-      }} />
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: 'My Grocery Orders',
+          headerTitleStyle: { fontWeight: '900', fontSize: 16 },
+          headerLeft: () => (
+            <TouchableOpacity onPress={() => router.back()}>
+              <IconSymbol
+                size={20}
+                name="chevron.right"
+                color="#000"
+                style={{ transform: [{ rotate: '180deg' }] }}
+              />
+            </TouchableOpacity>
+          ),
+        }}
+      />
 
-      {/* Tabs */}
       <View style={styles.tabsContainer}>
-        <TouchableOpacity 
-            style={[styles.tab, activeTab === 'Active' && styles.activeTab]} 
-            onPress={() => setActiveTab('Active')}
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'Active' && styles.activeTab]}
+          onPress={() => setActiveTab('Active')}
         >
-            <ThemedText style={[styles.tabText, activeTab === 'Active' && styles.activeTabText]}>Active</ThemedText>
+          <ThemedText style={[styles.tabText, activeTab === 'Active' && styles.activeTabText]}>
+            Active
+          </ThemedText>
         </TouchableOpacity>
-        <TouchableOpacity 
-            style={[styles.tab, activeTab === 'Past' && styles.activeTab]} 
-            onPress={() => setActiveTab('Past')}
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'Past' && styles.activeTab]}
+          onPress={() => setActiveTab('Past')}
         >
-            <ThemedText style={[styles.tabText, activeTab === 'Past' && styles.activeTabText]}>Past</ThemedText>
+          <ThemedText style={[styles.tabText, activeTab === 'Past' && styles.activeTabText]}>
+            Past
+          </ThemedText>
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.listContent}>
-         {activeTab === 'Active' ? (
-            activeOrders.length > 0 ? (
-                activeOrders.map(order => renderOrderCard(order, false))
-            ) : (
-                <View style={styles.emptyState}>
-                    <IconSymbol size={48} name="grocery" color="#DDD" />
-                    <ThemedText style={styles.emptyText}>No active orders</ThemedText>
-                </View>
-            )
-         ) : (
-            pastOrders.map(order => renderOrderCard(order, true))
-         )}
-      </ScrollView>
-
+      {loading && !refreshing && orders.length === 0 ? (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator size="large" color="#4CAF50" />
+        </View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.listContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
+          {currentList.length > 0 ? (
+            currentList.map((order) => renderOrderCard(order, activeTab === 'Past'))
+          ) : (
+            <View style={styles.emptyState}>
+              <IconSymbol size={48} name="grocery" color="#DDD" />
+              <ThemedText style={styles.emptyText}>
+                {activeTab === 'Active' ? 'No active grocery orders' : 'No past grocery orders'}
+              </ThemedText>
+            </View>
+          )}
+        </ScrollView>
+      )}
     </ThemedView>
   );
 }
@@ -164,7 +259,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   activeTab: {
-    backgroundColor: '#4CAF50', // Green for grocery active state
+    backgroundColor: '#4CAF50',
   },
   tabText: {
     fontSize: 14,
@@ -178,6 +273,11 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 16,
     paddingTop: 0,
+  },
+  loadingWrap: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   card: {
     backgroundColor: '#FFF',
@@ -211,6 +311,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
+    overflow: 'hidden',
+  },
+  storeLogo: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
   },
   storeName: {
     fontSize: 14,

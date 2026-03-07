@@ -39,7 +39,18 @@ export default function AddressManagerScreen() {
       try {
           const data = await getAddresses();
           if (Array.isArray(data)) {
-              setSavedAddresses(data);
+              // "Current Location" is temporary and should not be shown as a saved address.
+              const filtered = data.filter(
+                (addr) => String(addr?.label || '').trim().toLowerCase() !== 'current location'
+              );
+              setSavedAddresses(filtered);
+              if (filtered.length > 0) {
+                setSelectedId((prev) =>
+                  filtered.some((addr) => addr.id === prev) ? prev : filtered[0].id
+                );
+              } else {
+                setSelectedId('');
+              }
           }
       } catch (e) {
           console.error("Failed to load addresses", e);
@@ -128,15 +139,26 @@ export default function AddressManagerScreen() {
             />
           </ThemedView>
           <TouchableOpacity style={styles.currentLocationBtn} onPress={async () => {
-              // Fetch current location
-              let { status } = await Location.requestForegroundPermissionsAsync();
-              if (status !== 'granted') return;
-
-              let location = await Location.getCurrentPositionAsync({});
-              const address = await reverseGeocode(location.coords.latitude, location.coords.longitude);
-              if (address) {
-                  setAddressText(address);
+              const { status } = await Location.requestForegroundPermissionsAsync();
+              if (status !== 'granted') {
+                Alert.alert('Permission required', 'Please allow location access to use current location.');
+                return;
               }
+
+              const location = await Location.getCurrentPositionAsync({});
+              const latitude = location.coords.latitude;
+              const longitude = location.coords.longitude;
+              const address = await reverseGeocode(latitude, longitude);
+              const street = address || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+              setAddressText(street);
+              setDeliveryAddress({
+                id: 'temp-current',
+                label: 'Current Location',
+                street,
+                latitude,
+                longitude,
+              });
+              router.back();
           }}>
              <IconSymbol size={16} name="paperplane.fill" color="#5c6cc9" />
              <ThemedText style={styles.currentLocationText}>Use current location</ThemedText>
@@ -192,6 +214,9 @@ export default function AddressManagerScreen() {
              const selected = savedAddresses.find(addr => addr.id === selectedId);
              if (selected) {
                  setDeliveryAddress(selected);
+             } else {
+                 Alert.alert('Select Address', 'Please select a saved address or use current location.');
+                 return;
              }
              router.back();
          }}>

@@ -47,7 +47,12 @@ export class AddressService {
     }
 
     const addresses = await this.prisma.address.findMany({
-      where: { customerId: customer.id },
+      where: {
+        customerId: customer.id,
+        NOT: {
+          label: 'Current Location',
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
     console.log(`[AddressService] Found ${addresses.length} addresses`);

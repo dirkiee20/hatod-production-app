@@ -12,7 +12,7 @@ export default function CheckoutScreen() {
   const router = useRouter();
   const [selectedPayment, setSelectedPayment] = useState('COD');
 
-  const { items, cartTotal, clearCart, deliveryFee, deliveryAddress, setDeliveryAddress } = useCart();
+  const { items, cartTotal, clearCart, deliveryFee, deliveryAddress } = useCart();
   const { pabiliRequestId } = useLocalSearchParams<{ pabiliRequestId?: string }>();
   const [pabiliRequest, setPabiliRequest] = useState<any>(null);
 
@@ -108,8 +108,6 @@ export default function CheckoutScreen() {
             longitude: deliveryAddress.longitude ?? 0,
           });
           resolvedAddressId = saved.id;
-          // Update context so future orders reuse the saved address
-          setDeliveryAddress({ ...deliveryAddress, id: saved.id });
         } catch (addrErr) {
           console.error('Failed to save current location as address:', addrErr);
           Alert.alert('Error', 'Could not save your current location. Please select an address manually.');
